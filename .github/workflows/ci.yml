@@ -19,7 +19,7 @@ jobs:
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -38,7 +38,7 @@ jobs:
   validate-docker:
     name: Validate Docker Configuration
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -60,7 +60,7 @@ jobs:
   build:
     name: Build Check
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -79,7 +79,7 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -92,7 +92,7 @@ jobs:
           severity: 'HIGH,CRITICAL'
           exit-code: '1'
           ignore-unfixed: true
-        continue-on-error: true  # Don't fail PR, just report
+        continue-on-error: true # Don't fail PR, just report
 
       - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@master
@@ -100,6 +100,5 @@ jobs:
           scan-type: 'fs'
           scan-ref: '.'
           severity: 'HIGH,CRITICAL'
-          exit-code: '0'  # Report only, don't fail
+          exit-code: '0' # Report only, don't fail
           format: 'table'
-
