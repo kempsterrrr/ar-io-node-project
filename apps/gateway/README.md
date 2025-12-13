@@ -139,3 +139,4 @@ The gateway needs to index Arweave data. For development:
 2. Check wallet has enough AR or Turbo Credits for report uploads
 3. View observer logs: `docker compose logs core | grep observer`
 
+# Deployment trigger Sat 13 Dec 2025 15:20:03 GMT
