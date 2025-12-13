@@ -4,34 +4,25 @@
 
 ## Type of Change
 
-- [ ] 🐛 Bug fix (non-breaking change that fixes an issue)
-- [ ] ✨ New feature (non-breaking change that adds functionality)
-- [ ] 💥 Breaking change (fix or feature that would cause existing functionality to change)
-- [ ] 📚 Documentation update
-- [ ] 🔧 Configuration change
-- [ ] 🧹 Refactoring (no functional changes)
+<!-- Check one -->
+
+- [ ] 🐛 Bug fix
+- [ ] ✨ New feature
+- [ ] 💥 Breaking change
+- [ ] 📚 Documentation
+- [ ] 🔧 Configuration/CI
+- [ ] 🧹 Refactoring
 
 ## Changes Made
 
-<!-- List the specific changes made in this PR -->
+<!-- List the key changes -->
 
 -
 
 ## Testing
 
-<!-- Describe how you tested these changes -->
-
-- [ ] Tested locally with `docker compose up`
-- [ ] Ran `./scripts/test-gateway.sh`
-- [ ] Verified no breaking changes to existing functionality
-
-## Checklist
-
-- [ ] My code follows the project's style guidelines
-- [ ] I have run `bun run format` to format my code
-- [ ] I have updated documentation if needed
-- [ ] My changes don't introduce new warnings
+<!-- How did you verify this works? (optional for config/docs changes) -->
 
 ## Related Issues
 
-<!-- Link any related issues: Fixes #123, Closes #456 -->
+<!-- Fixes #123, Closes #456 (if applicable) -->
