@@ -1,0 +1,54 @@
+# =============================================================================
+# Dependabot Configuration
+# =============================================================================
+# Automatically creates PRs to update dependencies weekly.
+# Groups minor/patch updates together to reduce PR noise.
+# =============================================================================
+
+version: 2
+updates:
+  # JavaScript/TypeScript dependencies
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+      timezone: 'Europe/London'
+    open-pull-requests-limit: 5
+    groups:
+      # Group all minor and patch updates together
+      dependencies:
+        patterns:
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
+    commit-message:
+      prefix: 'chore(deps):'
+    labels:
+      - 'dependencies'
+      - 'automated'
+
+  # GitHub Actions
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    commit-message:
+      prefix: 'chore(ci):'
+    labels:
+      - 'ci'
+      - 'automated'
+
+  # Docker images (for future Dockerfiles)
+  - package-ecosystem: 'docker'
+    directory: '/apps/gateway'
+    schedule:
+      interval: 'weekly'
+    commit-message:
+      prefix: 'chore(docker):'
+    labels:
+      - 'docker'
+      - 'automated'

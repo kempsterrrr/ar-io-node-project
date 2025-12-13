@@ -43,11 +43,11 @@ curl -s http://localhost:3000/ar-io/healthcheck
 
 ### Expected Results
 
-| Endpoint | Expected Response |
-|----------|-------------------|
-| `/ar-io/info` | JSON with `processId`, `release`, etc. |
-| `/4jBV3ofWh41KhuTs2pFvj-KBZWUkbrbCYlJH0vLA6LM` | `test` |
-| `/ar-io/healthcheck` | `OK` or health status JSON |
+| Endpoint                                       | Expected Response                      |
+| ---------------------------------------------- | -------------------------------------- |
+| `/ar-io/info`                                  | JSON with `processId`, `release`, etc. |
+| `/4jBV3ofWh41KhuTs2pFvj-KBZWUkbrbCYlJH0vLA6LM` | `test`                                 |
+| `/ar-io/healthcheck`                           | `OK` or health status JSON             |
 
 ### Troubleshooting
 
@@ -136,4 +136,3 @@ hey -n 1000 -c 10 http://localhost:3000/ar-io/info
 # Test data fetching under load
 hey -n 100 -c 5 http://localhost:3000/4jBV3ofWh41KhuTs2pFvj-KBZWUkbrbCYlJH0vLA6LM
 ```
-
