@@ -29,6 +29,7 @@ bun run format
 # PR management
 gh pr create --title "feat: ..." --body "..."
 gh pr checks <NUMBER>
+gh pr view <NUMBER> --comments              # Check CodeRabbit review
 gh pr merge <NUMBER> --squash --delete-branch
 ```
 
@@ -41,6 +42,7 @@ gh pr merge <NUMBER> --squash --delete-branch
 3. **Envoy needs TVAL_* variables** - Check `docker-compose.yaml` if envoy fails.
 4. **CI must pass before merge** - Lint, Docker validation, Build, Security scan.
 5. **Format before committing** - Run `bun run format` or CI will fail.
+6. **CodeRabbit reviews PRs** - Check its comments before merging: `gh pr view <N> --comments`
 
 ---
 
