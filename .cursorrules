@@ -59,6 +59,7 @@ gh pr merge <NUMBER> --squash --delete-branch
 ### After Merging
 
 - Pull latest: `git checkout main && git pull`
+- Clean up local branches: `git branch -d <branch-name>` or `git fetch --prune`
 - Check if Dependabot created new PRs: `gh pr list`
 
 ### When to Update These Rules
