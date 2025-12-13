@@ -138,3 +138,4 @@ The gateway needs to index Arweave data. For development:
 1. Verify wallet keyfile is in `wallets/` directory
 2. Check wallet has enough AR or Turbo Credits for report uploads
 3. View observer logs: `docker compose logs core | grep observer`
+
