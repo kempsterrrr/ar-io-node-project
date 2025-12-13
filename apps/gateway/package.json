@@ -15,4 +15,3 @@
     "clean": "docker compose down -v"
   }
 }
-

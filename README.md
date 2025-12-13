@@ -95,24 +95,24 @@ bun run --filter @ar-io/gateway logs    # View gateway logs
 
 Add the following **secrets** to your repository (Settings → Secrets and variables → Actions):
 
-| Secret | Description |
-|--------|-------------|
-| `HETZNER_HOST` | Server IP address |
-| `HETZNER_USER` | SSH username (usually `root`) |
-| `HETZNER_SSH_KEY` | Private SSH key for authentication |
-| `AR_IO_WALLET` | Your Arweave wallet address |
-| `OBSERVER_WALLET` | Observer hot wallet address |
+| Secret                | Description                            |
+| --------------------- | -------------------------------------- |
+| `HETZNER_HOST`        | Server IP address                      |
+| `HETZNER_USER`        | SSH username (usually `root`)          |
+| `HETZNER_SSH_KEY`     | Private SSH key for authentication     |
+| `AR_IO_WALLET`        | Your Arweave wallet address            |
+| `OBSERVER_WALLET`     | Observer hot wallet address            |
 | `OBSERVER_WALLET_KEY` | Observer wallet keyfile (JSON content) |
 
 Add the following **variables** (Settings → Secrets and variables → Actions → Variables):
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GRAPHQL_HOST` | GraphQL endpoint | `arweave.net` |
-| `START_HEIGHT` | Starting block for indexing | `0` |
-| `ARNS_ROOT_HOST` | Your domain name | (empty) |
-| `RUN_OBSERVER` | Enable observer | `true` |
-| `LOG_LEVEL` | Logging level | `info` |
+| Variable         | Description                 | Default       |
+| ---------------- | --------------------------- | ------------- |
+| `GRAPHQL_HOST`   | GraphQL endpoint            | `arweave.net` |
+| `START_HEIGHT`   | Starting block for indexing | `0`           |
+| `ARNS_ROOT_HOST` | Your domain name            | (empty)       |
+| `RUN_OBSERVER`   | Enable observer             | `true`        |
+| `LOG_LEVEL`      | Logging level               | `info`        |
 
 ### Automatic Deployment
 
@@ -162,7 +162,7 @@ Sidecars are additional services that extend the gateway. To add a new sidecar:
        # ... your service config
        networks:
          - ar-io-network
-   
+
    networks:
      ar-io-network:
        external: true
@@ -252,4 +252,3 @@ cd apps/gateway
 ## License
 
 MIT
-

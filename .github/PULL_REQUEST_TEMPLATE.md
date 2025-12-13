@@ -15,7 +15,7 @@
 
 <!-- List the specific changes made in this PR -->
 
-- 
+-
 
 ## Testing
 
@@ -35,5 +35,3 @@
 ## Related Issues
 
 <!-- Link any related issues: Fixes #123, Closes #456 -->
-
-
