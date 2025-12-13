@@ -1,0 +1,18 @@
+{
+  "name": "@ar-io/gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AR.IO Gateway wrapper for local development and Hetzner deployment",
+  "scripts": {
+    "dev": "docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up",
+    "dev:detached": "docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d",
+    "start": "docker compose up -d",
+    "stop": "docker compose down",
+    "logs": "docker compose logs -f",
+    "logs:core": "docker compose logs core -f",
+    "pull": "docker compose pull",
+    "restart": "docker compose down && docker compose up -d",
+    "clean": "docker compose down -v"
+  }
+}
+

@@ -1,0 +1,201 @@
+# AR.IO Node Project - Cursor Rules
+
+## Project Overview
+
+This is a monorepo containing an AR.IO gateway wrapper and extensible sidecar packages. Built with Bun + Turborepo, deployed to Hetzner via GitHub Actions.
+
+## Project Structure
+
+```
+ar-io-node-project/
+├── apps/gateway/          # AR.IO gateway wrapper (Docker-based)
+├── packages/              # Sidecar extensions
+├── docs/                  # Documentation
+└── .github/workflows/     # CI/CD pipelines
+```
+
+## Tech Stack
+
+- **Package Manager:** Bun
+- **Monorepo Tool:** Turborepo
+- **Gateway:** Docker Compose with official ar-io-node images
+- **Deployment:** GitHub Actions → SSH to Hetzner
+- **Config Management:** GitHub Secrets/Variables → .env generation
+
+---
+
+## Testing the Gateway
+
+When asked to test or validate the gateway:
+
+1. **Start the gateway:**
+   ```bash
+   cd apps/gateway
+   cp .env.example .env  # Only if .env doesn't exist
+   docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d
+   ```
+
+2. **Wait for initialization:**
+   ```bash
+   sleep 15
+   ```
+
+3. **Check container status:**
+   ```bash
+   docker compose -f docker-compose.yaml -f docker-compose.dev.yaml ps
+   ```
+   - Both `core` and `envoy` should be running
+   - Envoy should show port 3000 mapped
+
+4. **Run the test script:**
+   ```bash
+   ./scripts/test-gateway.sh
+   ```
+
+5. **Or run manual tests:**
+   ```bash
+   # Gateway info (should return JSON)
+   curl -s http://localhost:3000/ar-io/info | jq .
+   
+   # Test transaction (should return "test")
+   curl -sL http://localhost:3000/4jBV3ofWh41KhuTs2pFvj-KBZWUkbrbCYlJH0vLA6LM
+   ```
+
+6. **Check logs if something fails:**
+   ```bash
+   docker compose -f docker-compose.yaml -f docker-compose.dev.yaml logs
+   ```
+
+7. **Always stop containers when done:**
+   ```bash
+   docker compose -f docker-compose.yaml -f docker-compose.dev.yaml down
+   ```
+
+---
+
+## Adding a New Sidecar
+
+When asked to create a new sidecar:
+
+1. Create the package structure:
+   ```
+   packages/<sidecar-name>/
+   ├── src/
+   │   └── index.ts
+   ├── Dockerfile
+   ├── docker-compose.yaml
+   ├── package.json
+   ├── tsconfig.json
+   └── README.md
+   ```
+
+2. The `docker-compose.yaml` must connect to the gateway network:
+   ```yaml
+   networks:
+     ar-io-network:
+       external: true
+   ```
+
+3. Add appropriate scripts to `package.json`:
+   ```json
+   {
+     "scripts": {
+       "dev": "docker compose up",
+       "build": "tsc",
+       "docker:build": "docker build -t <name> ."
+     }
+   }
+   ```
+
+4. Update root `turbo.json` if needed for new task pipelines.
+
+---
+
+## Environment Variables
+
+- **Never commit `.env` files** - they are gitignored
+- Use `.env.example` as a template with documented options
+- Production values come from GitHub Secrets/Variables
+- The deploy workflow generates `.env` on the server
+
+Key gateway variables:
+- `AR_IO_WALLET` - Gateway operator wallet address
+- `OBSERVER_WALLET` - Observer hot wallet address
+- `ARNS_ROOT_HOST` - Domain name for ArNS routing
+- `START_HEIGHT` - Block height to start indexing from
+- `RUN_OBSERVER` - Enable/disable observer
+
+---
+
+## Docker Commands
+
+```bash
+# Start gateway (development)
+cd apps/gateway
+docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d
+
+# Stop gateway
+docker compose -f docker-compose.yaml -f docker-compose.dev.yaml down
+
+# View logs
+docker compose -f docker-compose.yaml -f docker-compose.dev.yaml logs -f
+
+# Pull latest images
+docker compose pull
+
+# Clean slate (removes volumes)
+docker compose -f docker-compose.yaml -f docker-compose.dev.yaml down -v
+```
+
+---
+
+## Code Style
+
+- Use TypeScript for all new code
+- Follow existing Prettier configuration
+- Run `bun run format` before committing
+- Run `bun run lint` to check for issues
+
+---
+
+## Deployment
+
+- Push to `main` branch triggers automatic deployment to Hetzner
+- The workflow is in `.github/workflows/deploy-gateway.yml`
+- Requires GitHub Secrets to be configured (see README.md)
+
+To manually trigger deployment:
+1. Go to Actions tab in GitHub
+2. Select "Deploy Gateway" workflow
+3. Click "Run workflow"
+
+---
+
+## Common Issues
+
+### Docker not running
+```bash
+open -a Docker  # macOS
+# Wait for Docker Desktop to start
+```
+
+### Port 3000 already in use
+```bash
+lsof -i :3000
+kill -9 <PID>
+```
+
+### Envoy container exits immediately
+Check logs for missing environment variables:
+```bash
+docker compose logs envoy
+```
+Ensure all `TVAL_*` variables are set in docker-compose.yaml.
+
+### Gateway returns 502 or connection refused
+The core service may still be starting. Wait 30 seconds and try again.
+Check core logs:
+```bash
+docker compose logs core
+```
+

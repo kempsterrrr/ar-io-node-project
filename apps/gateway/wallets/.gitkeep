@@ -1,0 +1,4 @@
+# Place your observer wallet keyfile here
+# File should be named: <OBSERVER_WALLET_ADDRESS>.json
+# This file will be gitignored for security
+

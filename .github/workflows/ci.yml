@@ -1,0 +1,78 @@
+# =============================================================================
+# Continuous Integration
+# =============================================================================
+# Runs on all pull requests and pushes to main.
+# Validates code quality and configuration.
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Check formatting
+        run: bun run format:check
+
+  validate-docker:
+    name: Validate Docker Configuration
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create test .env file
+        run: |
+          cp apps/gateway/.env.example apps/gateway/.env
+
+      - name: Validate docker-compose.yaml
+        run: |
+          cd apps/gateway
+          docker compose config --quiet
+
+      - name: Validate docker-compose with dev overrides
+        run: |
+          cd apps/gateway
+          docker compose -f docker-compose.yaml -f docker-compose.dev.yaml config --quiet
+
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run build
+        run: bun run build
+
