@@ -12,6 +12,8 @@ ar-io-node-project/
 
 **Stack:** Bun + Turborepo, Docker Compose, GitHub Actions → Hetzner
 
+**Production:** https://ario.agenticway.io (ArNS: `*.ario.agenticway.io`)
+
 ---
 
 ## Key Project-Specific Commands
@@ -80,6 +82,7 @@ Update `.cursorrules` when:
 | CI configuration     | `.github/workflows/ci.yml`             |
 | Deploy configuration | `.github/workflows/deploy-gateway.yml` |
 | Dependabot config    | `.github/dependabot.yml`               |
+| SSL & Domain setup   | `docs/SSL-DOMAIN.md`                   |
 
 ---
 
