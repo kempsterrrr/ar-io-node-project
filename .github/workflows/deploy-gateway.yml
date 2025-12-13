@@ -98,11 +98,15 @@ jobs:
           EOF
 
       - name: Write observer wallet keyfile
-        if: ${{ secrets.OBSERVER_WALLET_KEY != '' }}
         run: |
           ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << EOF
-            echo '${{ secrets.OBSERVER_WALLET_KEY }}' > ${{ env.DEPLOY_PATH }}/wallets/${{ secrets.OBSERVER_WALLET }}.json
-            chmod 600 ${{ env.DEPLOY_PATH }}/wallets/${{ secrets.OBSERVER_WALLET }}.json
+            if [ -n '${{ secrets.OBSERVER_WALLET_KEY }}' ]; then
+              echo '${{ secrets.OBSERVER_WALLET_KEY }}' > ${{ env.DEPLOY_PATH }}/wallets/${{ secrets.OBSERVER_WALLET }}.json
+              chmod 600 ${{ env.DEPLOY_PATH }}/wallets/${{ secrets.OBSERVER_WALLET }}.json
+              echo "Observer wallet keyfile written"
+            else
+              echo "No observer wallet key provided, skipping"
+            fi
           EOF
 
       - name: Pull latest images
