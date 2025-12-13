@@ -140,4 +140,5 @@ The gateway needs to index Arweave data. For development:
 3. View observer logs: `docker compose logs core | grep observer`
 
 # Deployment trigger Sat 13 Dec 2025 15:20:03 GMT
+
 # ARNS domain configured: Sat 13 Dec 2025 15:57:45 GMT
