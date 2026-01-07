@@ -118,8 +118,8 @@ jobs:
             echo "=== Disk usage before cleanup ==="
             df -h /
 
-            echo "=== Cleaning up unused Docker resources ==="
-            docker system prune -af 2>/dev/null || true
+            echo "=== Cleaning up unused Docker images ==="
+            docker image prune -af 2>/dev/null || true
 
             echo "=== Disk usage after cleanup ==="
             df -h /
