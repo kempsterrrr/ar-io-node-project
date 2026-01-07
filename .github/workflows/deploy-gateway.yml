@@ -117,12 +117,14 @@ jobs:
           ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
             echo "=== Disk usage before cleanup ==="
             df -h /
+            docker system df
 
             echo "=== Cleaning up unused Docker images ==="
             docker image prune -af 2>/dev/null || true
 
             echo "=== Disk usage after cleanup ==="
             df -h /
+            docker system df
           EOF
 
       - name: Pull latest images
