@@ -1,0 +1,57 @@
+import { z } from 'zod';
+
+const envSchema = z.object({
+  // Server
+  PORT: z.coerce.number().default(3003),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+
+  // Database
+  DUCKDB_PATH: z.string().default('./data/provenance.duckdb'),
+
+  // Gateway
+  GATEWAY_URL: z.string().url().default('http://localhost:3000'),
+
+  // Turbo
+  TURBO_GATEWAY_URL: z.string().url().default('https://turbo.ardrive.io'),
+
+  // Wallet
+  ARWEAVE_WALLET_FILE: z.string().default('./wallets/arweave-wallet.json'),
+
+  // ArNS
+  ARNS_ROOT_NAME: z.string().optional(),
+
+  // Image Processing
+  MAX_IMAGE_SIZE_MB: z.coerce.number().default(50),
+  THUMBNAIL_WIDTH: z.coerce.number().default(400),
+  THUMBNAIL_QUALITY: z.coerce.number().min(1).max(100).default(80),
+
+  // C2PA
+  C2PA_CERT_PATH: z.string().optional(),
+  C2PA_KEY_PATH: z.string().optional(),
+});
+
+export type Config = z.infer<typeof envSchema>;
+
+function loadConfig(): Config {
+  const result = envSchema.safeParse(process.env);
+
+  if (!result.success) {
+    console.error('Invalid environment configuration:');
+    console.error(result.error.format());
+    process.exit(1);
+  }
+
+  return result.data;
+}
+
+export const config = loadConfig();
+
+/**
+ * Determine if we're using ArNS testnet based on environment.
+ * - development/test → testnet
+ * - production → mainnet
+ */
+export function isArnsTestnet(): boolean {
+  return config.NODE_ENV !== 'production';
+}

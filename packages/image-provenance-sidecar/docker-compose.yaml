@@ -1,0 +1,37 @@
+services:
+  image-provenance-sidecar:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: image-provenance-sidecar
+    restart: unless-stopped
+    ports:
+      - '${PORT:-3003}:3003'
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3003
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DUCKDB_PATH=/app/data/provenance.duckdb
+      - GATEWAY_URL=${GATEWAY_URL:-http://core:4000}
+      - TURBO_GATEWAY_URL=${TURBO_GATEWAY_URL:-https://turbo.ardrive.io}
+      - ARWEAVE_WALLET_FILE=/app/wallets/arweave-wallet.json
+      - ARNS_ROOT_NAME=${ARNS_ROOT_NAME}
+      - ARNS_PROCESS_ID=${ARNS_PROCESS_ID}
+      - MAX_IMAGE_SIZE_MB=${MAX_IMAGE_SIZE_MB:-50}
+      - THUMBNAIL_WIDTH=${THUMBNAIL_WIDTH:-400}
+      - THUMBNAIL_QUALITY=${THUMBNAIL_QUALITY:-80}
+    volumes:
+      - ./data:/app/data
+      - ./wallets:/app/wallets:ro
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3003/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  ar-io-network:
+    external: true
