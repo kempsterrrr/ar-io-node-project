@@ -48,14 +48,16 @@ A sidecar service for AR.IO gateways that provides C2PA (Content Credentials) ma
 
 ## API Endpoints
 
-| Endpoint                  | Method | Description                         |
-| ------------------------- | ------ | ----------------------------------- |
-| `/health`                 | GET    | Health check and service status     |
-| `/v1/upload`              | POST   | Upload image, create C2PA manifest  |
-| `/v1/search-similar`      | GET    | Search for similar images by pHash  |
-| `/v1/verify-authenticity` | GET    | Verify C2PA manifest signatures     |
-| `/v1/thumbnail`           | GET    | Extract thumbnail from manifest     |
-| `/webhook`                | POST   | Receive gateway index notifications |
+| Endpoint                  | Method | Access   | Description                         |
+| ------------------------- | ------ | -------- | ----------------------------------- |
+| `/health`                 | GET    | Public   | Health check and service status     |
+| `/v1/upload`              | POST   | Public   | Upload image, create C2PA manifest  |
+| `/v1/search-similar`      | GET    | Public   | Search for similar images by pHash  |
+| `/v1/verify-authenticity` | GET    | Public   | Verify C2PA manifest signatures     |
+| `/v1/thumbnail`           | GET    | Public   | Extract thumbnail from manifest     |
+| `/webhook`                | POST   | Internal | Receive gateway index notifications |
+
+> **Note**: The `/webhook` endpoint is only accessible from within the Docker network (e.g., from the AR.IO gateway). External requests to `/webhook` return 404.
 
 ## Gateway Configuration
 
@@ -67,28 +69,36 @@ WEBHOOK_INDEX_FILTER='{"tags":[{"name":"pHash"}]}'
 WEBHOOK_TARGET_SERVERS="http://image-provenance-sidecar:3003/webhook"
 ```
 
+The gateway connects to the sidecar directly via the Docker network (`ar-io-network`), bypassing the nginx proxy. This ensures the webhook is only accessible from trusted internal services.
+
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      AR.IO GATEWAY                               │
-│  Indexes pHash-tagged transactions → pushes webhooks            │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │ POST /webhook
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              IMAGE PROVENANCE SIDECAR (port 3003)                │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
-│  │ Upload API  │  │ Search API  │  │ Verify API  │             │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘             │
-│         │                │                │                     │
-│         ▼                ▼                ▼                     │
-│  ┌────────────────────────────────────────────────────────────┐│
-│  │            DuckDB (embedded, persistent)                    ││
-│  │            ./data/provenance.duckdb                         ││
-│  └────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
+External (Internet)                    Docker Network (ar-io-network)
+       |                                        |
+       v                                        |
++-------------------+                           |
+|  nginx proxy      |                           |
+|  (port 3003)      |---------------------------+
+|                   |     /health, /v1/*, /     |
+|  Routes:          |            |              |
+|  + /health        |            v              |
+|  + /v1/*          |   +-------------------+   |
+|  + /              |   | image-provenance  |   |
+|  x /webhook       |   | sidecar (:3003)   |   |
++-------------------+   |                   |   |
+                        | (internal only)   |   |
+                        +---------^---------+   |
+                                  |             |
+                        POST /webhook           |
+                                  |             |
+                        +---------+----------+  |
+                        |   AR.IO Gateway    |  |
+                        |   (core:4000)      |--+
+                        +--------------------+
 ```
+
+**Security Model**: The nginx reverse proxy exposes only public endpoints (health, API routes) while blocking direct access to `/webhook`. The AR.IO gateway communicates directly with the sidecar over the Docker network, ensuring webhook requests are authenticated by network isolation.
 
 ## Development
 
@@ -167,6 +177,26 @@ For full end-to-end testing with Arweave uploads:
    ARNS_ROOT_NAME=your-arns-name  # Optional
    ```
 4. Run: `DRY_RUN=false bun run test:e2e`
+
+### Verifying Network Isolation
+
+After deployment, verify the webhook is properly protected:
+
+```bash
+# Public endpoints should work
+curl http://localhost:3003/health
+curl http://localhost:3003/v1/search-similar?txId=test
+
+# Webhook should return 404 externally
+curl -X POST http://localhost:3003/webhook -d '{}'
+# Expected: 404 Not Found
+
+# Webhook works internally (from gateway container)
+docker exec -it core curl -X POST http://image-provenance-sidecar:3003/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"tx_id":"test"}'
+# Expected: 200 or appropriate response
+```
 
 ## License
 

@@ -10,3 +10,6 @@ services:
       - ./src:/app/src:ro
       - ./data:/app/data
       - ./wallets:/app/wallets:ro
+
+  image-provenance-proxy:
+    restart: 'no'
