@@ -26,15 +26,15 @@ describe('ArNS service', () => {
       expect(name1).not.toBe(name2);
     });
 
-    it('generates undernames with prov- prefix', () => {
+    it('generates undernames with th- prefix', () => {
       const name = generateUndername();
-      expect(name.startsWith('prov-')).toBe(true);
+      expect(name.startsWith('th-')).toBe(true);
     });
 
     it('generates undernames with 8-char suffix', () => {
       const name = generateUndername();
-      // Format: prov-{8chars}
-      expect(name.length).toBe(13); // "prov-" + 8 chars
+      // Format: th-{8chars}
+      expect(name.length).toBe(11); // "th-" + 8 chars
     });
 
     it('generates valid URL-safe names', () => {
@@ -46,8 +46,8 @@ describe('ArNS service', () => {
 
   describe('buildArnsUrl', () => {
     it('builds correct ArNS URL with undername', () => {
-      const url = buildArnsUrl('prov-abc12345');
-      expect(url).toBe('https://prov-abc12345_testgateway.arweave.net');
+      const url = buildArnsUrl('th-abc12345');
+      expect(url).toBe('https://th-abc12345_testgateway.arweave.net');
     });
 
     it('uses underscore separator for undernames', () => {
@@ -64,18 +64,18 @@ describe('ArNS service', () => {
 
   describe('parseArnsUrl', () => {
     it('parses valid ArNS URL', () => {
-      const result = parseArnsUrl('https://prov-abc_mygateway.arweave.net');
+      const result = parseArnsUrl('https://th-abc_mygateway.arweave.net');
 
       expect(result).not.toBeNull();
-      expect(result?.undername).toBe('prov-abc');
+      expect(result?.undername).toBe('th-abc');
       expect(result?.rootName).toBe('mygateway');
     });
 
     it('handles complex undername', () => {
-      const result = parseArnsUrl('https://prov-abc12345_my-gateway.arweave.net');
+      const result = parseArnsUrl('https://th-abc12345_my-gateway.arweave.net');
 
       expect(result).not.toBeNull();
-      expect(result?.undername).toBe('prov-abc12345');
+      expect(result?.undername).toBe('th-abc12345');
       expect(result?.rootName).toBe('my-gateway');
     });
 

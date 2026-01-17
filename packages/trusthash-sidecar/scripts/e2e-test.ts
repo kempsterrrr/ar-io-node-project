@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * End-to-End Test Script for Image Provenance Sidecar
+ * End-to-End Test Script for Trusthash Sidecar
  *
  * This script tests the full flow of the sidecar:
  * 1. Health check
@@ -347,16 +347,16 @@ async function testUploadWithArnsValidation(): Promise<Record<string, unknown>> 
     hasArnsUrl: !!arnsUrl,
   };
 
-  // Validate undername format: prov-{8chars}
+  // Validate undername format: th-{8chars}
   if (arnsUndername) {
-    const undernamePattern = /^prov-[a-f0-9]{8}$/;
+    const undernamePattern = /^th-[a-f0-9]{8}$/;
     validations.undernameFormatValid = undernamePattern.test(arnsUndername);
     validations.arnsUndername = arnsUndername;
   }
 
   // Validate URL format: https://{undername}_{rootname}.arweave.net
   if (arnsUrl) {
-    const urlPattern = /^https:\/\/prov-[a-f0-9]{8}_[a-zA-Z0-9-]+\.arweave\.net$/;
+    const urlPattern = /^https:\/\/th-[a-f0-9]{8}_[a-zA-Z0-9-]+\.arweave\.net$/;
     validations.urlFormatValid = urlPattern.test(arnsUrl);
     validations.arnsUrl = arnsUrl;
   }
@@ -390,7 +390,7 @@ async function testArnsUndernameRegistration(): Promise<Record<string, unknown>>
   const urlContainsUndername = url?.includes(undername || '');
 
   // Verify undername format
-  const undernameValid = /^prov-[a-f0-9]{8}$/.test(undername || '');
+  const undernameValid = /^th-[a-f0-9]{8}$/.test(undername || '');
 
   // Verify TX ID format (43 chars, base64url)
   const txIdValid = /^[a-zA-Z0-9_-]{43}$/.test(txId || '');
@@ -430,7 +430,7 @@ async function testArnsNetworkDetection(): Promise<Record<string, unknown>> {
 
 async function main() {
   console.log('='.repeat(60));
-  console.log('Image Provenance Sidecar - End-to-End Tests');
+  console.log('Trusthash Sidecar - End-to-End Tests');
   console.log('='.repeat(60));
   console.log(`Base URL: ${BASE_URL}`);
   console.log(`Mode: ${DRY_RUN ? 'Dry Run (no real uploads)' : 'Full Test'}`);

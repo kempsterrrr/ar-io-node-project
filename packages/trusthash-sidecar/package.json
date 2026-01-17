@@ -1,5 +1,5 @@
 {
-  "name": "@ar-io/image-provenance-sidecar",
+  "name": "@ar-io/trusthash-sidecar",
   "version": "0.1.0",
   "private": true,
   "type": "module",

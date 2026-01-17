@@ -28,7 +28,7 @@ app.route('/v1/thumbnail', thumbnail);
 // Root endpoint - service info
 app.get('/', (c) => {
   return c.json({
-    name: 'Image Provenance Sidecar',
+    name: 'Trusthash Sidecar',
     version: '0.1.0',
     description: 'C2PA manifest creation, storage, and pHash similarity search for Arweave',
     endpoints: {
@@ -66,7 +66,7 @@ async function start() {
       fetch: app.fetch,
     });
 
-    logger.info(`Image Provenance Sidecar running at http://localhost:${config.PORT}`);
+    logger.info(`Trusthash Sidecar running at http://localhost:${config.PORT}`);
   } catch (error) {
     logger.error({ error }, 'Failed to start server');
     process.exit(1);

@@ -24,9 +24,9 @@ import { logger } from '../utils/logger.js';
  * Result of registering an undername
  */
 export interface UndernameResult {
-  /** The undername created (e.g., "prov-a3f2b1c4") */
+  /** The undername created (e.g., "th-a3f2b1c4") */
   undername: string;
-  /** Full ArNS URL (e.g., "https://prov-a3f2b1c4_mygateway.arweave.net") */
+  /** Full ArNS URL (e.g., "https://th-a3f2b1c4_mygateway.arweave.net") */
   fullUrl: string;
   /** Transaction ID of the undername registration */
   registrationTxId?: string;
@@ -195,19 +195,19 @@ export async function getWalletAddress(): Promise<string> {
 
 /**
  * Generate a unique undername for a provenance manifest.
- * Format: "prov-{short-uuid}"
+ * Format: "th-{short-uuid}"
  */
 export function generateUndername(): string {
   const uuid = uuidv4();
   const shortId = uuid.split('-')[0]; // First segment of UUID (8 chars)
-  return `prov-${shortId}`;
+  return `th-${shortId}`;
 }
 
 /**
  * Build the full ArNS URL for an undername.
  *
- * @param undername - The undername (e.g., "prov-a3f2b1c4")
- * @returns Full URL (e.g., "https://prov-a3f2b1c4_mygateway.arweave.net")
+ * @param undername - The undername (e.g., "th-a3f2b1c4")
+ * @returns Full URL (e.g., "https://th-a3f2b1c4_mygateway.arweave.net")
  */
 export function buildArnsUrl(undername: string): string {
   if (!config.ARNS_ROOT_NAME) {

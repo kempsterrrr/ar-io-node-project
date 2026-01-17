@@ -1,4 +1,4 @@
-# Image Provenance Sidecar
+# Trusthash Sidecar
 
 A sidecar service for AR.IO gateways that provides C2PA (Content Credentials) manifest creation, permanent storage on Arweave via ArNS undernames, and perceptual hash (pHash) similarity search.
 
@@ -66,7 +66,7 @@ To enable webhooks from the AR.IO gateway, add to `apps/gateway/.env`:
 ```bash
 ANS104_INDEX_FILTER='{"tags":[{"name":"pHash"}]}'
 WEBHOOK_INDEX_FILTER='{"tags":[{"name":"pHash"}]}'
-WEBHOOK_TARGET_SERVERS="http://image-provenance-sidecar:3003/webhook"
+WEBHOOK_TARGET_SERVERS="http://trusthash-sidecar:3003/webhook"
 ```
 
 The gateway connects to the sidecar directly via the Docker network (`ar-io-network`), bypassing the nginx proxy. This ensures the webhook is only accessible from trusted internal services.
@@ -84,8 +84,8 @@ External (Internet)                    Docker Network (ar-io-network)
 |  Routes:          |            |              |
 |  + /health        |            v              |
 |  + /v1/*          |   +-------------------+   |
-|  + /              |   | image-provenance  |   |
-|  x /webhook       |   | sidecar (:3003)   |   |
+|  + /              |   |    trusthash      |   |
+|  x /webhook       |   |  sidecar (:3003)  |   |
 +-------------------+   |                   |   |
                         | (internal only)   |   |
                         +---------^---------+   |
@@ -192,7 +192,7 @@ curl -X POST http://localhost:3003/webhook -d '{}'
 # Expected: 404 Not Found
 
 # Webhook works internally (from gateway container)
-docker exec -it core curl -X POST http://image-provenance-sidecar:3003/webhook \
+docker exec -it core curl -X POST http://trusthash-sidecar:3003/webhook \
   -H "Content-Type: application/json" \
   -d '{"tx_id":"test"}'
 # Expected: 200 or appropriate response

@@ -202,7 +202,7 @@ export async function uploadImage(options: UploadOptions): Promise<UploadResult>
     } else {
       // Generate undername but don't register (ArNS not configured)
       const uuid = crypto.randomUUID().split('-')[0];
-      arnsUndername = `prov-${uuid}`;
+      arnsUndername = `th-${uuid}`;
       arnsUrl = `https://${arnsUndername}.local.arweave.net`;
       logger.warn('ArNS not configured, using local undername');
     }

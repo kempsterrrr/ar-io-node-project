@@ -58,7 +58,7 @@ describe('C2PA service', () => {
       expect(result.manifestBuffer).toBeDefined();
       expect(result.manifestBuffer.length).toBeGreaterThan(0);
       expect(result.contentType).toBe('application/c2pa+json');
-      expect(result.claimGenerator).toContain('Image Provenance Sidecar');
+      expect(result.claimGenerator).toContain('Trusthash');
       expect(result.hasPriorManifest).toBe(false);
     });
 
@@ -191,7 +191,7 @@ describe('C2PA service', () => {
 
       expect(result.found).toBe(true);
       expect(result.manifest).toBeDefined();
-      expect(result.manifest?.claimGenerator).toContain('Image Provenance Sidecar');
+      expect(result.manifest?.claimGenerator).toContain('Trusthash');
     });
 
     it('returns not found for non-manifest data', async () => {
@@ -331,7 +331,7 @@ describe('C2PA service', () => {
   describe('getClaimGenerator', () => {
     it('returns claim generator string', () => {
       const generator = getClaimGenerator();
-      expect(generator).toContain('Image Provenance Sidecar');
+      expect(generator).toContain('Trusthash');
       expect(generator).toMatch(/\d+\.\d+\.\d+/); // Version number
     });
   });

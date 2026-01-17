@@ -39,14 +39,14 @@ import {
 /**
  * Claim generator string for manifests created by this service
  */
-const CLAIM_GENERATOR = 'Image Provenance Sidecar/0.1.0';
+const CLAIM_GENERATOR = 'Trusthash/0.1.0';
 
 /**
  * Self-signed certificate information
  * In production, this would use a proper certificate chain
  */
 const SELF_SIGNED_CERT_INFO = {
-  issuer: 'CN=Image Provenance Sidecar Self-Signed',
+  issuer: 'CN=Trusthash Self-Signed',
   algorithm: 'ES256',
   validFrom: new Date().toISOString().split('T')[0],
   validTo: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],

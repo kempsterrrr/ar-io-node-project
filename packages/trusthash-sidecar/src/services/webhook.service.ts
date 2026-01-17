@@ -66,7 +66,7 @@ function getTagValue(tags: WebhookTag[], name: string): string | undefined {
  *   tags: [
  *     { name: "pHash", value: "a5a5a5a5a5a5a5a5" },
  *     { name: "Content-Type", value: "application/c2pa+json" },
- *     { name: "ArNS-Undername", value: "prov-abc123" }
+ *     { name: "ArNS-Undername", value: "th-abc123" }
  *   ],
  *   owner: "xyz789...",
  *   block_height: 1500000,

@@ -1,5 +1,5 @@
 services:
-  image-provenance-sidecar:
+  trusthash-sidecar:
     environment:
       - NODE_ENV=development
       - LOG_LEVEL=debug
@@ -11,5 +11,5 @@ services:
       - ./data:/app/data
       - ./wallets:/app/wallets:ro
 
-  image-provenance-proxy:
+  trusthash-proxy:
     restart: 'no'
