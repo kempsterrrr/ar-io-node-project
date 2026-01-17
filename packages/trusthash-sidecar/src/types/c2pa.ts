@@ -103,6 +103,7 @@ export interface C2PAAssertionSummary {
  */
 export interface C2PAManifestSummary {
   claimGenerator: string;
+  title?: string;
   created: string;
   signatureInfo: C2PASignatureInfo;
   assertions: C2PAAssertionSummary[];

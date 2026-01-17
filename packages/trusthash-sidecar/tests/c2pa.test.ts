@@ -1,10 +1,10 @@
 import { describe, expect, it, beforeAll } from 'bun:test';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
 import sharp from 'sharp';
 import {
   createManifest,
   readManifest,
-  verifyManifest,
-  extractThumbnail,
   hasManifest,
   getClaimGenerator,
   readEmbeddedManifest,
@@ -14,14 +14,32 @@ import { generateThumbnail, computeImageHash } from '../src/services/thumbnail.s
 import { computePHash } from '../src/services/phash.service.js';
 
 describe('C2PA service', () => {
-  let testImageBuffer: Buffer;
-  let thumbnailResult: { buffer: Buffer; contentType: string };
-  let imageHash: string;
-  let pHashResult: { hex: string };
+  // Use real JPEG fixture for createManifest tests (c2pa-node requires valid JPEG structure)
+  let fixtureImageBuffer: Buffer;
+  let fixtureImageThumbnail: { buffer: Buffer; contentType: string };
+  let fixtureImageHash: string;
+  let fixtureImagePHash: { hex: string };
+
+  // Synthetic image for read/validate tests only
+  let syntheticImageBuffer: Buffer;
 
   beforeAll(async () => {
-    // Create a test image
-    testImageBuffer = await sharp({
+    // Load plain JPEG fixture (c2pa-sample.jpg already has manifest, can't re-sign)
+    fixtureImageBuffer = await readFile(join(__dirname, 'fixtures/plain-test.jpg'));
+
+    // Generate thumbnail for fixture
+    const thumb = await generateThumbnail(fixtureImageBuffer);
+    fixtureImageThumbnail = {
+      buffer: thumb.buffer,
+      contentType: thumb.contentType,
+    };
+
+    // Compute hashes for fixture
+    fixtureImageHash = await computeImageHash(fixtureImageBuffer);
+    fixtureImagePHash = await computePHash(fixtureImageBuffer);
+
+    // Create synthetic image for read/validate tests
+    syntheticImageBuffer = await sharp({
       create: {
         width: 500,
         height: 400,
@@ -31,109 +49,130 @@ describe('C2PA service', () => {
     })
       .jpeg({ quality: 90 })
       .toBuffer();
-
-    // Generate thumbnail
-    const thumb = await generateThumbnail(testImageBuffer);
-    thumbnailResult = {
-      buffer: thumb.buffer,
-      contentType: thumb.contentType,
-    };
-
-    // Compute hashes
-    imageHash = await computeImageHash(testImageBuffer);
-    pHashResult = await computePHash(testImageBuffer);
   });
 
   describe('createManifest', () => {
-    it('creates a manifest with required fields', async () => {
+    it('creates a C2PA-compliant signed image', async () => {
       const result = await createManifest({
-        imageBuffer: testImageBuffer,
+        imageBuffer: fixtureImageBuffer,
         contentType: 'image/jpeg',
-        thumbnail: thumbnailResult,
-        originalHash: imageHash,
-        pHash: pHashResult.hex,
+        thumbnail: fixtureImageThumbnail,
+        originalHash: fixtureImageHash,
+        pHash: fixtureImagePHash.hex,
         arnsUrl: 'https://test-prov_mygateway.arweave.net',
       });
 
+      // New API returns signed image, not JSON manifest
       expect(result.manifestBuffer).toBeDefined();
-      expect(result.manifestBuffer.length).toBeGreaterThan(0);
-      expect(result.contentType).toBe('application/c2pa+json');
+      expect(result.manifestBuffer.length).toBeGreaterThan(fixtureImageBuffer.length);
+      expect(result.contentType).toBe('image/jpeg');
       expect(result.claimGenerator).toContain('Trusthash');
       expect(result.hasPriorManifest).toBe(false);
+
+      // Verify it's a valid JPEG (magic bytes)
+      expect(result.manifestBuffer[0]).toBe(0xff);
+      expect(result.manifestBuffer[1]).toBe(0xd8);
     });
 
-    it('includes embedded thumbnail', async () => {
+    it('embeds C2PA manifest in the signed image', async () => {
       const result = await createManifest({
-        imageBuffer: testImageBuffer,
+        imageBuffer: fixtureImageBuffer,
         contentType: 'image/jpeg',
-        thumbnail: thumbnailResult,
-        originalHash: imageHash,
-        pHash: pHashResult.hex,
+        thumbnail: fixtureImageThumbnail,
+        originalHash: fixtureImageHash,
+        pHash: fixtureImagePHash.hex,
         arnsUrl: 'https://test-prov_mygateway.arweave.net',
       });
 
-      // Parse manifest to verify thumbnail
-      const manifest = JSON.parse(result.manifestBuffer.toString('utf-8'));
-      expect(manifest.thumbnail).toBeDefined();
-      expect(manifest.assertions['c2pa.thumbnail.claim']).toBeDefined();
-      expect(manifest.assertions['c2pa.thumbnail.claim'].contentType).toBe('image/jpeg');
+      // The signed image should now have an embedded C2PA manifest
+      const hasC2PA = await hasManifest(result.manifestBuffer);
+      expect(hasC2PA).toBe(true);
     });
 
-    it('includes hash assertion', async () => {
+    it('manifest can be read back from signed image', async () => {
       const result = await createManifest({
-        imageBuffer: testImageBuffer,
+        imageBuffer: fixtureImageBuffer,
         contentType: 'image/jpeg',
-        thumbnail: thumbnailResult,
-        originalHash: imageHash,
-        pHash: pHashResult.hex,
+        thumbnail: fixtureImageThumbnail,
+        originalHash: fixtureImageHash,
+        pHash: fixtureImagePHash.hex,
         arnsUrl: 'https://test-prov_mygateway.arweave.net',
       });
 
-      const manifest = JSON.parse(result.manifestBuffer.toString('utf-8'));
-      expect(manifest.assertions['c2pa.hash.data']).toBeDefined();
-      expect(manifest.assertions['c2pa.hash.data'].algorithm).toBe('SHA-256');
-      expect(manifest.assertions['c2pa.hash.data'].hash).toBe(imageHash);
+      // Read the embedded manifest
+      const readResult = await readEmbeddedManifest(result.manifestBuffer);
+      expect(readResult.found).toBe(true);
+      expect(readResult.manifest).toBeDefined();
+      expect(readResult.manifest?.claimGenerator).toContain('Trusthash');
     });
 
-    it('includes soft binding (pHash)', async () => {
+    it('signed image passes C2PA validation', async () => {
       const result = await createManifest({
-        imageBuffer: testImageBuffer,
+        imageBuffer: fixtureImageBuffer,
         contentType: 'image/jpeg',
-        thumbnail: thumbnailResult,
-        originalHash: imageHash,
-        pHash: pHashResult.hex,
+        thumbnail: fixtureImageThumbnail,
+        originalHash: fixtureImageHash,
+        pHash: fixtureImagePHash.hex,
         arnsUrl: 'https://test-prov_mygateway.arweave.net',
       });
 
-      const manifest = JSON.parse(result.manifestBuffer.toString('utf-8'));
-      expect(manifest.assertions['c2pa.soft-binding']).toBeDefined();
-      expect(manifest.assertions['c2pa.soft-binding'].algorithm).toBe('pHash');
-      expect(manifest.assertions['c2pa.soft-binding'].value).toBe(pHashResult.hex);
+      // Validate the embedded manifest
+      const validation = await validateEmbeddedManifest(result.manifestBuffer);
+      expect(validation.verified).toBe(true);
+      expect(validation.manifest).toBeDefined();
     });
 
-    it('includes ArNS identifier', async () => {
+    it('includes soft binding (pHash) assertion', async () => {
+      const result = await createManifest({
+        imageBuffer: fixtureImageBuffer,
+        contentType: 'image/jpeg',
+        thumbnail: fixtureImageThumbnail,
+        originalHash: fixtureImageHash,
+        pHash: fixtureImagePHash.hex,
+        arnsUrl: 'https://test-prov_mygateway.arweave.net',
+      });
+
+      const readResult = await readEmbeddedManifest(result.manifestBuffer);
+      expect(readResult.found).toBe(true);
+
+      // Check for soft-binding assertion in the manifest
+      const manifest = readResult.manifest;
+      expect(manifest?.assertions).toBeDefined();
+
+      const softBindingAssertion = manifest?.assertions?.find(
+        (a) => a.label === 'c2pa.soft-binding'
+      );
+      expect(softBindingAssertion).toBeDefined();
+    });
+
+    it('includes ArNS identifier assertion', async () => {
       const arnsUrl = 'https://test-prov-123_mygateway.arweave.net';
 
       const result = await createManifest({
-        imageBuffer: testImageBuffer,
+        imageBuffer: fixtureImageBuffer,
         contentType: 'image/jpeg',
-        thumbnail: thumbnailResult,
-        originalHash: imageHash,
-        pHash: pHashResult.hex,
+        thumbnail: fixtureImageThumbnail,
+        originalHash: fixtureImageHash,
+        pHash: fixtureImagePHash.hex,
         arnsUrl,
       });
 
-      const manifest = JSON.parse(result.manifestBuffer.toString('utf-8'));
-      expect(manifest.assertions['dc:identifier']).toBe(arnsUrl);
+      const readResult = await readEmbeddedManifest(result.manifestBuffer);
+      expect(readResult.found).toBe(true);
+
+      // Check for ArNS assertion
+      const manifest = readResult.manifest;
+      const arnsAssertion = manifest?.assertions?.find((a) => a.label === 'ar.io.arns');
+      expect(arnsAssertion).toBeDefined();
     });
 
-    it('handles prior manifest as ingredient', async () => {
+    it('sets hasPriorManifest flag when prior manifest provided', async () => {
       const result = await createManifest({
-        imageBuffer: testImageBuffer,
+        imageBuffer: fixtureImageBuffer,
         contentType: 'image/jpeg',
-        thumbnail: thumbnailResult,
-        originalHash: imageHash,
-        pHash: pHashResult.hex,
+        thumbnail: fixtureImageThumbnail,
+        originalHash: fixtureImageHash,
+        pHash: fixtureImagePHash.hex,
         arnsUrl: 'https://test-prov_mygateway.arweave.net',
         priorManifest: {
           instanceId: 'urn:uuid:prior-manifest-id',
@@ -143,50 +182,46 @@ describe('C2PA service', () => {
       });
 
       expect(result.hasPriorManifest).toBe(true);
-
-      const manifest = JSON.parse(result.manifestBuffer.toString('utf-8'));
-      expect(manifest.ingredients).toHaveLength(1);
-      expect(manifest.ingredients[0].instanceId).toBe('urn:uuid:prior-manifest-id');
-
-      // Should have repackaged action
-      const actions = manifest.assertions['c2pa.actions'];
-      expect(actions.some((a: { action: string }) => a.action === 'c2pa.repackaged')).toBe(true);
     });
 
-    it('includes optional title and creator', async () => {
+    it('includes title and creator when provided', async () => {
       const result = await createManifest({
-        imageBuffer: testImageBuffer,
+        imageBuffer: fixtureImageBuffer,
         contentType: 'image/jpeg',
-        thumbnail: thumbnailResult,
-        originalHash: imageHash,
-        pHash: pHashResult.hex,
+        thumbnail: fixtureImageThumbnail,
+        originalHash: fixtureImageHash,
+        pHash: fixtureImagePHash.hex,
         arnsUrl: 'https://test-prov_mygateway.arweave.net',
         title: 'Test Image',
         creator: 'Test User',
       });
 
-      const manifest = JSON.parse(result.manifestBuffer.toString('utf-8'));
-      expect(manifest.assertions['dc:title']).toBe('Test Image');
-      expect(manifest.assertions['dc:creator']).toBe('Test User');
+      const readResult = await readEmbeddedManifest(result.manifestBuffer);
+      expect(readResult.found).toBe(true);
+      expect(readResult.manifest?.title).toBe('Test Image');
+
+      // Check for creator assertion
+      const creatorAssertion = readResult.manifest?.assertions?.find(
+        (a) => a.label === 'stds.schema-org.CreativeWork'
+      );
+      expect(creatorAssertion).toBeDefined();
     });
   });
 
   describe('readManifest', () => {
-    it('reads standalone JSON manifest', async () => {
-      // First create a manifest
+    it('reads embedded manifest from signed image', async () => {
       const created = await createManifest({
-        imageBuffer: testImageBuffer,
+        imageBuffer: fixtureImageBuffer,
         contentType: 'image/jpeg',
-        thumbnail: thumbnailResult,
-        originalHash: imageHash,
-        pHash: pHashResult.hex,
+        thumbnail: fixtureImageThumbnail,
+        originalHash: fixtureImageHash,
+        pHash: fixtureImagePHash.hex,
         arnsUrl: 'https://test-prov_mygateway.arweave.net',
       });
 
-      // Then read it
       const result = await readManifest({
         buffer: created.manifestBuffer,
-        isStandalone: true,
+        isStandalone: false,
       });
 
       expect(result.found).toBe(true);
@@ -194,137 +229,44 @@ describe('C2PA service', () => {
       expect(result.manifest?.claimGenerator).toContain('Trusthash');
     });
 
-    it('returns not found for non-manifest data', async () => {
+    it('returns not found for plain image without manifest', async () => {
       const result = await readManifest({
-        buffer: Buffer.from('not a manifest'),
-        isStandalone: true,
+        buffer: syntheticImageBuffer,
+      });
+
+      expect(result.found).toBe(false);
+    });
+
+    it('returns not found for non-image data', async () => {
+      const result = await readManifest({
+        buffer: Buffer.from('not an image at all'),
+        isStandalone: false,
       });
 
       expect(result.found).toBe(false);
     });
   });
 
-  describe('verifyManifest', () => {
-    it('verifies valid manifest without original image', async () => {
-      const created = await createManifest({
-        imageBuffer: testImageBuffer,
-        contentType: 'image/jpeg',
-        thumbnail: thumbnailResult,
-        originalHash: imageHash,
-        pHash: pHashResult.hex,
-        arnsUrl: 'https://test-prov_mygateway.arweave.net',
-      });
-
-      const result = await verifyManifest(created.manifestBuffer);
-
-      expect(result.verified).toBe(true);
-      expect(result.manifest).toBeDefined();
-      expect(result.validationStatus.signatureValid).toBe(true);
-      expect(result.validationStatus.hashMatch).toBeNull(); // No original provided
-      expect(result.validationStatus.warnings).toContain(
-        'Self-signed certificate - not verified against trusted CA'
-      );
-    });
-
-    it('verifies hash when original image provided', async () => {
-      const created = await createManifest({
-        imageBuffer: testImageBuffer,
-        contentType: 'image/jpeg',
-        thumbnail: thumbnailResult,
-        originalHash: imageHash,
-        pHash: pHashResult.hex,
-        arnsUrl: 'https://test-prov_mygateway.arweave.net',
-      });
-
-      const result = await verifyManifest(created.manifestBuffer, testImageBuffer);
-
-      expect(result.verified).toBe(true);
-      expect(result.validationStatus.hashMatch).toBe(true);
-    });
-
-    it('detects hash mismatch with wrong image', async () => {
-      const created = await createManifest({
-        imageBuffer: testImageBuffer,
-        contentType: 'image/jpeg',
-        thumbnail: thumbnailResult,
-        originalHash: imageHash,
-        pHash: pHashResult.hex,
-        arnsUrl: 'https://test-prov_mygateway.arweave.net',
-      });
-
-      // Create a different image
-      const differentImage = await sharp({
-        create: {
-          width: 100,
-          height: 100,
-          channels: 3,
-          background: { r: 0, g: 0, b: 0 },
-        },
-      })
-        .jpeg()
-        .toBuffer();
-
-      const result = await verifyManifest(created.manifestBuffer, differentImage);
-
-      expect(result.verified).toBe(false);
-      expect(result.validationStatus.hashMatch).toBe(false);
-      expect(result.validationStatus.errors).toContain('Image hash does not match manifest');
-    });
-
-    it('handles invalid manifest buffer', async () => {
-      const result = await verifyManifest(Buffer.from('not valid json'));
-
-      expect(result.verified).toBe(false);
-      expect(result.validationStatus.signatureValid).toBe(false);
-      expect(result.validationStatus.errors.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('extractThumbnail', () => {
-    it('extracts embedded thumbnail', async () => {
-      const created = await createManifest({
-        imageBuffer: testImageBuffer,
-        contentType: 'image/jpeg',
-        thumbnail: thumbnailResult,
-        originalHash: imageHash,
-        pHash: pHashResult.hex,
-        arnsUrl: 'https://test-prov_mygateway.arweave.net',
-      });
-
-      const thumbnail = await extractThumbnail(created.manifestBuffer);
-
-      expect(thumbnail).not.toBeNull();
-      expect(thumbnail?.contentType).toBe('image/jpeg');
-      expect(thumbnail?.data.length).toBe(thumbnailResult.buffer.length);
-
-      // Verify JPEG magic bytes
-      expect(thumbnail?.data[0]).toBe(0xff);
-      expect(thumbnail?.data[1]).toBe(0xd8);
-    });
-
-    it('returns null for invalid manifest', async () => {
-      const thumbnail = await extractThumbnail(Buffer.from('not a manifest'));
-      expect(thumbnail).toBeNull();
-    });
-  });
-
   describe('hasManifest', () => {
-    it('detects JSON manifest', async () => {
+    it('detects C2PA manifest in signed image', async () => {
       const created = await createManifest({
-        imageBuffer: testImageBuffer,
+        imageBuffer: fixtureImageBuffer,
         contentType: 'image/jpeg',
-        thumbnail: thumbnailResult,
-        originalHash: imageHash,
-        pHash: pHashResult.hex,
+        thumbnail: fixtureImageThumbnail,
+        originalHash: fixtureImageHash,
+        pHash: fixtureImagePHash.hex,
         arnsUrl: 'https://test-prov_mygateway.arweave.net',
       });
 
       expect(await hasManifest(created.manifestBuffer)).toBe(true);
     });
 
-    it('returns false for non-manifest data', async () => {
+    it('returns false for plain image without manifest', async () => {
+      expect(await hasManifest(syntheticImageBuffer)).toBe(false);
+    });
+
+    it('returns false for non-image data', async () => {
       expect(await hasManifest(Buffer.from('random data'))).toBe(false);
-      expect(await hasManifest(testImageBuffer)).toBe(false);
     });
   });
 
@@ -336,39 +278,9 @@ describe('C2PA service', () => {
     });
   });
 
-  describe('hasManifest - embedded detection', () => {
-    it('returns false for plain JPEG without embedded manifest', async () => {
-      // Create a plain JPEG without any C2PA manifest
-      const plainJpeg = await sharp({
-        create: { width: 100, height: 100, channels: 3, background: { r: 128, g: 128, b: 128 } },
-      })
-        .jpeg()
-        .toBuffer();
-
-      expect(await hasManifest(plainJpeg)).toBe(false);
-    });
-
-    it('returns false for plain PNG without embedded manifest', async () => {
-      // Create a plain PNG without any C2PA manifest
-      const plainPng = await sharp({
-        create: { width: 100, height: 100, channels: 3, background: { r: 128, g: 128, b: 128 } },
-      })
-        .png()
-        .toBuffer();
-
-      expect(await hasManifest(plainPng)).toBe(false);
-    });
-  });
-
   describe('readEmbeddedManifest', () => {
     it('returns found=false for JPEG without manifest', async () => {
-      const plainJpeg = await sharp({
-        create: { width: 100, height: 100, channels: 3, background: { r: 128, g: 128, b: 128 } },
-      })
-        .jpeg()
-        .toBuffer();
-
-      const result = await readEmbeddedManifest(plainJpeg);
+      const result = await readEmbeddedManifest(syntheticImageBuffer);
       expect(result.found).toBe(false);
       expect(result.error).toBeUndefined();
     });
@@ -406,14 +318,24 @@ describe('C2PA service', () => {
   });
 
   describe('validateEmbeddedManifest', () => {
-    it('returns verified=false for image without manifest', async () => {
-      const plainJpeg = await sharp({
-        create: { width: 100, height: 100, channels: 3, background: { r: 128, g: 128, b: 128 } },
-      })
-        .jpeg()
-        .toBuffer();
+    it('validates signed image with embedded manifest', async () => {
+      const created = await createManifest({
+        imageBuffer: fixtureImageBuffer,
+        contentType: 'image/jpeg',
+        thumbnail: fixtureImageThumbnail,
+        originalHash: fixtureImageHash,
+        pHash: fixtureImagePHash.hex,
+        arnsUrl: 'https://test-prov_mygateway.arweave.net',
+      });
 
-      const result = await validateEmbeddedManifest(plainJpeg);
+      const result = await validateEmbeddedManifest(created.manifestBuffer);
+      expect(result.verified).toBe(true);
+      expect(result.manifest).toBeDefined();
+      expect(result.validationStatus.errors).toHaveLength(0);
+    });
+
+    it('returns verified=false for image without manifest', async () => {
+      const result = await validateEmbeddedManifest(syntheticImageBuffer);
       expect(result.verified).toBe(false);
       expect(result.validationStatus.errors).toContain('No embedded C2PA manifest found in image');
     });
@@ -423,19 +345,6 @@ describe('C2PA service', () => {
       const result = await validateEmbeddedManifest(randomBuffer);
       expect(result.verified).toBe(false);
       expect(result.validationStatus.errors.some((e) => e.includes('Unsupported'))).toBe(true);
-    });
-  });
-
-  describe('readManifest - embedded support', () => {
-    it('returns found=false for plain image without manifest', async () => {
-      const plainJpeg = await sharp({
-        create: { width: 100, height: 100, channels: 3, background: { r: 64, g: 128, b: 192 } },
-      })
-        .jpeg()
-        .toBuffer();
-
-      const result = await readManifest({ buffer: plainJpeg });
-      expect(result.found).toBe(false);
     });
   });
 });

@@ -27,8 +27,9 @@ const envSchema = z.object({
   THUMBNAIL_QUALITY: z.coerce.number().min(1).max(100).default(80),
 
   // C2PA
-  C2PA_CERT_PATH: z.string().optional(),
-  C2PA_KEY_PATH: z.string().optional(),
+  C2PA_CERT_PATH: z.string().default('./certs/certificate.pem'),
+  C2PA_KEY_PATH: z.string().default('./certs/private-key.pem'),
+  C2PA_TSA_URL: z.string().url().optional(), // Optional timestamp authority URL
 });
 
 export type Config = z.infer<typeof envSchema>;

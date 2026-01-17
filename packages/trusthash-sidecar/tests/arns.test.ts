@@ -13,6 +13,10 @@ mock.module('../src/config.js', () => ({
     ARNS_ROOT_NAME: 'testgateway',
     ARWEAVE_WALLET_FILE: './wallets/test-wallet.json',
     NODE_ENV: 'development',
+    // Include C2PA config to prevent undefined when tests run together
+    C2PA_CERT_PATH: './certs/certificate.pem',
+    C2PA_KEY_PATH: './certs/private-key.pem',
+    C2PA_TSA_URL: undefined,
   },
   isArnsTestnet: () => true,
 }));
