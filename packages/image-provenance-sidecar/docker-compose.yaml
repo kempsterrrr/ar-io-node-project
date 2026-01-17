@@ -16,7 +16,6 @@ services:
       - TURBO_GATEWAY_URL=${TURBO_GATEWAY_URL:-https://turbo.ardrive.io}
       - ARWEAVE_WALLET_FILE=/app/wallets/arweave-wallet.json
       - ARNS_ROOT_NAME=${ARNS_ROOT_NAME}
-      - ARNS_PROCESS_ID=${ARNS_PROCESS_ID}
       - MAX_IMAGE_SIZE_MB=${MAX_IMAGE_SIZE_MB:-50}
       - THUMBNAIL_WIDTH=${THUMBNAIL_WIDTH:-400}
       - THUMBNAIL_QUALITY=${THUMBNAIL_QUALITY:-80}
