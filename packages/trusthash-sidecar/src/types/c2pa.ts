@@ -129,8 +129,8 @@ export interface CreateManifestOptions {
   imageBuffer: Buffer;
   /** Image content type */
   contentType: string;
-  /** Thumbnail to embed */
-  thumbnail: {
+  /** Thumbnail to embed (optional - skipped in minimal storage mode) */
+  thumbnail?: {
     buffer: Buffer;
     contentType: string;
   };
@@ -197,3 +197,24 @@ export interface VerifyManifestResult {
   /** Detailed validation status */
   validationStatus: C2PAValidationStatus;
 }
+
+/**
+ * Storage modes for upload workflow.
+ *
+ * All modes return the signed image (with embedded manifest) to the client.
+ * The modes control what gets uploaded to Arweave:
+ *
+ * - standard: JUMBF sidecar + thumbnail on Arweave (default)
+ *   - Client receives: signed image with embedded manifest
+ *   - Arweave stores: JUMBF sidecar (~36KB) + thumbnail (~2KB)
+ *
+ * - minimal: JUMBF sidecar only on Arweave (privacy/cost mode)
+ *   - Client receives: signed image with embedded manifest
+ *   - Arweave stores: JUMBF sidecar only (~36KB)
+ *
+ * - full: JUMBF sidecar + full signed image + thumbnail on Arweave (archival)
+ *   - Client receives: signed image with embedded manifest
+ *   - Arweave stores: JUMBF sidecar (~36KB) + signed image (~39KB) + thumbnail (~2KB)
+ *   - Benefits: Fast manifest lookups, resilience, soft binding repository
+ */
+export type StorageMode = 'standard' | 'minimal' | 'full';

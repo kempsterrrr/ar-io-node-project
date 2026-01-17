@@ -59,6 +59,50 @@ A sidecar service for AR.IO gateways that provides C2PA (Content Credentials) ma
 
 > **Note**: The `/webhook` endpoint is only accessible from within the Docker network (e.g., from the AR.IO gateway). External requests to `/webhook` return 404.
 
+### Upload Storage Modes
+
+The `/v1/upload` endpoint supports three storage modes via the `?storage=` query parameter:
+
+| Mode       | Arweave Uploads                | Use Case                   |
+| ---------- | ------------------------------ | -------------------------- |
+| `standard` | JUMBF sidecar + thumbnail      | Default, balanced approach |
+| `minimal`  | JUMBF sidecar only             | Privacy/cost optimized     |
+| `full`     | Sidecar + signed image + thumb | Archival, full redundancy  |
+
+All modes return the signed image (with embedded C2PA manifest) to the client in the response.
+
+```bash
+# Upload with default storage mode
+curl -X POST http://localhost:3003/v1/upload -F "file=@image.jpg"
+
+# Upload with minimal storage (privacy mode)
+curl -X POST "http://localhost:3003/v1/upload?storage=minimal" -F "file=@image.jpg"
+
+# Upload with full archival storage
+curl -X POST "http://localhost:3003/v1/upload?storage=full" -F "file=@image.jpg"
+```
+
+## ArNS Configuration
+
+### Auto-Purchase Capacity
+
+The sidecar automatically manages ArNS undername capacity. When capacity runs low, it purchases more using ARIO tokens from the configured wallet.
+
+Add to your `.env`:
+
+```bash
+# Enable auto-purchase when capacity is low (default: true)
+ARNS_AUTO_PURCHASE_CAPACITY=true
+
+# Number of undernames to purchase at a time (default: 100)
+ARNS_CAPACITY_PURCHASE_QTY=100
+
+# Trigger purchase when available capacity falls below this (default: 10)
+ARNS_CAPACITY_THRESHOLD=10
+```
+
+> **Note**: Ensure your wallet has sufficient ARIO tokens for capacity purchases. The cost varies based on your ArNS name configuration.
+
 ## Gateway Configuration
 
 To enable webhooks from the AR.IO gateway, add to `apps/gateway/.env`:

@@ -48,10 +48,25 @@ export interface CreateUndernameOptions {
   description?: string;
 }
 
+/**
+ * Undername capacity information
+ */
+export interface UndernameCapacity {
+  /** Maximum undernames allowed for this ArNS name */
+  limit: number;
+  /** Current number of undernames in use */
+  used: number;
+  /** Available slots remaining */
+  available: number;
+  /** Whether capacity is available */
+  hasCapacity: boolean;
+}
+
 // Singleton instances (lazily initialized)
 let antInstance: Awaited<ReturnType<typeof ANT.init>> | null = null;
 let walletAddress: string | null = null;
 let cachedProcessId: string | null = null;
+let cachedUndernameLimit: number | null = null;
 
 /**
  * Get the ARIO process ID based on current environment.
@@ -107,10 +122,83 @@ async function getAntProcessId(): Promise<string> {
       'ANT process ID resolved'
     );
 
+    // Also cache the undername limit from the record
+    if (typeof record.undernameLimit === 'number') {
+      cachedUndernameLimit = record.undernameLimit;
+      logger.debug(
+        { undernameLimit: cachedUndernameLimit },
+        'Cached undername limit from ArNS record'
+      );
+    }
+
     return cachedProcessId;
   } catch (error) {
     logger.error({ error, arnsName: config.ARNS_ROOT_NAME }, 'Failed to look up ArNS record');
     throw new Error(`Failed to look up ArNS name: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Get the undername capacity for the configured ArNS name.
+ *
+ * Checks the ArNS record for the undername limit and compares
+ * against the current number of registered undernames.
+ *
+ * @returns Capacity information including limit, used, and available slots
+ */
+export async function getUndernameCapacity(): Promise<UndernameCapacity> {
+  if (!config.ARNS_ROOT_NAME) {
+    throw new Error('ARNS_ROOT_NAME is required for capacity check');
+  }
+
+  try {
+    // Ensure we have the ANT initialized (which also caches the limit)
+    const ant = await getANT();
+
+    // Get the undername limit (from cache or fetch fresh)
+    let limit = cachedUndernameLimit;
+    if (limit === null) {
+      // Fetch fresh from ARIO if not cached
+      const arioProcessId = getArioProcessId();
+      const ario = ARIO.init({ processId: arioProcessId });
+      const record = await ario.getArNSRecord({ name: config.ARNS_ROOT_NAME });
+
+      if (!record) {
+        throw new Error(`ArNS name not found: ${config.ARNS_ROOT_NAME}`);
+      }
+
+      limit = typeof record.undernameLimit === 'number' ? record.undernameLimit : 10;
+      cachedUndernameLimit = limit;
+    }
+
+    // Get current records from the ANT
+    const records = await ant.getRecords();
+
+    // Count undernames (exclude the base '@' record)
+    const recordEntries = Object.entries(records);
+    const undernameCount = recordEntries.filter(([key]) => key !== '@').length;
+
+    const available = Math.max(0, limit - undernameCount);
+
+    logger.debug(
+      {
+        limit,
+        used: undernameCount,
+        available,
+        hasCapacity: available > 0,
+      },
+      'Checked undername capacity'
+    );
+
+    return {
+      limit,
+      used: undernameCount,
+      available,
+      hasCapacity: available > 0,
+    };
+  } catch (error) {
+    logger.error({ error }, 'Failed to check undername capacity');
+    throw new Error(`Capacity check failed: ${(error as Error).message}`);
   }
 }
 
@@ -220,7 +308,190 @@ export function buildArnsUrl(undername: string): string {
 }
 
 /**
+ * Result of checking capacity purchase cost
+ */
+export interface CapacityCostResult {
+  /** Cost in mARIO (milli-ARIO tokens) */
+  mARIO: number;
+  /** Cost in ARIO tokens */
+  ario: number;
+  /** Number of undernames to purchase */
+  qty: number;
+}
+
+/**
+ * Result of purchasing capacity
+ */
+export interface CapacityPurchaseResult {
+  success: boolean;
+  txId?: string;
+  newLimit?: number;
+  error?: string;
+}
+
+/**
+ * Get the cost to increase undername capacity.
+ *
+ * @param qty - Number of additional undernames to purchase
+ * @returns Cost in mARIO and ARIO
+ */
+export async function getCapacityCost(qty: number): Promise<CapacityCostResult> {
+  if (!config.ARNS_ROOT_NAME) {
+    throw new Error('ARNS_ROOT_NAME is required for capacity cost check');
+  }
+
+  try {
+    const arioProcessId = getArioProcessId();
+    const ario = ARIO.init({ processId: arioProcessId });
+
+    const cost = await ario.getTokenCost({
+      intent: 'Increase-Undername-Limit',
+      name: config.ARNS_ROOT_NAME,
+      quantity: qty,
+    });
+
+    // Cost is returned in mARIO (milli-ARIO)
+    const mARIO = Number(cost);
+    const ario_tokens = mARIO / 1_000_000; // Convert to ARIO
+
+    logger.debug(
+      {
+        qty,
+        mARIO,
+        ario: ario_tokens,
+        arnsName: config.ARNS_ROOT_NAME,
+      },
+      'Checked undername capacity cost'
+    );
+
+    return {
+      mARIO,
+      ario: ario_tokens,
+      qty,
+    };
+  } catch (error) {
+    logger.error({ error, qty }, 'Failed to get capacity cost');
+    throw new Error(`Failed to get capacity cost: ${(error as Error).message}`);
+  }
+}
+
+/**
+ * Purchase additional undername capacity for the configured ArNS name.
+ *
+ * Uses ARIO tokens from the configured wallet to increase the undername limit.
+ *
+ * @param qty - Number of additional undernames to purchase
+ * @returns Purchase result with transaction ID
+ */
+export async function purchaseUndernameCapacity(qty: number): Promise<CapacityPurchaseResult> {
+  if (!config.ARNS_ROOT_NAME) {
+    throw new Error('ARNS_ROOT_NAME is required for capacity purchase');
+  }
+
+  logger.info(
+    {
+      qty,
+      arnsName: config.ARNS_ROOT_NAME,
+    },
+    'Purchasing additional undername capacity'
+  );
+
+  try {
+    // Load wallet and create signer
+    const walletFile = Bun.file(config.ARWEAVE_WALLET_FILE);
+    if (!(await walletFile.exists())) {
+      throw new Error(`Wallet file not found: ${config.ARWEAVE_WALLET_FILE}`);
+    }
+
+    const jwk = await walletFile.json();
+    const signer = new ArweaveSigner(jwk);
+
+    // Initialize ARIO with signer for write operations
+    const arioProcessId = getArioProcessId();
+    const ario = ARIO.init({
+      processId: arioProcessId,
+      signer: signer as AoSigner,
+    });
+
+    // Purchase the capacity increase
+    const result = await ario.increaseUndernameLimit({
+      name: config.ARNS_ROOT_NAME,
+      qty,
+    });
+
+    // Update cached limit
+    if (cachedUndernameLimit !== null) {
+      cachedUndernameLimit += qty;
+    }
+
+    logger.info(
+      {
+        txId: result.id,
+        qty,
+        newLimit: cachedUndernameLimit,
+        arnsName: config.ARNS_ROOT_NAME,
+      },
+      'Successfully purchased undername capacity'
+    );
+
+    return {
+      success: true,
+      txId: result.id,
+      newLimit: cachedUndernameLimit ?? undefined,
+    };
+  } catch (error) {
+    logger.error({ error, qty }, 'Failed to purchase undername capacity');
+    return {
+      success: false,
+      error: (error as Error).message,
+    };
+  }
+}
+
+/**
+ * Ensure sufficient undername capacity, auto-purchasing if needed.
+ *
+ * If capacity is below the threshold and auto-purchase is enabled,
+ * automatically purchases additional capacity.
+ *
+ * @returns The current capacity after any purchases
+ */
+async function ensureCapacity(): Promise<UndernameCapacity> {
+  const capacity = await getUndernameCapacity();
+
+  // Check if we need to auto-purchase
+  if (capacity.available < config.ARNS_CAPACITY_THRESHOLD && config.ARNS_AUTO_PURCHASE_CAPACITY) {
+    logger.warn(
+      {
+        available: capacity.available,
+        threshold: config.ARNS_CAPACITY_THRESHOLD,
+        purchaseQty: config.ARNS_CAPACITY_PURCHASE_QTY,
+      },
+      'Undername capacity below threshold, attempting auto-purchase'
+    );
+
+    const purchaseResult = await purchaseUndernameCapacity(config.ARNS_CAPACITY_PURCHASE_QTY);
+
+    if (purchaseResult.success) {
+      // Refresh capacity after purchase
+      return await getUndernameCapacity();
+    } else {
+      logger.error(
+        { error: purchaseResult.error },
+        'Auto-purchase failed, continuing with current capacity'
+      );
+    }
+  }
+
+  return capacity;
+}
+
+/**
  * Create and register a new undername pointing to a transaction.
+ *
+ * Checks undername capacity before attempting registration.
+ * If capacity is low and auto-purchase is enabled, purchases more.
+ * If capacity is exhausted and purchase fails, returns an error.
  *
  * @param options - Undername creation options
  * @returns Registration result with undername and full URL
@@ -241,6 +512,37 @@ export async function createUndername(options: CreateUndernameOptions): Promise<
   );
 
   try {
+    // Check and ensure capacity (auto-purchase if needed)
+    const capacity = await ensureCapacity();
+
+    if (!capacity.hasCapacity) {
+      logger.error(
+        {
+          limit: capacity.limit,
+          used: capacity.used,
+          undername,
+          autoPurchaseEnabled: config.ARNS_AUTO_PURCHASE_CAPACITY,
+        },
+        'ArNS undername capacity exhausted and auto-purchase failed or disabled'
+      );
+
+      throw new Error(
+        `Undername capacity exhausted: ${capacity.used}/${capacity.limit} undernames in use. ` +
+          (config.ARNS_AUTO_PURCHASE_CAPACITY
+            ? 'Auto-purchase failed. Check wallet balance and try again.'
+            : 'Enable ARNS_AUTO_PURCHASE_CAPACITY or manually purchase more capacity.')
+      );
+    }
+
+    logger.debug(
+      {
+        available: capacity.available,
+        limit: capacity.limit,
+        used: capacity.used,
+      },
+      'Undername capacity available'
+    );
+
     const ant = await getANT();
     const owner = await getWalletAddress();
 

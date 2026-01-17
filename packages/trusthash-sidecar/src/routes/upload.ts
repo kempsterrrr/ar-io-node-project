@@ -9,6 +9,12 @@ import { z } from 'zod';
 import { logger } from '../utils/logger.js';
 import { uploadImage, getTurboBalance, estimateUploadCost } from '../services/upload.service.js';
 import { config } from '../config.js';
+import type { StorageMode } from '../types/c2pa.js';
+
+/**
+ * Valid storage modes
+ */
+const VALID_STORAGE_MODES: StorageMode[] = ['standard', 'minimal', 'full'];
 
 const upload = new Hono();
 
@@ -30,15 +36,34 @@ const SUPPORTED_TYPES = [
  *
  * Upload an image file and create a C2PA manifest stored on Arweave.
  *
+ * Query parameters:
+ * - storage: Storage mode - standard (default), minimal, or full
+ *   - standard: JUMBF sidecar + thumbnail on Arweave
+ *   - minimal: JUMBF sidecar only (privacy/cost mode)
+ *   - full: JUMBF sidecar + full signed image + thumbnail (archival)
+ *
  * Request: multipart/form-data
  * - file: Image file (required)
  * - title: Optional title/description
  * - creator: Optional creator name
  *
- * Response: JSON with manifest details
+ * Response: JSON with manifest details including base64-encoded signed image
  */
 upload.post('/', async (c) => {
   try {
+    // Parse storage mode from query parameter
+    const storageParam = c.req.query('storage') || 'standard';
+    if (!VALID_STORAGE_MODES.includes(storageParam as StorageMode)) {
+      return c.json(
+        {
+          success: false,
+          error: `Invalid storage mode: ${storageParam}. Valid modes: ${VALID_STORAGE_MODES.join(', ')}`,
+        },
+        400
+      );
+    }
+    const storageMode = storageParam as StorageMode;
+
     const body = await c.req.parseBody();
 
     // Get the uploaded file
@@ -92,6 +117,7 @@ upload.post('/', async (c) => {
         size: file.size,
         hasTitle: !!title,
         hasCreator: !!creator,
+        storageMode,
       },
       'Processing upload request'
     );
@@ -102,6 +128,7 @@ upload.post('/', async (c) => {
       contentType,
       title,
       creator,
+      storageMode,
     });
 
     if (result.success && result.data) {

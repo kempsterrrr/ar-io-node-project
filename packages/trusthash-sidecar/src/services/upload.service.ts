@@ -18,7 +18,7 @@ import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 import { computePHash } from './phash.service.js';
 import { generateThumbnail, validateImage, computeImageHash } from './thumbnail.service.js';
-import { createManifest, readManifest } from './c2pa.service.js';
+import { createManifest, readManifest, extractManifestJUMBF } from './c2pa.service.js';
 import {
   createUndername,
   updateUndername,
@@ -27,7 +27,7 @@ import {
   isArnsConfigured,
 } from './arns.service.js';
 import { insertManifest } from '../db/index.js';
-import type { C2PAIngredient } from '../types/c2pa.js';
+import type { C2PAIngredient, StorageMode } from '../types/c2pa.js';
 
 /**
  * Upload request options
@@ -41,6 +41,8 @@ export interface UploadOptions {
   title?: string;
   /** Optional creator name */
   creator?: string;
+  /** Storage mode: standard (default), minimal, or full */
+  storageMode?: StorageMode;
 }
 
 /**
@@ -51,8 +53,10 @@ export interface UploadResult {
   success: boolean;
   /** Data payload (on success) */
   data?: {
-    /** Arweave transaction ID of the manifest */
+    /** Arweave transaction ID of the JUMBF sidecar manifest (all modes) */
     manifestTxId: string;
+    /** Arweave transaction ID of the full signed image (full mode only) */
+    signedImageTxId?: string;
     /** ArNS undername */
     arnsUndername: string;
     /** Full ArNS URL */
@@ -65,6 +69,12 @@ export interface UploadResult {
     hasPriorManifest: boolean;
     /** Content type of original image */
     contentType: string;
+    /** Storage mode used for this upload */
+    storageMode: StorageMode;
+    /** Signed image with embedded C2PA manifest (base64) - always returned */
+    signedImage: string;
+    /** Arweave transaction ID of thumbnail (standard/full modes only) */
+    thumbnailTxId?: string;
   };
   /** Error message (on failure) */
   error?: string;
@@ -123,13 +133,14 @@ async function getTurboClient(): Promise<TurboAuthenticatedClient> {
  * @returns Upload result with manifest details
  */
 export async function uploadImage(options: UploadOptions): Promise<UploadResult> {
-  const { imageBuffer, contentType, title, creator } = options;
+  const { imageBuffer, contentType, title, creator, storageMode = 'standard' } = options;
 
   logger.info(
     {
       contentType,
       size: imageBuffer.length,
       hasTitle: !!title,
+      storageMode,
     },
     'Starting image upload'
   );
@@ -176,9 +187,14 @@ export async function uploadImage(options: UploadOptions): Promise<UploadResult>
       'Computed image hashes'
     );
 
-    // Step 4: Generate thumbnail
-    const thumbnail = await generateThumbnail(imageBuffer);
-    logger.debug({ thumbnailSize: thumbnail.size }, 'Generated thumbnail');
+    // Step 4: Generate thumbnail (skip for minimal mode)
+    let thumbnail: { buffer: Buffer; contentType: string; size: number } | undefined;
+    if (storageMode !== 'minimal') {
+      thumbnail = await generateThumbnail(imageBuffer);
+      logger.debug({ thumbnailSize: thumbnail.size }, 'Generated thumbnail');
+    } else {
+      logger.debug('Skipping thumbnail generation (minimal mode)');
+    }
 
     // Step 5: Create ArNS undername
     // First, we need to create a placeholder - we'll update it after upload
@@ -207,14 +223,16 @@ export async function uploadImage(options: UploadOptions): Promise<UploadResult>
       logger.warn('ArNS not configured, using local undername');
     }
 
-    // Step 6: Create C2PA manifest
+    // Step 6: Create C2PA manifest (signed image with embedded manifest)
     const manifestResult = await createManifest({
       imageBuffer,
       contentType,
-      thumbnail: {
-        buffer: thumbnail.buffer,
-        contentType: thumbnail.contentType,
-      },
+      thumbnail: thumbnail
+        ? {
+            buffer: thumbnail.buffer,
+            contentType: thumbnail.contentType,
+          }
+        : undefined,
       originalHash,
       pHash: phashResult.hex,
       arnsUrl,
@@ -223,48 +241,123 @@ export async function uploadImage(options: UploadOptions): Promise<UploadResult>
       priorManifest,
     });
 
+    const signedImageBuffer = manifestResult.manifestBuffer;
+
     logger.debug(
       {
-        manifestSize: manifestResult.manifestBuffer.length,
+        signedImageSize: signedImageBuffer.length,
         hasPriorManifest: manifestResult.hasPriorManifest,
       },
       'Created C2PA manifest'
     );
 
-    // Step 7: Upload manifest to Arweave via Turbo
+    // Step 7: Extract JUMBF sidecar from signed image (manifest only, no pixels)
+    const jumbfSidecar = extractManifestJUMBF(signedImageBuffer);
+    if (!jumbfSidecar) {
+      return {
+        success: false,
+        error: 'Failed to extract JUMBF manifest from signed image',
+      };
+    }
+
+    logger.debug(
+      {
+        jumbfSize: jumbfSidecar.length,
+        signedImageSize: signedImageBuffer.length,
+        sizeReduction: signedImageBuffer.length - jumbfSidecar.length,
+      },
+      'Extracted JUMBF sidecar for storage'
+    );
+
+    // Step 8: Upload JUMBF sidecar to Arweave (all modes)
+    // This is the manifest-only data without image pixels
     const turbo = await getTurboClient();
     const ownerAddress = await getWalletAddress();
 
-    const uploadResult = await turbo.uploadFile({
-      fileStreamFactory: () => Readable.from(manifestResult.manifestBuffer),
-      fileSizeFactory: () => manifestResult.manifestBuffer.length,
+    const sidecarUploadResult = await turbo.uploadFile({
+      fileStreamFactory: () => Readable.from(jumbfSidecar),
+      fileSizeFactory: () => jumbfSidecar.length,
       dataItemOpts: {
         tags: [
-          { name: 'Content-Type', value: manifestResult.contentType },
+          { name: 'Content-Type', value: 'application/c2pa' },
+          { name: 'Manifest-Type', value: 'sidecar' },
           { name: 'pHash', value: phashResult.hex },
-          { name: 'App-Name', value: 'Image-Provenance-Sidecar' },
-          { name: 'App-Version', value: '0.1.0' },
+          { name: 'App-Name', value: 'Trusthash-Sidecar' },
+          { name: 'App-Version', value: '1.0.0' },
           { name: 'Original-Content-Type', value: contentType },
           { name: 'ArNS-Undername', value: arnsUndername },
+          { name: 'Storage-Mode', value: storageMode },
         ],
       },
       signal: AbortSignal.timeout(60_000), // 60 second timeout
     });
 
-    const manifestTxId = uploadResult.id;
-    logger.info({ manifestTxId }, 'Manifest uploaded to Arweave');
+    const manifestTxId = sidecarUploadResult.id;
+    logger.info(
+      { manifestTxId, sidecarSize: jumbfSidecar.length },
+      'JUMBF sidecar uploaded to Arweave'
+    );
 
-    // Step 8: Update ArNS undername to point to manifest
+    // Step 9: For full mode, also upload the complete signed image
+    let signedImageTxId: string | undefined;
+    if (storageMode === 'full') {
+      const signedImageUploadResult = await turbo.uploadFile({
+        fileStreamFactory: () => Readable.from(signedImageBuffer),
+        fileSizeFactory: () => signedImageBuffer.length,
+        dataItemOpts: {
+          tags: [
+            { name: 'Content-Type', value: manifestResult.contentType },
+            { name: 'Manifest-Type', value: 'embedded' },
+            { name: 'Manifest-Sidecar-TxId', value: manifestTxId },
+            { name: 'pHash', value: phashResult.hex },
+            { name: 'App-Name', value: 'Trusthash-Sidecar' },
+            { name: 'App-Version', value: '1.0.0' },
+            { name: 'Original-Content-Type', value: contentType },
+            { name: 'ArNS-Undername', value: arnsUndername },
+            { name: 'Storage-Mode', value: storageMode },
+          ],
+        },
+        signal: AbortSignal.timeout(60_000), // 60 second timeout
+      });
+      signedImageTxId = signedImageUploadResult.id;
+      logger.info(
+        { signedImageTxId, signedImageSize: signedImageBuffer.length },
+        'Full signed image uploaded to Arweave (full mode)'
+      );
+    }
+
+    // Step 10: Upload thumbnail (for standard/full modes)
+    let thumbnailTxId: string | undefined;
+    if (thumbnail && storageMode !== 'minimal') {
+      const thumbnailUploadResult = await turbo.uploadFile({
+        fileStreamFactory: () => Readable.from(thumbnail.buffer),
+        fileSizeFactory: () => thumbnail.buffer.length,
+        dataItemOpts: {
+          tags: [
+            { name: 'Content-Type', value: thumbnail.contentType },
+            { name: 'App-Name', value: 'Trusthash-Sidecar' },
+            { name: 'App-Version', value: '1.0.0' },
+            { name: 'Type', value: 'thumbnail' },
+            { name: 'Parent-Manifest', value: manifestTxId },
+          ],
+        },
+        signal: AbortSignal.timeout(30_000), // 30 second timeout
+      });
+      thumbnailTxId = thumbnailUploadResult.id;
+      logger.info({ thumbnailTxId }, 'Thumbnail uploaded to Arweave');
+    }
+
+    // Step 11: Update ArNS undername to point to manifest (sidecar)
     if (isArnsConfigured()) {
       const updateResult = await updateUndername(arnsUndername, manifestTxId);
       if (updateResult.success) {
-        logger.debug({ arnsUndername, manifestTxId }, 'ArNS undername updated');
+        logger.debug({ arnsUndername, manifestTxId }, 'ArNS undername updated to point to sidecar');
       } else {
         logger.warn({ error: updateResult.error }, 'Failed to update ArNS undername');
       }
     }
 
-    // Step 9: Index in local database
+    // Step 12: Index in local database
     await insertManifest({
       manifestTxId,
       arnsUndername,
@@ -280,22 +373,34 @@ export async function uploadImage(options: UploadOptions): Promise<UploadResult>
     logger.info(
       {
         manifestTxId,
+        signedImageTxId,
+        thumbnailTxId,
         arnsUrl,
         phash: phashResult.hex,
+        storageMode,
+        jumbfSize: jumbfSidecar.length,
+        signedImageSize: signedImageBuffer.length,
       },
       'Image upload complete'
     );
+
+    // Convert signed image to base64 for response (always returned to client)
+    const signedImageBase64 = signedImageBuffer.toString('base64');
 
     return {
       success: true,
       data: {
         manifestTxId,
+        signedImageTxId,
         arnsUndername,
         arnsUrl,
         phash: phashResult.hex,
         originalHash,
         hasPriorManifest: manifestResult.hasPriorManifest,
         contentType,
+        storageMode,
+        signedImage: signedImageBase64,
+        thumbnailTxId,
       },
     };
   } catch (error) {

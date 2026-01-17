@@ -738,6 +738,37 @@ export async function hasManifest(buffer: Buffer): Promise<boolean> {
 }
 
 /**
+ * Extract the raw JUMBF manifest data from a signed image.
+ *
+ * This extracts just the manifest bytes (no image pixels), which can be
+ * stored as a "sidecar" file for C2PA manifest repository lookups.
+ *
+ * @param signedImageBuffer - Buffer containing a signed image with embedded C2PA manifest
+ * @returns Raw JUMBF manifest data, or null if no manifest found
+ */
+export function extractManifestJUMBF(signedImageBuffer: Buffer): Buffer | null {
+  try {
+    const asset = createC2PAAsset(signedImageBuffer);
+    if (!asset) {
+      logger.debug('Cannot extract JUMBF: unsupported image format');
+      return null;
+    }
+
+    const jumbfData = asset.getManifestJUMBF();
+    if (!jumbfData || jumbfData.length === 0) {
+      logger.debug('No JUMBF manifest found in image');
+      return null;
+    }
+
+    logger.debug({ jumbfSize: jumbfData.length }, 'Extracted JUMBF manifest from image');
+    return Buffer.from(jumbfData);
+  } catch (error) {
+    logger.error({ error }, 'Failed to extract JUMBF manifest');
+    return null;
+  }
+}
+
+/**
  * Get the claim generator string.
  */
 export function getClaimGenerator(): string {

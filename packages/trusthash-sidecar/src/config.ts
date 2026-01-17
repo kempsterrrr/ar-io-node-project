@@ -20,6 +20,15 @@ const envSchema = z.object({
 
   // ArNS
   ARNS_ROOT_NAME: z.string().optional(),
+  // Auto-purchase undername capacity when running low
+  ARNS_AUTO_PURCHASE_CAPACITY: z
+    .string()
+    .transform((v) => v === 'true')
+    .default('true'),
+  // Number of undernames to purchase at a time
+  ARNS_CAPACITY_PURCHASE_QTY: z.coerce.number().min(1).max(1000).default(100),
+  // Threshold to trigger auto-purchase (purchase when available < threshold)
+  ARNS_CAPACITY_THRESHOLD: z.coerce.number().min(1).default(10),
 
   // Image Processing
   MAX_IMAGE_SIZE_MB: z.coerce.number().default(50),
