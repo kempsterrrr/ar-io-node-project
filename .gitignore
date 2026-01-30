@@ -23,8 +23,8 @@ build/
 !.env.*.example
 
 # Wallet keyfiles (sensitive!)
-wallets/*.json
-!wallets/.gitkeep
+**/wallets/*.json
+!**/wallets/.gitkeep
 
 # Logs
 logs/
