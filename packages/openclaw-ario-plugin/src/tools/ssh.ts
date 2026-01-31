@@ -285,7 +285,9 @@ export function registerSSHTools(api: OpenClawPluginApi, sshConfig: SSHConfig): 
         const success = upResult.exitCode === 0;
         return toolResult({
           success,
-          message: success ? 'Gateway updated and restarted' : 'Gateway update failed during restart',
+          message: success
+            ? 'Gateway updated and restarted'
+            : 'Gateway update failed during restart',
           pullOutput: pullResult.stdout,
           upOutput: upResult.stdout,
           error: success ? undefined : upResult.stderr || upResult.stdout,
