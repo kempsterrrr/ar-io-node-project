@@ -21,7 +21,7 @@
 FROM node:22-slim
 
 # Install system dependencies (baked in - survives restarts)
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
     curl \
     ca-certificates \
