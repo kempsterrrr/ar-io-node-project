@@ -36,6 +36,11 @@ interface OpenClawPluginApi {
   }): void;
 }
 
+/** Validates a service name to prevent command injection */
+function isValidServiceName(service: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(service);
+}
+
 /** Helper to format tool results */
 function toolResult(data: unknown): ToolResult {
   return {
@@ -172,6 +177,13 @@ export function registerSSHTools(api: OpenClawPluginApi, sshConfig: SSHConfig): 
     execute: async (_id, params) => {
       try {
         const service = params.service as string | undefined;
+        if (service && !isValidServiceName(service)) {
+          return toolResult({
+            success: false,
+            error:
+              'Invalid service name. Only alphanumeric characters, hyphens, and underscores allowed.',
+          });
+        }
         const command = service
           ? `cd ~/ar-io-node && docker compose restart ${service}`
           : 'cd ~/ar-io-node && docker compose restart';
@@ -210,6 +222,13 @@ export function registerSSHTools(api: OpenClawPluginApi, sshConfig: SSHConfig): 
     execute: async (_id, params) => {
       try {
         const service = params.service as string | undefined;
+        if (service && !isValidServiceName(service)) {
+          return toolResult({
+            success: false,
+            error:
+              'Invalid service name. Only alphanumeric characters, hyphens, and underscores allowed.',
+          });
+        }
         const lines = (params.lines as number) ?? 50;
         const command = service
           ? `cd ~/ar-io-node && docker compose logs --tail=${lines} ${service}`
