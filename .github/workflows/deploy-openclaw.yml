@@ -157,10 +157,9 @@ jobs:
         run: |
           echo "## OpenClaw Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Server:** ${{ secrets.OPENCLAW_HOST }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "**Time:** $(date -u)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
           echo "- Access UI: https://clawd.agenticway.io" >> $GITHUB_STEP_SUMMARY
-          echo "- View logs: \`ssh root@${{ secrets.OPENCLAW_HOST }} 'cd ~/openclaw && docker compose logs -f'\`" >> $GITHUB_STEP_SUMMARY
+          echo "- View logs: See deployment documentation for SSH access" >> $GITHUB_STEP_SUMMARY
