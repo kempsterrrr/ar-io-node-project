@@ -1,5 +1,12 @@
 # OpenClaw with AR.IO Gateway Plugin
 # Builds OpenClaw and installs the AR.IO gateway plugin
+#
+# Plugin structure:
+#   /home/node/.openclaw/extensions/ario-gateway/
+#   ├── package.json              (with main: "dist/index.js")
+#   └── dist/
+#       ├── index.js              (compiled plugin entry point)
+#       └── openclaw.plugin.json  (plugin manifest with id: "ario-gateway")
 
 FROM node:22-slim AS builder
 
@@ -13,15 +20,12 @@ COPY openclaw.plugin.json ./
 # Install dependencies and build
 RUN npm install && npm run build
 
-# Copy manifest to dist folder (OpenClaw expects it next to the entry point)
-RUN cp openclaw.plugin.json dist/
-
 # Production image
 FROM ghcr.io/openclaw/openclaw:latest
 
 # Create all required directories with proper permissions
 USER root
-RUN mkdir -p /home/node/.openclaw/extensions/ario-gateway/dist \
+RUN mkdir -p /home/node/.openclaw/extensions/ario-gateway \
     /home/node/.openclaw/devices \
     /home/node/.openclaw/canvas \
     /home/node/.openclaw/cron \
@@ -29,8 +33,10 @@ RUN mkdir -p /home/node/.openclaw/extensions/ario-gateway/dist \
     && chown -R node:node /home/node/.openclaw
 
 # Copy built plugin to extensions directory
+# Folder name MUST match the plugin ID in openclaw.plugin.json ("ario-gateway")
+# OpenClaw expects: manifest alongside entry point in dist/
 COPY --from=builder --chown=node:node /build/dist /home/node/.openclaw/extensions/ario-gateway/dist
-COPY --from=builder --chown=node:node /build/openclaw.plugin.json /home/node/.openclaw/extensions/ario-gateway/
+COPY --from=builder --chown=node:node /build/openclaw.plugin.json /home/node/.openclaw/extensions/ario-gateway/dist/
 COPY --from=builder --chown=node:node /build/package.json /home/node/.openclaw/extensions/ario-gateway/
 
 USER node

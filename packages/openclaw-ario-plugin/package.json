@@ -9,7 +9,9 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:integration": "docker compose -f tests/docker-compose.test.yaml up --build --abort-on-container-exit --exit-code-from test-runner",
+    "test:integration:down": "docker compose -f tests/docker-compose.test.yaml down -v"
   },
   "peerDependencies": {
     "openclaw": ">=1.0.0"
