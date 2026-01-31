@@ -1,10 +1,29 @@
 {
-  "name": "@ar-io/openclaw-ario-plugin",
+  "name": "@kempsterrrr/openclaw-ario-plugin",
   "version": "0.1.0",
   "description": "OpenClaw plugin providing tools for interacting with AR.IO gateways and Arweave",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kempsterrrr/ar-io-node-project.git",
+    "directory": "packages/openclaw-ario-plugin"
+  },
+  "homepage": "https://github.com/kempsterrrr/ar-io-node-project/tree/main/packages/openclaw-ario-plugin",
+  "bugs": {
+    "url": "https://github.com/kempsterrrr/ar-io-node-project/issues"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

@@ -13,7 +13,25 @@ This plugin extends OpenClaw with Arweave-specific capabilities:
 
 ## Installation
 
-### Option A: Docker Sidecar (Recommended for Production)
+### Option A: npm Package (Recommended)
+
+Install the plugin into an existing OpenClaw installation:
+
+```bash
+# Install the plugin
+bunx openclaw plugins install @kempsterrrr/openclaw-ario-plugin
+
+# Configure to use any public AR.IO gateway
+bunx openclaw config set plugins.entries.ario-gateway.config.gatewayUrl "https://arweave.net"
+
+# Or use a specific gateway
+bunx openclaw config set plugins.entries.ario-gateway.config.gatewayUrl "https://ar-io.dev"
+
+# Start OpenClaw
+bunx openclaw start
+```
+
+### Option B: Docker Sidecar (AR.IO Gateway Operators)
 
 Run OpenClaw as a sidecar alongside your AR.IO gateway:
 
@@ -38,7 +56,7 @@ Access UI at http://localhost:18789
 
 The plugin is pre-configured to connect to the gateway at `http://core:4000` (internal Docker network).
 
-### Option B: Native OpenClaw (Development)
+### Option C: Local Development
 
 ```bash
 # Install OpenClaw
