@@ -163,10 +163,11 @@ export class GatewayClient {
     }
 
     const first = query.first ?? 10;
+    parts.push(`first: ${first}`);
 
     return `
       query {
-        transactions(${parts.join(', ')}, first: ${first}) {
+        transactions(${parts.join(', ')}) {
           edges {
             node {
               id
