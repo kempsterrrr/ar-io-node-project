@@ -1,0 +1,20 @@
+{
+  "id": "ario-gateway",
+  "name": "AR.IO Gateway Plugin",
+  "version": "0.1.0",
+  "description": "Tools for interacting with AR.IO gateways and Arweave",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "gatewayUrl": {
+        "type": "string",
+        "description": "URL of the AR.IO gateway"
+      },
+      "timeout": {
+        "type": "number",
+        "description": "Request timeout in milliseconds"
+      }
+    },
+    "required": ["gatewayUrl"]
+  }
+}

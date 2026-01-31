@@ -1,0 +1,36 @@
+{
+  "name": "@ar-io/openclaw-ario-plugin",
+  "version": "0.1.0",
+  "description": "OpenClaw plugin providing tools for interacting with AR.IO gateways and Arweave",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "openclaw": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "arweave",
+    "ar-io",
+    "gateway"
+  ]
+}
