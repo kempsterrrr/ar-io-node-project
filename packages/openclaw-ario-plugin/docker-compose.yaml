@@ -19,9 +19,9 @@ services:
       dockerfile: Dockerfile
     image: ar-io/openclaw-ario:local
     restart: unless-stopped
-    ports:
-      - "${OPENCLAW_PORT:-18789}:18789"
-      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+    expose:
+      - "18789"
+      - "18790"
     environment:
       HOME: /home/node
       TERM: xterm-256color
@@ -40,6 +40,26 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+
+  openclaw-proxy:
+    image: nginx:alpine
+    container_name: openclaw-proxy
+    restart: unless-stopped
+    ports:
+      - "${OPENCLAW_PORT:-18789}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      openclaw:
+        condition: service_healthy
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # CLI container for management commands
   openclaw-cli:

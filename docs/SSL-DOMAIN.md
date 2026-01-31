@@ -8,6 +8,7 @@
 | https://ario.agenticway.io/ar-io/info | Gateway info           |
 | https://ardrive.ario.agenticway.io    | ArNS subdomain example |
 | https://\*.ario.agenticway.io         | Any ArNS name          |
+| https://clawd.agenticway.io           | OpenClaw sidecar       |
 
 ## DNS Configuration
 
@@ -17,6 +18,7 @@
 | ---- | -------- | ----------------- | -------- |
 | A    | `ario`   | `138.199.227.142` | DNS only |
 | A    | `*.ario` | `138.199.227.142` | DNS only |
+| A    | `clawd`  | `138.199.227.142` | DNS only |
 
 **Important:** Keep proxy status as "DNS only" (gray cloud) for AR.IO gateways.
 
@@ -50,6 +52,48 @@ certbot renew --force-renewal
 ### Nginx Configuration
 
 Located at: `/etc/nginx/sites-available/ario-agenticway`
+
+#### OpenClaw (clawd.agenticway.io)
+
+Add this server block for the OpenClaw sidecar:
+
+```nginx
+# clawd.agenticway.io → OpenClaw
+server {
+    listen 80;
+    server_name clawd.agenticway.io;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name clawd.agenticway.io;
+
+    ssl_certificate /etc/letsencrypt/live/ario.agenticway.io/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/ario.agenticway.io/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    location / {
+        proxy_pass http://localhost:18789;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+**Note:** Update the SSL certificate to include `clawd.agenticway.io`:
+
+```bash
+certbot certonly --dns-cloudflare \
+  -d ario.agenticway.io \
+  -d '*.ario.agenticway.io' \
+  -d clawd.agenticway.io
+```
 
 ## Server Access
 
