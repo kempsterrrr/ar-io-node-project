@@ -87,11 +87,25 @@ async function executeSSH(
       stderr += data.toString();
     });
 
-    proc.on('close', (code) => {
+    proc.on('close', (code, signal) => {
+      // If process was terminated by signal, treat as error (exit code 128 + signal number convention)
+      // If code is null without signal, default to 1 (unknown error)
+      let exitCode = code ?? 1;
+      if (signal) {
+        // Common signal numbers: SIGTERM=15, SIGKILL=9, SIGINT=2
+        const signalNumbers: Record<string, number> = {
+          SIGHUP: 1,
+          SIGINT: 2,
+          SIGQUIT: 3,
+          SIGKILL: 9,
+          SIGTERM: 15,
+        };
+        exitCode = 128 + (signalNumbers[signal] ?? 0);
+      }
       resolve({
         stdout: stdout.trim(),
         stderr: stderr.trim(),
-        exitCode: code ?? 0,
+        exitCode,
       });
     });
 
