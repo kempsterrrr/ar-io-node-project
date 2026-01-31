@@ -1,17 +1,28 @@
 /**
  * AR.IO Gateway Plugin for OpenClaw
  *
- * Provides tools for interacting with AR.IO gateways and Arweave.
+ * Provides tools for interacting with AR.IO gateways and Arweave,
+ * including SSH-based gateway management operations.
+ *
  * See: https://docs.openclaw.ai/plugin
  */
 
 import { GatewayClient } from './gateway/client.js';
 import { registerGatewayTools } from './tools/index.js';
+import { registerSSHTools, type SSHConfig } from './tools/ssh.js';
+
+/** SSH configuration */
+interface SSHPluginConfig {
+  host: string;
+  user?: string;
+  keyPath: string;
+}
 
 /** Plugin configuration */
 interface PluginConfig {
   gatewayUrl: string;
   timeout?: number;
+  ssh?: SSHPluginConfig;
 }
 
 /** OpenClaw plugin API */
@@ -55,6 +66,26 @@ export default {
         type: 'number',
         description: 'Request timeout in milliseconds',
       },
+      ssh: {
+        type: 'object',
+        description: 'SSH configuration for gateway management',
+        properties: {
+          host: {
+            type: 'string',
+            description: 'Gateway server hostname or IP',
+          },
+          user: {
+            type: 'string',
+            description: 'SSH username',
+            default: 'root',
+          },
+          keyPath: {
+            type: 'string',
+            description: 'Path to SSH private key file',
+          },
+        },
+        required: ['host', 'keyPath'],
+      },
     },
     required: ['gatewayUrl'],
   },
@@ -73,14 +104,33 @@ export default {
       return;
     }
 
+    // Register gateway API tools
     const gateway = new GatewayClient({
       baseUrl: config.gatewayUrl,
       timeout: config.timeout ?? 30000,
     });
 
     registerGatewayTools(api, gateway);
+    api.logger.info(`AR.IO Gateway plugin: API tools registered (${config.gatewayUrl})`);
 
-    api.logger.info(`AR.IO Gateway plugin registered (${config.gatewayUrl})`);
+    // Register SSH tools if configured
+    if (config.ssh) {
+      if (!config.ssh.host || !config.ssh.keyPath) {
+        api.logger.warn('AR.IO Gateway plugin: SSH config incomplete (need host and keyPath)');
+      } else {
+        const sshConfig: SSHConfig = {
+          host: config.ssh.host,
+          user: config.ssh.user ?? 'root',
+          keyPath: config.ssh.keyPath,
+        };
+        registerSSHTools(api, sshConfig);
+        api.logger.info(
+          `AR.IO Gateway plugin: SSH tools registered (${sshConfig.user}@${sshConfig.host})`
+        );
+      }
+    } else {
+      api.logger.info('AR.IO Gateway plugin: SSH tools not configured (optional)');
+    }
   },
 };
 
@@ -88,3 +138,4 @@ export default {
 export { GatewayClient } from './gateway/client.js';
 export type { GatewayClientOptions } from './gateway/client.js';
 export type { GatewayInfo, ArweaveTransaction, ArNSResolution } from './types/index.js';
+export type { SSHConfig } from './tools/ssh.js';

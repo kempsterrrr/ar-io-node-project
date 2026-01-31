@@ -1,6 +1,6 @@
 # AR.IO Gateway Plugin for OpenClaw
 
-An OpenClaw plugin that provides tools for interacting with AR.IO gateways and Arweave.
+An OpenClaw plugin that provides tools for interacting with AR.IO gateways and Arweave, including SSH-based gateway management operations.
 
 ## Overview
 
@@ -10,83 +10,45 @@ This plugin extends OpenClaw with Arweave-specific capabilities:
 - Resolve ArNS (Arweave Name System) names
 - Search for content by tags or owners
 - Get gateway status and information
+- **SSH gateway management** - restart, view logs, update (when configured)
 
 ## Installation
 
-### Option A: npm Package (Recommended)
-
-Install the plugin into an existing OpenClaw installation:
-
 ```bash
 # Install the plugin
-bunx openclaw plugins install @kempsterrrr/openclaw-ario-plugin
+npx openclaw plugins install @kempsterrrr/openclaw-ario-plugin
 
 # Configure to use any public AR.IO gateway
-bunx openclaw config set plugins.entries.ario-gateway.config.gatewayUrl "https://arweave.net"
+npx openclaw config set plugins.entries.ario-gateway.config.gatewayUrl "https://arweave.net"
 
 # Or use a specific gateway
-bunx openclaw config set plugins.entries.ario-gateway.config.gatewayUrl "https://ar-io.dev"
+npx openclaw config set plugins.entries.ario-gateway.config.gatewayUrl "https://ar-io.dev"
 
 # Start OpenClaw
-bunx openclaw start
-```
-
-### Option B: Docker Sidecar (AR.IO Gateway Operators)
-
-Run OpenClaw as a sidecar alongside your AR.IO gateway:
-
-```bash
-# 1. Start the gateway first
-cd apps/gateway && docker compose up -d
-
-# 2. Configure environment
-cd packages/openclaw-ario-plugin
-cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
-
-# 3. Build and start OpenClaw sidecar
-docker compose up -d --build
-
-# 4. (Optional) Setup messaging channels
-docker compose run --rm openclaw-cli channels login  # WhatsApp QR
-docker compose run --rm openclaw-cli channels add --channel telegram --token "<token>"
-```
-
-Access UI at http://localhost:18789
-
-The plugin is pre-configured to connect to the gateway at `http://core:4000` (internal Docker network).
-
-### Option C: Local Development
-
-```bash
-# Install OpenClaw
-bunx openclaw@latest
-
-# Start gateway
-cd apps/gateway && docker compose up -d
-
-# Build and install plugin
-cd packages/openclaw-ario-plugin
-bun install && bun run build
-bunx openclaw plugins install .
-
-# Configure plugin
-bunx openclaw config set plugins.entries.ario-gateway.config.gatewayUrl "http://localhost:3000"
-
-# Start OpenClaw
-bunx openclaw start
+npx openclaw start
 ```
 
 ## Configuration
 
 ### Plugin Configuration
 
-| Option       | Type   | Required | Default | Description                     |
-| ------------ | ------ | -------- | ------- | ------------------------------- |
-| `gatewayUrl` | string | Yes      | -       | URL of the AR.IO gateway        |
-| `timeout`    | number | No       | 30000   | Request timeout in milliseconds |
+| Option       | Type   | Required | Default | Description                                      |
+| ------------ | ------ | -------- | ------- | ------------------------------------------------ |
+| `gatewayUrl` | string | Yes      | -       | URL of the AR.IO gateway API                     |
+| `timeout`    | number | No       | 30000   | Request timeout in milliseconds                  |
+| `ssh`        | object | No       | -       | SSH configuration for gateway management (below) |
 
-The Docker sidecar pre-configures these in `openclaw.json`:
+### SSH Configuration (Optional)
+
+Enable SSH tools for gateway management when running on a separate server:
+
+| Option        | Type   | Required | Default | Description                   |
+| ------------- | ------ | -------- | ------- | ----------------------------- |
+| `ssh.host`    | string | Yes      | -       | Gateway server IP or hostname |
+| `ssh.user`    | string | No       | root    | SSH username                  |
+| `ssh.keyPath` | string | Yes      | -       | Path to SSH private key       |
+
+### Example Configuration
 
 ```json
 {
@@ -95,8 +57,13 @@ The Docker sidecar pre-configures these in `openclaw.json`:
       "ario-gateway": {
         "enabled": true,
         "config": {
-          "gatewayUrl": "http://core:4000",
-          "timeout": 30000
+          "gatewayUrl": "http://10.0.0.2:4000",
+          "timeout": 30000,
+          "ssh": {
+            "host": "10.0.0.2",
+            "user": "root",
+            "keyPath": "/home/node/.ssh/gateway_key"
+          }
         }
       }
     }
@@ -104,17 +71,9 @@ The Docker sidecar pre-configures these in `openclaw.json`:
 }
 ```
 
-### Environment Variables
-
-| Variable                 | Description                     | Required |
-| ------------------------ | ------------------------------- | -------- |
-| `ANTHROPIC_API_KEY`      | Claude API key                  | Yes      |
-| `OPENCLAW_GATEWAY_TOKEN` | OpenClaw auth token             | No       |
-| `OPENCLAW_PORT`          | Gateway UI port (default 18789) | No       |
-
 ## Tools
 
-The plugin registers the following tools with OpenClaw:
+### Gateway API Tools
 
 | Tool              | Description                        |
 | ----------------- | ---------------------------------- |
@@ -122,6 +81,18 @@ The plugin registers the following tools with OpenClaw:
 | `gateway_fetch`   | Fetch transaction data by ID       |
 | `gateway_resolve` | Resolve ArNS names                 |
 | `gateway_search`  | Search transactions by tags/owners |
+
+### Gateway SSH Tools (when configured)
+
+| Tool                  | Description                     |
+| --------------------- | ------------------------------- |
+| `gateway_status`      | Get Docker container status     |
+| `gateway_restart`     | Restart gateway containers      |
+| `gateway_logs`        | View container logs             |
+| `gateway_update`      | Pull latest images and redeploy |
+| `gateway_ssh_execute` | Execute arbitrary SSH commands  |
+
+## Tool Details
 
 ### gateway_info
 
@@ -164,30 +135,97 @@ Search for Arweave transactions by tags or owner addresses.
 
 **Example prompt:** "Search for transactions with App-Name ArDrive"
 
-## Architecture
+### gateway_status
 
-### Production Deployment
+Get Docker container status on the gateway server.
 
+**Parameters:** None
+
+**Example prompt:** "Show gateway status"
+
+### gateway_restart
+
+Restart gateway Docker containers.
+
+**Parameters:**
+
+- `service` (string, optional): Specific service to restart (e.g., "core", "envoy")
+
+**Example prompt:** "Restart the gateway" or "Restart the core service"
+
+### gateway_logs
+
+View recent logs from gateway containers.
+
+**Parameters:**
+
+- `service` (string, optional): Specific service to get logs from
+- `lines` (number, optional): Number of log lines (default: 50)
+
+**Example prompt:** "Show gateway logs" or "Show last 100 core logs"
+
+### gateway_update
+
+Update the gateway by pulling latest Docker images and redeploying.
+
+**Parameters:** None
+
+**Example prompt:** "Update the gateway to the latest version"
+
+## Deployment
+
+For production deployment, see [apps/openclaw/README.md](../../apps/openclaw/README.md).
+
+The plugin is designed to be installed from npm. Deployment infrastructure (Dockerfile, docker-compose, etc.) is in the `apps/openclaw/` directory.
+
+## Development
+
+```bash
+# Install dependencies
+npm install
+
+# Build
+npm run build
+
+# Type check
+npm run typecheck
+
+# Watch mode
+npm run dev
 ```
-clawd.agenticway.io (HTTPS)
-        ↓
-Production nginx (Hetzner server)
-        ↓
-localhost:18789
-        ↓
-openclaw-proxy (nginx:alpine in Docker)
-        ↓
-openclaw:18789 (internal)
+
+### Local Development Setup
+
+```bash
+# Install OpenClaw
+npx openclaw@latest
+
+# Start gateway
+cd apps/gateway && docker compose up -d
+
+# Build and install plugin
+cd packages/openclaw-ario-plugin
+npm install && npm run build
+npx openclaw plugins install .
+
+# Configure plugin
+npx openclaw config set plugins.entries.ario-gateway.config.gatewayUrl "http://localhost:3000"
+
+# Start OpenClaw
+npx openclaw start
 ```
 
-### File Structure
+### Running Integration Tests
+
+```bash
+npm run test:integration
+npm run test:integration:down
+```
+
+## File Structure
 
 ```
 openclaw-ario-plugin/
-├── Dockerfile            # Builds OpenClaw with plugin pre-installed
-├── docker-compose.yaml   # Sidecar deployment config
-├── nginx.conf            # Nginx reverse proxy config
-├── openclaw.json         # OpenClaw configuration
 ├── openclaw.plugin.json  # Plugin manifest
 ├── package.json          # Package configuration
 ├── tsconfig.json         # TypeScript config
@@ -196,154 +234,11 @@ openclaw-ario-plugin/
 │   ├── gateway/
 │   │   └── client.ts     # AR.IO gateway HTTP client
 │   ├── tools/
-│   │   └── index.ts      # OpenClaw tool registration
+│   │   ├── index.ts      # Gateway API tool registration
+│   │   └── ssh.ts        # SSH tool registration
 │   └── types/
 │       └── index.ts      # Gateway types
 └── README.md
-```
-
-### Docker Network
-
-When running as a sidecar, OpenClaw joins the `ar-io-network` and can access:
-
-- `core:4000` - AR.IO gateway internal API
-- `envoy:3000` - AR.IO gateway public proxy
-
-## Development
-
-```bash
-# Install dependencies
-bun install
-
-# Build
-bun run build
-
-# Type check
-bun run typecheck
-
-# Watch mode
-bun run dev
-```
-
-## Production Deployment (clawd.agenticway.io)
-
-This section documents the manual steps required to deploy OpenClaw to production.
-
-### Prerequisites
-
-- SSH access to the Hetzner server (`ssh root@138.199.227.142`)
-- Cloudflare DNS access for `agenticway.io`
-- The AR.IO gateway must be running
-
-### Step 1: DNS Configuration (Cloudflare)
-
-Add an A record for the `clawd` subdomain:
-
-| Type | Name    | Content           | Proxy    |
-| ---- | ------- | ----------------- | -------- |
-| A    | `clawd` | `138.199.227.142` | DNS only |
-
-### Step 2: SSL Certificate (Hetzner Server)
-
-SSH into the server and update the certificate to include the new subdomain:
-
-```bash
-ssh root@138.199.227.142
-
-# Update certificate to include clawd subdomain
-certbot certonly --dns-cloudflare \
-  -d ario.agenticway.io \
-  -d '*.ario.agenticway.io' \
-  -d clawd.agenticway.io
-```
-
-### Step 3: Nginx Configuration (Hetzner Server)
-
-Add the following server block to `/etc/nginx/sites-available/ario-agenticway`:
-
-```nginx
-# clawd.agenticway.io → OpenClaw
-server {
-    listen 80;
-    server_name clawd.agenticway.io;
-    return 301 https://$server_name$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name clawd.agenticway.io;
-
-    ssl_certificate /etc/letsencrypt/live/ario.agenticway.io/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/ario.agenticway.io/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-
-    location / {
-        proxy_pass http://localhost:18789;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-Test and reload nginx:
-
-```bash
-nginx -t && systemctl reload nginx
-```
-
-### Step 4: Deploy OpenClaw Sidecar
-
-```bash
-cd ~/ar-io-node/packages/openclaw-ario-plugin
-
-# Pull latest changes
-git pull
-
-# Start the sidecar
-docker compose up -d --build
-```
-
-### Step 5: Verify Deployment
-
-```bash
-# Check containers are healthy
-docker compose ps
-
-# Test health endpoint
-curl https://clawd.agenticway.io/health
-
-# Check SSL certificate
-curl -vI https://clawd.agenticway.io 2>&1 | grep -A2 "SSL certificate"
-```
-
-## Troubleshooting
-
-### Cannot connect to gateway
-
-Ensure the gateway is running and the `ar-io-network` exists:
-
-```bash
-docker network ls | grep ar-io-network
-docker compose -f apps/gateway/docker-compose.yaml ps
-```
-
-### Plugin not loading
-
-Check OpenClaw logs:
-
-```bash
-docker compose logs openclaw
-```
-
-Verify the plugin is recognized:
-
-```bash
-docker compose run --rm openclaw-cli plugins list
 ```
 
 ## License

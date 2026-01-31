@@ -82,9 +82,7 @@ describe('AR.IO Gateway Integration', () => {
 
   describe('gateway_resolve', () => {
     it('should resolve known ArNS name', async () => {
-      const response = await fetch(
-        `${GATEWAY_URL}/ar-io/resolver/records/${TEST_ARNS_NAME}`
-      );
+      const response = await fetch(`${GATEWAY_URL}/ar-io/resolver/records/${TEST_ARNS_NAME}`);
       expect(response.ok).toBe(true);
 
       const resolution = await response.json();
@@ -94,9 +92,7 @@ describe('AR.IO Gateway Integration', () => {
     });
 
     it('should return 404 for unknown ArNS name', async () => {
-      const response = await fetch(
-        `${GATEWAY_URL}/ar-io/resolver/records/nonexistent-name`
-      );
+      const response = await fetch(`${GATEWAY_URL}/ar-io/resolver/records/nonexistent-name`);
       expect(response.status).toBe(404);
     });
   });

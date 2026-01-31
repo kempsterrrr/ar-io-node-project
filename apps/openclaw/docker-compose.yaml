@@ -1,0 +1,58 @@
+# =============================================================================
+# OpenClaw Agent Deployment (Separate Server)
+# =============================================================================
+# Runs OpenClaw on its own server, connected to the gateway via private network.
+#
+# Prerequisites:
+#   - Hetzner private network between servers (10.0.0.0/16)
+#   - Gateway accessible at private IP (default: 10.0.0.2:4000)
+#   - SSH key for gateway access (gateway_key in this directory)
+#
+# Setup:
+#   1. Copy .env.example to .env and fill in secrets
+#   2. Place gateway SSH private key as ./gateway_key
+#   3. docker compose up -d
+#
+# Update:
+#   docker compose build --no-cache && docker compose up -d
+#
+# Access:
+#   - Local: http://localhost:18789 (via nginx proxy on host)
+#   - Public: https://clawd.agenticway.io (after nginx/certbot setup)
+# =============================================================================
+
+services:
+  openclaw:
+    build: .
+    image: openclaw-ario:local
+    container_name: openclaw-gateway
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18789:18789"  # Loopback only, host nginx handles public
+    environment:
+      NODE_ENV: production
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OPENCLAW_KEYRING_PASSWORD: ${OPENCLAW_KEYRING_PASSWORD:-}
+    volumes:
+      # Persist all OpenClaw state (config, tokens, auth profiles)
+      - openclaw-config:/home/node/.openclaw
+      # Override with our config
+      - ./openclaw.json:/home/node/.openclaw/openclaw.json:ro
+      # SSH key for gateway access (must be chmod 600)
+      - ./gateway_key:/home/node/.ssh/gateway_key:ro
+    networks:
+      - openclaw-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18789/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+networks:
+  openclaw-network:
+    driver: bridge
+
+volumes:
+  openclaw-config:

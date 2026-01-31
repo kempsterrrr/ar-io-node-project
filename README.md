@@ -162,12 +162,12 @@ open http://localhost:18789
 
 ### Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `gateway_info` | Get gateway status and information |
-| `gateway_fetch` | Fetch transaction data by ID |
+| Tool              | Description                           |
+| ----------------- | ------------------------------------- |
+| `gateway_info`    | Get gateway status and information    |
+| `gateway_fetch`   | Fetch transaction data by ID          |
 | `gateway_resolve` | Resolve ArNS names to transaction IDs |
-| `gateway_search` | Search transactions by tags or owners |
+| `gateway_search`  | Search transactions by tags or owners |
 
 ### Example Prompts
 
