@@ -13,7 +13,7 @@ const TEST_TX_ID = '4jBV3ofWh41KhuTs2pFvj-KBZWUkbrbCYlJH0vLA6LM';
 const mockGatewayInfo = {
   network: 'arweave.N.1',
   version: '1.0.0-test',
-  release: 1,
+  release: '1',
   height: 1500000,
   current: 'test-block-hash',
   blocks: 1500000,
