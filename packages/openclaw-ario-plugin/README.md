@@ -224,7 +224,7 @@ npm run test:integration:down
 
 ## File Structure
 
-```
+```text
 openclaw-ario-plugin/
 ├── openclaw.plugin.json  # Plugin manifest
 ├── package.json          # Package configuration
