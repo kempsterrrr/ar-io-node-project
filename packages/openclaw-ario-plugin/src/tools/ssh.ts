@@ -282,12 +282,13 @@ export function registerSSHTools(api: OpenClawPluginApi, sshConfig: SSHConfig): 
 
         // Restart with new images
         const upResult = await executeSSH(sshConfig, 'cd ~/ar-io-node && docker compose up -d');
+        const success = upResult.exitCode === 0;
         return toolResult({
-          success: upResult.exitCode === 0,
-          message: 'Gateway updated and restarted',
+          success,
+          message: success ? 'Gateway updated and restarted' : 'Gateway update failed during restart',
           pullOutput: pullResult.stdout,
           upOutput: upResult.stdout,
-          error: upResult.stderr || undefined,
+          error: success ? undefined : upResult.stderr || upResult.stdout,
         });
       } catch (error) {
         return toolError(error);
