@@ -1,0 +1,12 @@
+# Environment and secrets
+.env
+*.env
+
+# SSH keys (never commit!)
+gateway_key
+gateway_key.pub
+*.pem
+id_*
+
+# Docker
+docker-compose.override.yaml
