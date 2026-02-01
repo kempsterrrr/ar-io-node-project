@@ -10,7 +10,7 @@
   },
   "plugins": {
     "entries": {
-      "ario-gateway": {
+      "openclaw-ario-plugin": {
         "enabled": true,
         "config": {
           "gatewayUrl": "http://10.0.0.2:4000",
