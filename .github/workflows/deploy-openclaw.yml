@@ -94,6 +94,7 @@ jobs:
           {
             "gateway": {
               "mode": "local",
+              "bind": "lan",
               "auth": {
                 "mode": "token"
               },
@@ -106,13 +107,13 @@ jobs:
                 "openclaw-ario-plugin": {
                   "enabled": true,
                   "config": {
-                    "gatewayUrl": "http://${GATEWAY_IP}:4000",
+                    "gatewayUrl": "http://${GATEWAY_IP}:3000",
                     "timeout": 30000,
                     "ssh": {
                       "host": "${GATEWAY_IP}",
                       "user": "root",
                       "keyPath": "/home/node/.ssh/gateway_key",
-                      "workingDirectory": "~/ar-io-gateway"
+                      "workingDirectory": "/root/ar-io-gateway"
                     }
                   }
                 }
