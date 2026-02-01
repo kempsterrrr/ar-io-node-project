@@ -6,7 +6,8 @@
       "mode": "token"
     },
     "controlUi": {
-      "enabled": true
+      "enabled": true,
+      "allowInsecureAuth": true
     }
   },
   "plugins": {
@@ -14,10 +15,10 @@
       "openclaw-ario-plugin": {
         "enabled": true,
         "config": {
-          "gatewayUrl": "http://10.0.0.2:3000",
+          "gatewayUrl": "https://ario.agenticway.io",
           "timeout": 30000,
           "ssh": {
-            "host": "10.0.0.2",
+            "host": "GATEWAY_PUBLIC_IP",
             "user": "root",
             "keyPath": "/home/node/.ssh/gateway_key",
             "workingDirectory": "/root/ar-io-gateway"

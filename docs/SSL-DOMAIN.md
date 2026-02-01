@@ -6,12 +6,16 @@
 ┌─────────────────────────────────┐     ┌─────────────────────────────────┐
 │ Server A: Gateway               │     │ Server B: OpenClaw              │
 │ Public:  138.199.227.142        │     │ Public:  OPENCLAW_IP            │
-│ Private: 10.0.0.2               │     │ Private: 10.0.0.3               │
 └─────────────────────────────────┘     └─────────────────────────────────┘
          ↑                                        ↑
    ario.agenticway.io                    clawd.agenticway.io
-   *.ario.agenticway.io
+   *.ario.agenticway.io                  (basic auth protected)
 ```
+
+**Connections:**
+
+- HTTPS: OpenClaw → Gateway API at `https://ario.agenticway.io`
+- SSH: OpenClaw → Gateway server at public IP for ops (restart, logs, update)
 
 ## Production Domain
 
@@ -62,7 +66,7 @@ certbot renew --force-renewal
 | `/etc/letsencrypt/live/ario.agenticway.io/`        | Certificate files          |
 | `/etc/letsencrypt/renewal/ario.agenticway.io.conf` | Renewal config             |
 
-Nginx config: `/etc/nginx/sites-available/ario-agenticway`
+Nginx config: `/etc/nginx/sites-available/ario-agenticway` (managed via `apps/gateway/nginx/`)
 
 ### OpenClaw Server Configuration
 
@@ -89,59 +93,51 @@ certbot certonly --dns-cloudflare \
 
 #### Nginx Configuration
 
-Create `/etc/nginx/sites-available/clawd`:
+Nginx config: `/etc/nginx/sites-available/clawd` (managed via `apps/openclaw/nginx/`)
 
-```nginx
-# clawd.agenticway.io → OpenClaw
-server {
-    listen 80;
-    server_name clawd.agenticway.io;
-    return 301 https://$server_name$request_uri;
-}
+The config includes basic auth protection - credentials stored in `/etc/nginx/.htpasswd`.
 
-server {
-    listen 443 ssl http2;
-    server_name clawd.agenticway.io;
+## Nginx as Code
 
-    ssl_certificate /etc/letsencrypt/live/clawd.agenticway.io/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/clawd.agenticway.io/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
+Both server nginx configs are version-controlled in this repository:
 
-    location / {
-        proxy_pass http://localhost:18789;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
+| Server   | Source File                          | Deployed To                                  |
+| -------- | ------------------------------------ | -------------------------------------------- |
+| Gateway  | `apps/gateway/nginx/ario-agenticway` | `/etc/nginx/sites-available/ario-agenticway` |
+| OpenClaw | `apps/openclaw/nginx/clawd`          | `/etc/nginx/sites-available/clawd`           |
 
-Enable the site:
+Configs are automatically deployed via GitHub Actions workflows:
 
-```bash
-ln -s /etc/nginx/sites-available/clawd /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
-```
+- Gateway: `.github/workflows/deploy-gateway.yml`
+- OpenClaw: `.github/workflows/deploy-openclaw.yml`
 
-## Private Network Configuration
+## One-Time Server Setup
 
-OpenClaw connects to the gateway via Hetzner private networking.
+### Gateway Server (SSH firewall)
 
-### Gateway Server Firewall
-
-Allow OpenClaw to access the gateway's internal API and SSH:
+Allow SSH from anywhere (required for OpenClaw to SSH via public IP):
 
 ```bash
 ssh root@138.199.227.142
 
-# If using ufw
-ufw allow from 10.0.0.0/16 to any port 4000  # Gateway API
-ufw allow from 10.0.0.0/16 to any port 22    # SSH for agent ops
+# Allow SSH (key-based auth only)
+ufw allow 22/tcp
 ufw status
+```
+
+### OpenClaw Server (basic auth)
+
+Create basic auth password file:
+
+```bash
+ssh root@OPENCLAW_IP
+
+# Install htpasswd
+apt install -y apache2-utils
+
+# Create password file
+htpasswd -c /etc/nginx/.htpasswd admin
+# Enter password when prompted
 ```
 
 ### SSH Key Setup for Agent
@@ -153,28 +149,16 @@ The OpenClaw agent needs SSH access to the gateway for operations:
 ssh-keygen -t ed25519 -f ~/openclaw/gateway_key -N ""
 
 # Copy public key to gateway
-ssh-copy-id -i ~/openclaw/gateway_key.pub root@10.0.0.2
+ssh-copy-id -i ~/openclaw/gateway_key.pub root@138.199.227.142
 
 # Test connection
-ssh -i ~/openclaw/gateway_key root@10.0.0.2 "docker compose ps"
-```
-
-### Verify Connectivity
-
-From the OpenClaw server:
-
-```bash
-# Test private network
-ping 10.0.0.2
-
-# Test gateway API
-curl http://10.0.0.2:4000/ar-io/info
+ssh -i ~/openclaw/gateway_key root@138.199.227.142 "docker compose ps"
 ```
 
 ## Server Access
 
 ```bash
-# SSH into server
+# SSH into gateway server
 ssh root@138.199.227.142
 
 # Or use the deploy key
