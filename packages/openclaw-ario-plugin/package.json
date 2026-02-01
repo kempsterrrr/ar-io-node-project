@@ -1,6 +1,6 @@
 {
   "name": "@kempsterrrr/openclaw-ario-plugin",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "OpenClaw plugin providing tools for interacting with AR.IO gateways and Arweave",
   "license": "MIT",
   "repository": {
@@ -53,5 +53,10 @@
     "arweave",
     "ar-io",
     "gateway"
-  ]
+  ],
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  }
 }
