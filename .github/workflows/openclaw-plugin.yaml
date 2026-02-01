@@ -56,6 +56,9 @@ jobs:
   publish:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: test
+    permissions:
+      contents: read
+      id-token: write # Required for OIDC trusted publishing
     uses: ./.github/workflows/_npm-publish.yaml
     with:
       package-path: packages/openclaw-ario-plugin
