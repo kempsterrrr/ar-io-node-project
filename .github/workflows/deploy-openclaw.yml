@@ -103,7 +103,7 @@ jobs:
             },
             "plugins": {
               "entries": {
-                "ario-gateway": {
+                "openclaw-ario-plugin": {
                   "enabled": true,
                   "config": {
                     "gatewayUrl": "http://${GATEWAY_IP}:4000",
@@ -111,7 +111,8 @@ jobs:
                     "ssh": {
                       "host": "${GATEWAY_IP}",
                       "user": "root",
-                      "keyPath": "/home/node/.ssh/gateway_key"
+                      "keyPath": "/home/node/.ssh/gateway_key",
+                      "workingDirectory": "~/ar-io-gateway"
                     }
                   }
                 }
@@ -150,7 +151,7 @@ jobs:
 
             echo ""
             echo "Recent logs:"
-            docker compose logs --tail=20 openclaw-gateway
+            docker compose logs --tail=20 openclaw
           EOF
 
       - name: Deployment summary
