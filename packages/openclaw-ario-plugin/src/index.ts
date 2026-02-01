@@ -16,11 +16,12 @@ interface SSHPluginConfig {
   host: string;
   user?: string;
   keyPath: string;
+  workingDirectory?: string;
 }
 
 /** Plugin configuration */
 interface PluginConfig {
-  gatewayUrl: string;
+  gatewayUrl?: string;
   timeout?: number;
   ssh?: SSHPluginConfig;
 }
@@ -60,7 +61,7 @@ export default {
     properties: {
       gatewayUrl: {
         type: 'string',
-        description: 'URL of the AR.IO gateway',
+        description: 'URL of the AR.IO gateway. Defaults to https://arweave.net',
       },
       timeout: {
         type: 'number',
@@ -83,35 +84,36 @@ export default {
             type: 'string',
             description: 'Path to SSH private key file',
           },
+          workingDirectory: {
+            type: 'string',
+            description:
+              'Path to ar-io-node directory on gateway server. Defaults to ~/ar-io-gateway',
+          },
         },
         required: ['host', 'keyPath'],
       },
     },
-    required: ['gatewayUrl'],
   },
 
   register(api: OpenClawPluginApi, pluginConfig?: PluginConfig) {
-    // Try to get config from multiple sources
+    // Try to get config from multiple sources with sensible defaults
     const config: PluginConfig = pluginConfig ??
       api.config?.plugins?.entries?.['ario-gateway']?.config ?? {
-        gatewayUrl: process.env.ARIO_GATEWAY_URL ?? 'http://core:4000',
+        gatewayUrl: 'https://arweave.net',
         timeout: 30000,
       };
 
-    // Validate required config
-    if (!config.gatewayUrl) {
-      api.logger.error('AR.IO Gateway plugin: gatewayUrl is required');
-      return;
-    }
+    // Use default gateway URL if not provided
+    const gatewayUrl = config.gatewayUrl ?? 'https://arweave.net';
 
     // Register gateway API tools
     const gateway = new GatewayClient({
-      baseUrl: config.gatewayUrl,
+      baseUrl: gatewayUrl,
       timeout: config.timeout ?? 30000,
     });
 
     registerGatewayTools(api, gateway);
-    api.logger.info(`AR.IO Gateway plugin: API tools registered (${config.gatewayUrl})`);
+    api.logger.info(`AR.IO Gateway plugin: API tools registered (${gatewayUrl})`);
 
     // Register SSH tools if configured
     if (config.ssh) {
@@ -122,6 +124,7 @@ export default {
           host: config.ssh.host,
           user: config.ssh.user ?? 'root',
           keyPath: config.ssh.keyPath,
+          workingDirectory: config.ssh.workingDirectory ?? '~/ar-io-gateway',
         };
         registerSSHTools(api, sshConfig);
         api.logger.info(

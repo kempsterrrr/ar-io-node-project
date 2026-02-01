@@ -18,7 +18,8 @@
           "ssh": {
             "host": "10.0.0.2",
             "user": "root",
-            "keyPath": "/home/node/.ssh/gateway_key"
+            "keyPath": "/home/node/.ssh/gateway_key",
+            "workingDirectory": "~/ar-io-gateway"
           }
         }
       }
