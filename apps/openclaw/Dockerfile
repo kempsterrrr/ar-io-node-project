@@ -35,7 +35,8 @@ RUN mkdir -p /home/node/.openclaw/workspace /home/node/.ssh \
 # Install OpenClaw globally
 RUN npm install -g openclaw@latest
 
-# Install the AR.IO plugin from npm
+# Install the AR.IO plugin - set HOME so it installs to /home/node/.openclaw/
+ENV HOME=/home/node
 RUN npx openclaw plugins install @kempsterrrr/openclaw-ario-plugin
 
 # Copy default config (can be overridden by volume mount)
