@@ -60,7 +60,7 @@ Enable SSH tools for gateway management when running on a separate server:
           "gatewayUrl": "https://ario.agenticway.io",
           "timeout": 30000,
           "ssh": {
-            "host": "138.199.227.142",
+            "host": "<GATEWAY_PUBLIC_IP>",
             "user": "root",
             "keyPath": "/home/node/.ssh/gateway_key"
           }

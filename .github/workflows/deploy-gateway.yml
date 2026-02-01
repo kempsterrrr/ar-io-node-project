@@ -77,7 +77,7 @@ jobs:
       - name: Deploy nginx config
         run: |
           ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
-            cp ~/ar-io-gateway/nginx/ario-agenticway /etc/nginx/sites-available/ario-agenticway
+            cp ${{ env.DEPLOY_PATH }}/nginx/ario-agenticway /etc/nginx/sites-available/ario-agenticway
             ln -sf /etc/nginx/sites-available/ario-agenticway /etc/nginx/sites-enabled/
             nginx -t && systemctl reload nginx
           EOF

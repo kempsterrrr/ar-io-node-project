@@ -62,8 +62,8 @@ jobs:
       - name: Deploy nginx config
         run: |
           ssh ${{ secrets.OPENCLAW_USER }}@${{ secrets.OPENCLAW_HOST }} << 'EOF'
-            # Files already copied to ~/openclaw/ by previous step
-            cp ~/openclaw/nginx/clawd /etc/nginx/sites-available/clawd
+            # Files already copied to $DEPLOY_PATH by previous step
+            cp ${{ env.DEPLOY_PATH }}/nginx/clawd /etc/nginx/sites-available/clawd
             ln -sf /etc/nginx/sites-available/clawd /etc/nginx/sites-enabled/
             nginx -t && systemctl reload nginx
           EOF
@@ -91,6 +91,13 @@ jobs:
           ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
           OPENCLAW_GATEWAY_TOKEN=${{ secrets.OPENCLAW_GATEWAY_TOKEN }}
           ENVFILE
+
+      - name: Validate required variables
+        run: |
+          if [ -z "${{ vars.GATEWAY_PUBLIC_IP }}" ]; then
+            echo "Error: GATEWAY_PUBLIC_IP variable is not set"
+            exit 1
+          fi
 
       - name: Update openclaw.json with gateway config
         run: |

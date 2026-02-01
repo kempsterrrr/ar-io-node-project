@@ -8,8 +8,8 @@
 │ Public:  138.199.227.142        │     │ Public:  OPENCLAW_IP            │
 └─────────────────────────────────┘     └─────────────────────────────────┘
          ↑                                        ↑
-   ario.agenticway.io                    clawd.agenticway.io
-   *.ario.agenticway.io                  (basic auth protected)
+   ario.agenticway.io                    clawd.agenticway.io (basic auth)
+   *.ario.agenticway.io
 ```
 
 **Connections:**
