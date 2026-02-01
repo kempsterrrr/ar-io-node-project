@@ -38,7 +38,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist-${{ hashFiles(format('{0}/package.json', inputs.package-path)) }}
+          name: dist-${{ github.run_id }}
           path: ${{ inputs.package-path }}/dist/
           retention-days: 1
 
@@ -63,7 +63,7 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: dist-${{ hashFiles(format('{0}/package.json', inputs.package-path)) }}
+          name: dist-${{ github.run_id }}
           path: ${{ inputs.package-path }}/dist/
 
       - name: Check if version exists
