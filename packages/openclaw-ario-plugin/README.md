@@ -57,7 +57,7 @@ Enable SSH tools for gateway management when running on a separate server:
       "ario-gateway": {
         "enabled": true,
         "config": {
-          "gatewayUrl": "http://10.0.0.2:4000",
+          "gatewayUrl": "http://10.0.0.2:3000",
           "timeout": 30000,
           "ssh": {
             "host": "10.0.0.2",
