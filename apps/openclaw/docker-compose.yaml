@@ -1,11 +1,10 @@
 # =============================================================================
 # OpenClaw Agent Deployment (Separate Server)
 # =============================================================================
-# Runs OpenClaw on its own server, connected to the gateway via private network.
+# Runs OpenClaw on its own server, connected to the gateway via public endpoints.
 #
 # Prerequisites:
-#   - Hetzner private network between servers (10.0.0.0/16)
-#   - Gateway accessible at private IP (default: 10.0.0.2:4000)
+#   - Gateway accessible at public URL (https://ario.agenticway.io)
 #   - SSH key for gateway access (gateway_key in this directory)
 #
 # Setup:
@@ -18,7 +17,7 @@
 #
 # Access:
 #   - Local: http://localhost:18789 (via nginx proxy on host)
-#   - Public: https://clawd.agenticway.io (after nginx/certbot setup)
+#   - Public: https://clawd.agenticway.io (protected by basic auth)
 # =============================================================================
 
 services:
