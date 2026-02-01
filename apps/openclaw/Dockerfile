@@ -50,4 +50,4 @@ ENV HOME=/home/node
 
 EXPOSE 18789
 
-CMD ["npx", "openclaw", "start"]
+CMD ["npx", "openclaw", "gateway"]
