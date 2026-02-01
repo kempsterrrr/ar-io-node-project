@@ -1,5 +1,5 @@
 {
-  "id": "ario-gateway",
+  "id": "openclaw-ario-plugin",
   "name": "AR.IO Gateway Plugin",
   "version": "0.1.0",
   "description": "Tools for interacting with AR.IO gateways and Arweave, including SSH-based gateway management",

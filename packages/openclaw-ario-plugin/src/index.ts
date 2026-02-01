@@ -31,7 +31,7 @@ interface OpenClawPluginApi {
   config?: {
     plugins?: {
       entries?: {
-        'ario-gateway'?: {
+        'openclaw-ario-plugin'?: {
           config?: PluginConfig;
         };
       };
@@ -52,7 +52,7 @@ interface OpenClawPluginApi {
 
 /** OpenClaw plugin export format */
 export default {
-  id: 'ario-gateway',
+  id: 'openclaw-ario-plugin',
   name: 'AR.IO Gateway Plugin',
 
   // JSON Schema for plugin configuration (must match openclaw.plugin.json)
@@ -98,7 +98,7 @@ export default {
   register(api: OpenClawPluginApi, pluginConfig?: PluginConfig) {
     // Try to get config from multiple sources with sensible defaults
     const config: PluginConfig = pluginConfig ??
-      api.config?.plugins?.entries?.['ario-gateway']?.config ?? {
+      api.config?.plugins?.entries?.['openclaw-ario-plugin']?.config ?? {
         gatewayUrl: 'https://arweave.net',
         timeout: 30000,
       };
