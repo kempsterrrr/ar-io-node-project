@@ -13,6 +13,7 @@ export interface SSHConfig {
   host: string;
   user: string;
   keyPath: string;
+  workingDirectory: string;
 }
 
 /** Tool content block */
@@ -161,7 +162,10 @@ export function registerSSHTools(api: OpenClawPluginApi, sshConfig: SSHConfig): 
     },
     execute: async (_id) => {
       try {
-        const result = await executeSSH(sshConfig, 'cd ~/ar-io-node && docker compose ps');
+        const result = await executeSSH(
+          sshConfig,
+          `cd ${sshConfig.workingDirectory} && docker compose ps`
+        );
         return toolResult({
           success: result.exitCode === 0,
           output: result.stdout,
@@ -199,8 +203,8 @@ export function registerSSHTools(api: OpenClawPluginApi, sshConfig: SSHConfig): 
           });
         }
         const command = service
-          ? `cd ~/ar-io-node && docker compose restart ${service}`
-          : 'cd ~/ar-io-node && docker compose restart';
+          ? `cd ${sshConfig.workingDirectory} && docker compose restart ${service}`
+          : `cd ${sshConfig.workingDirectory} && docker compose restart`;
         const result = await executeSSH(sshConfig, command);
         return toolResult({
           success: result.exitCode === 0,
@@ -245,8 +249,8 @@ export function registerSSHTools(api: OpenClawPluginApi, sshConfig: SSHConfig): 
         }
         const lines = (params.lines as number) ?? 50;
         const command = service
-          ? `cd ~/ar-io-node && docker compose logs --tail=${lines} ${service}`
-          : `cd ~/ar-io-node && docker compose logs --tail=${lines}`;
+          ? `cd ${sshConfig.workingDirectory} && docker compose logs --tail=${lines} ${service}`
+          : `cd ${sshConfig.workingDirectory} && docker compose logs --tail=${lines}`;
         const result = await executeSSH(sshConfig, command);
         return toolResult({
           success: result.exitCode === 0,
@@ -271,7 +275,10 @@ export function registerSSHTools(api: OpenClawPluginApi, sshConfig: SSHConfig): 
     execute: async (_id) => {
       try {
         // Pull latest images
-        const pullResult = await executeSSH(sshConfig, 'cd ~/ar-io-node && docker compose pull');
+        const pullResult = await executeSSH(
+          sshConfig,
+          `cd ${sshConfig.workingDirectory} && docker compose pull`
+        );
         if (pullResult.exitCode !== 0) {
           return toolResult({
             success: false,
@@ -281,7 +288,10 @@ export function registerSSHTools(api: OpenClawPluginApi, sshConfig: SSHConfig): 
         }
 
         // Restart with new images
-        const upResult = await executeSSH(sshConfig, 'cd ~/ar-io-node && docker compose up -d');
+        const upResult = await executeSSH(
+          sshConfig,
+          `cd ${sshConfig.workingDirectory} && docker compose up -d`
+        );
         const success = upResult.exitCode === 0;
         return toolResult({
           success,

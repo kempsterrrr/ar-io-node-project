@@ -8,7 +8,7 @@
     "properties": {
       "gatewayUrl": {
         "type": "string",
-        "description": "URL of the AR.IO gateway API (e.g., http://10.0.0.2:4000 or http://core:4000)"
+        "description": "URL of the AR.IO gateway API. Defaults to https://arweave.net"
       },
       "timeout": {
         "type": "number",
@@ -30,11 +30,14 @@
           "keyPath": {
             "type": "string",
             "description": "Path to SSH private key file (e.g., /home/node/.ssh/gateway_key)"
+          },
+          "workingDirectory": {
+            "type": "string",
+            "description": "Path to ar-io-node directory on gateway server. Defaults to ~/ar-io-gateway"
           }
         },
         "required": ["host", "keyPath"]
       }
-    },
-    "required": ["gatewayUrl"]
+    }
   }
 }
