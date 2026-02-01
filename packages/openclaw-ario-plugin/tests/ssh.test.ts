@@ -277,4 +277,52 @@ envoy               running`;
       expect(parsed.error).toBe('Connection refused');
     });
   });
+
+  describe('Input Validation', () => {
+    it('should reject workingDirectory with command injection characters', () => {
+      const maliciousConfig: SSHConfig = {
+        ...testConfig,
+        workingDirectory: '~/ar-io-gateway; rm -rf /',
+      };
+
+      expect(() => registerSSHTools(createMockApi(), maliciousConfig)).toThrow(
+        'Invalid workingDirectory: contains disallowed characters'
+      );
+    });
+
+    it('should reject workingDirectory with shell expansion', () => {
+      const maliciousConfig: SSHConfig = {
+        ...testConfig,
+        workingDirectory: '$(whoami)',
+      };
+
+      expect(() => registerSSHTools(createMockApi(), maliciousConfig)).toThrow(
+        'Invalid workingDirectory: contains disallowed characters'
+      );
+    });
+
+    it('should reject workingDirectory with path traversal', () => {
+      const maliciousConfig: SSHConfig = {
+        ...testConfig,
+        workingDirectory: '~/ar-io-gateway/../../../etc',
+      };
+
+      expect(() => registerSSHTools(createMockApi(), maliciousConfig)).toThrow(
+        'Invalid workingDirectory: contains disallowed characters'
+      );
+    });
+
+    it('should accept valid workingDirectory paths', () => {
+      const validConfigs = [
+        { ...testConfig, workingDirectory: '~/ar-io-gateway' },
+        { ...testConfig, workingDirectory: '/home/user/ar-io-gateway' },
+        { ...testConfig, workingDirectory: '/opt/ar-io-node' },
+        { ...testConfig, workingDirectory: '~/my_project-v2.1' },
+      ];
+
+      for (const config of validConfigs) {
+        expect(() => registerSSHTools(createMockApi(), config)).not.toThrow();
+      }
+    });
+  });
 });

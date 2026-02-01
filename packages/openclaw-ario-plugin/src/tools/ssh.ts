@@ -42,6 +42,12 @@ function isValidServiceName(service: string): boolean {
   return /^[a-zA-Z0-9_-]+$/.test(service);
 }
 
+/** Validates a working directory path to prevent command injection */
+function isValidWorkingDirectory(dir: string): boolean {
+  // Allow typical Unix paths: alphanumeric, slashes, dots, hyphens, underscores, tilde
+  return /^[~]?[a-zA-Z0-9_./-]+$/.test(dir) && !dir.includes('..');
+}
+
 /** Helper to format tool results */
 function toolResult(data: unknown): ToolResult {
   return {
@@ -120,6 +126,11 @@ async function executeSSH(
  * Register SSH tools with OpenClaw
  */
 export function registerSSHTools(api: OpenClawPluginApi, sshConfig: SSHConfig): void {
+  // Validate workingDirectory to prevent command injection
+  if (!isValidWorkingDirectory(sshConfig.workingDirectory)) {
+    throw new Error('Invalid workingDirectory: contains disallowed characters');
+  }
+
   // Tool: gateway_ssh_execute
   api.registerTool({
     name: 'gateway_ssh_execute',
