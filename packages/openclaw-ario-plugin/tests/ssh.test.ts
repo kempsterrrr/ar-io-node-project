@@ -22,6 +22,7 @@ const testConfig: SSHConfig = {
   host: '10.0.0.2',
   user: 'root',
   keyPath: '/home/node/.ssh/gateway_key',
+  workingDirectory: '~/ar-io-gateway',
 };
 
 // Mock OpenClaw API
@@ -135,7 +136,7 @@ envoy               running`;
       // Verify the command
       expect(spawn).toHaveBeenCalledWith(
         'ssh',
-        expect.arrayContaining(['cd ~/ar-io-node && docker compose ps'])
+        expect.arrayContaining(['cd ~/ar-io-gateway && docker compose ps'])
       );
 
       const parsed = JSON.parse((result as { content: { text: string }[] }).content[0].text);
@@ -154,7 +155,7 @@ envoy               running`;
 
       expect(spawn).toHaveBeenCalledWith(
         'ssh',
-        expect.arrayContaining(['cd ~/ar-io-node && docker compose restart'])
+        expect.arrayContaining(['cd ~/ar-io-gateway && docker compose restart'])
       );
 
       const parsed = JSON.parse((result as { content: { text: string }[] }).content[0].text);
@@ -170,7 +171,7 @@ envoy               running`;
 
       expect(spawn).toHaveBeenCalledWith(
         'ssh',
-        expect.arrayContaining(['cd ~/ar-io-node && docker compose restart core'])
+        expect.arrayContaining(['cd ~/ar-io-gateway && docker compose restart core'])
       );
 
       const parsed = JSON.parse((result as { content: { text: string }[] }).content[0].text);
@@ -189,7 +190,7 @@ envoy               running`;
 
       expect(spawn).toHaveBeenCalledWith(
         'ssh',
-        expect.arrayContaining(['cd ~/ar-io-node && docker compose logs --tail=50'])
+        expect.arrayContaining(['cd ~/ar-io-gateway && docker compose logs --tail=50'])
       );
 
       const parsed = JSON.parse((result as { content: { text: string }[] }).content[0].text);
@@ -205,7 +206,7 @@ envoy               running`;
 
       expect(spawn).toHaveBeenCalledWith(
         'ssh',
-        expect.arrayContaining(['cd ~/ar-io-node && docker compose logs --tail=100 core'])
+        expect.arrayContaining(['cd ~/ar-io-gateway && docker compose logs --tail=100 core'])
       );
 
       const parsed = JSON.parse((result as { content: { text: string }[] }).content[0].text);
@@ -228,12 +229,12 @@ envoy               running`;
       expect(spawn).toHaveBeenNthCalledWith(
         1,
         'ssh',
-        expect.arrayContaining(['cd ~/ar-io-node && docker compose pull'])
+        expect.arrayContaining(['cd ~/ar-io-gateway && docker compose pull'])
       );
       expect(spawn).toHaveBeenNthCalledWith(
         2,
         'ssh',
-        expect.arrayContaining(['cd ~/ar-io-node && docker compose up -d'])
+        expect.arrayContaining(['cd ~/ar-io-gateway && docker compose up -d'])
       );
 
       const parsed = JSON.parse((result as { content: { text: string }[] }).content[0].text);
