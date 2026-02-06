@@ -1,42 +1,36 @@
 # Trusthash Sidecar
 
-A sidecar service for AR.IO gateways that provides C2PA (Content Credentials) manifest creation, permanent storage on Arweave via ArNS undernames, and perceptual hash (pHash) similarity search.
+Trusthash Sidecar is a companion service for AR.IO gateways that provides a C2PA manifest repository, the C2PA Soft Binding Resolution API, and pHash similarity search powered by DuckDB. It indexes manifests from gateway webhooks using tags only (no JUMBF parsing). It does not create, sign, or verify manifests.
 
 ## Features
 
-- **C2PA Manifest Creation** - Generate Content Credentials manifests with embedded thumbnails
-- **Permanent Storage** - Store manifests on Arweave via ArNS undernames
-- **Similarity Search** - 64-bit pHash-based image similarity search using Hamming distance
-- **Provenance Verification** - Validate C2PA signatures and manifest integrity
-- **Gateway Integration** - Receives webhooks from AR.IO gateway for automatic indexing
+- **Manifest Repository** - Serve `application/c2pa` manifest stores by manifest ID (URN)
+- **Soft Binding Resolution API** - Resolve manifests by binding, content, or reference URL
+- **Similarity Search** - 64-bit pHash nearest-neighbor search using Hamming distance
+- **Gateway Integration** - Webhook-driven indexing based on gateway tags
 
 ## Quick Start
 
 ### Prerequisites
 
 - Bun 1.2+
-- AR.IO Gateway running (creates `ar-io-network`)
-- Arweave wallet with funds for uploads
-- ArNS root name (for undername registration)
+- AR.IO Gateway running (creates `ar-io-network` if using Docker)
 
 ### Setup
 
-1. Copy environment template:
+1. Copy the environment template:
 
    ```bash
    cp .env.example .env
    ```
 
-2. Configure your `.env`:
+2. Set required environment values:
 
    ```bash
-   ARNS_ROOT_NAME=your-arns-name
-   ARWEAVE_WALLET_FILE=./wallets/your-wallet.json
+   GATEWAY_URL=http://localhost:3000
    ```
 
-3. Place your Arweave wallet in `./wallets/`
-
-4. Start the service:
+3. Start the service:
 
    ```bash
    # Development
@@ -46,202 +40,158 @@ A sidecar service for AR.IO gateways that provides C2PA (Content Credentials) ma
    docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d
    ```
 
-## API Endpoints
+> Note: Docker uses `.env.docker` for container settings (default `GATEWAY_URL=http://core:4000`).  
+> Keep `.env` for local (non-Docker) development.
 
-| Endpoint                  | Method | Access   | Description                         |
-| ------------------------- | ------ | -------- | ----------------------------------- |
-| `/health`                 | GET    | Public   | Health check and service status     |
-| `/v1/upload`              | POST   | Public   | Upload image, create C2PA manifest  |
-| `/v1/search-similar`      | GET    | Public   | Search for similar images by pHash  |
-| `/v1/verify-authenticity` | GET    | Public   | Verify C2PA manifest signatures     |
-| `/v1/thumbnail`           | GET    | Public   | Extract thumbnail from manifest     |
-| `/webhook`                | POST   | Internal | Receive gateway index notifications |
+## Deployment (Gateway Operators)
 
-> **Note**: The `/webhook` endpoint is only accessible from within the Docker network (e.g., from the AR.IO gateway). External requests to `/webhook` return 404.
-
-### Upload Storage Modes
-
-The `/v1/upload` endpoint supports three storage modes via the `?storage=` query parameter:
-
-| Mode       | Arweave Uploads                | Use Case                   |
-| ---------- | ------------------------------ | -------------------------- |
-| `standard` | JUMBF sidecar + thumbnail      | Default, balanced approach |
-| `minimal`  | JUMBF sidecar only             | Privacy/cost optimized     |
-| `full`     | Sidecar + signed image + thumb | Archival, full redundancy  |
-
-All modes return the signed image (with embedded C2PA manifest) to the client in the response.
+To run the sidecar alongside an AR.IO gateway, use the sidecar overlay compose file so both
+services share the same `ar-io-network`.
 
 ```bash
-# Upload with default storage mode
-curl -X POST http://localhost:3003/v1/upload -F "file=@image.jpg"
-
-# Upload with minimal storage (privacy mode)
-curl -X POST "http://localhost:3003/v1/upload?storage=minimal" -F "file=@image.jpg"
-
-# Upload with full archival storage
-curl -X POST "http://localhost:3003/v1/upload?storage=full" -F "file=@image.jpg"
+# From the gateway directory (or a deployment directory containing both files)
+docker compose \
+  -f docker-compose.yaml \
+  -f /path/to/packages/trusthash-sidecar/docker-compose.sidecar.yaml \
+  up -d
 ```
 
-## ArNS Configuration
+### Required Environment
 
-### Auto-Purchase Capacity
+- `GATEWAY_URL=http://core:4000` (set in `.env.docker` by default)
 
-The sidecar automatically manages ArNS undername capacity. When capacity runs low, it purchases more using ARIO tokens from the configured wallet.
+### Optional Environment
 
-Add to your `.env`:
+- `TRUSTHASH_SIDECAR_IMAGE` (defaults to `ghcr.io/ar-io/trusthash-sidecar:latest`)
+- `PROXY_PORT` (default `3003`)
+- `MAX_IMAGE_SIZE_MB` (default `50`)
+- `REFERENCE_FETCH_TIMEOUT_MS` (default `10000`)
 
-```bash
-# Enable auto-purchase when capacity is low (default: true)
-ARNS_AUTO_PURCHASE_CAPACITY=true
+> If you are not using the default gateway service name (`core`), update `GATEWAY_URL` in `.env.docker`.
 
-# Number of undernames to purchase at a time (default: 100)
-ARNS_CAPACITY_PURCHASE_QTY=100
+## Tag Contract (Gateway Indexing)
 
-# Trigger purchase when available capacity falls below this (default: 10)
-ARNS_CAPACITY_THRESHOLD=10
-```
+The sidecar **only indexes transactions that include the required tag set**. It does not parse JUMBF to recover missing data.
 
-> **Note**: Ensure your wallet has sufficient ARIO tokens for capacity purchases. The cost varies based on your ArNS name configuration.
+Required tags:
+
+- `Content-Type=application/c2pa`
+- `Manifest-Type=sidecar`
+- `C2PA-Manifest-Id` (URN, e.g. `urn:uuid:...`)
+- `C2PA-SoftBinding-Alg` (one per binding)
+- `C2PA-SoftBinding-Value` (one per binding, base64-encoded CBOR bstr)
+- `pHash` (16-char hex or 64-bit binary string, used for similarity search)
+
+Recommended tags:
+
+- `Original-Content-Type` (e.g. `image/jpeg`)
+- `App-Name` (stored as claim generator)
+- `C2PA-SoftBinding-Scope` (optional, one per binding, JSON string or scalar)
+
+The sidecar requires `C2PA-SoftBinding-Alg` and `C2PA-SoftBinding-Value` to have matching counts.
 
 ## Gateway Configuration
 
-To enable webhooks from the AR.IO gateway, add to `apps/gateway/.env`:
+Configure the gateway to send webhooks for C2PA sidecar transactions:
 
 ```bash
-ANS104_INDEX_FILTER='{"tags":[{"name":"pHash"}]}'
-WEBHOOK_INDEX_FILTER='{"tags":[{"name":"pHash"}]}'
+WEBHOOK_INDEX_FILTER='{"tags":[{"name":"Content-Type","value":"application/c2pa"},{"name":"Manifest-Type","value":"sidecar"},{"name":"C2PA-Manifest-Id"},{"name":"C2PA-SoftBinding-Alg","value":"org.ar-io.phash"},{"name":"C2PA-SoftBinding-Value"},{"name":"pHash"}]}'
 WEBHOOK_TARGET_SERVERS="http://trusthash-sidecar:3003/webhook"
 ```
 
-The gateway connects to the sidecar directly via the Docker network (`ar-io-network`), bypassing the nginx proxy. This ensures the webhook is only accessible from trusted internal services.
+If you also want the gateway to index these transactions for GraphQL queries:
 
-## Architecture
-
-```
-External (Internet)                    Docker Network (ar-io-network)
-       |                                        |
-       v                                        |
-+-------------------+                           |
-|  nginx proxy      |                           |
-|  (port 3003)      |---------------------------+
-|                   |     /health, /v1/*, /     |
-|  Routes:          |            |              |
-|  + /health        |            v              |
-|  + /v1/*          |   +-------------------+   |
-|  + /              |   |    trusthash      |   |
-|  x /webhook       |   |  sidecar (:3003)  |   |
-+-------------------+   |                   |   |
-                        | (internal only)   |   |
-                        +---------^---------+   |
-                                  |             |
-                        POST /webhook           |
-                                  |             |
-                        +---------+----------+  |
-                        |   AR.IO Gateway    |  |
-                        |   (core:4000)      |--+
-                        +--------------------+
+```bash
+ANS104_INDEX_FILTER='{"tags":[{"name":"Content-Type","value":"application/c2pa"},{"name":"Manifest-Type","value":"sidecar"}]}'
 ```
 
-**Security Model**: The nginx reverse proxy exposes only public endpoints (health, API routes) while blocking direct access to `/webhook`. The AR.IO gateway communicates directly with the sidecar over the Docker network, ensuring webhook requests are authenticated by network isolation.
+## API Endpoints
+
+| Endpoint                        | Method   | Access   | Description                                |
+| ------------------------------- | -------- | -------- | ------------------------------------------ |
+| `/health`                       | GET      | Public   | Health check and service status            |
+| `/v1/search-similar`            | GET      | Public   | pHash similarity search                    |
+| `/v1/matches/byBinding`         | GET/POST | Public   | Resolve soft bindings by value             |
+| `/v1/matches/byContent`         | POST     | Public   | Resolve soft bindings by content           |
+| `/v1/matches/byReference`       | POST     | Public   | Resolve soft bindings by reference URL     |
+| `/v1/manifests/:manifestId`     | GET      | Public   | Fetch C2PA manifest store                  |
+| `/v1/services/supportedAlgorithms` | GET   | Public   | Supported soft binding algorithms          |
+| `/webhook`                      | POST     | Internal | Receive gateway index notifications        |
+
+> The `/webhook` endpoint is expected to be reachable only from the gateway network. External requests should be blocked at the proxy layer.
+
+## Soft Binding Resolution (C2PA)
+
+Resolve manifests from soft binding values or content.
+
+```bash
+# By binding (GET)
+curl "http://localhost:3003/v1/matches/byBinding?alg=org.ar-io.phash&value=BASE64&maxResults=10"
+
+# By binding (POST)
+curl -X POST http://localhost:3003/v1/matches/byBinding \
+  -H "Content-Type: application/json" \
+  -d '{"alg":"org.ar-io.phash","value":"BASE64"}'
+
+# By content (POST)
+curl -X POST http://localhost:3003/v1/matches/byContent?alg=org.ar-io.phash \
+  -H "Content-Type: image/jpeg" \
+  --data-binary "@image.jpg"
+
+# By reference (POST)
+curl -X POST http://localhost:3003/v1/matches/byReference \
+  -H "Content-Type: application/json" \
+  -d '{"referenceUrl":"https://example.com/image.jpg","assetLength":12345,"assetType":"image/jpeg"}'
+```
+
+## Manifest Repository (C2PA)
+
+Fetch a manifest store by manifest ID (URN). The response content type is `application/c2pa`.
+
+```bash
+curl -o manifest.c2pa \
+  "http://localhost:3003/v1/manifests/urn:uuid:YOUR-MANIFEST-ID"
+```
+
+## Similarity Search
+
+Search for similar images by pHash:
+
+```bash
+curl "http://localhost:3003/v1/search-similar?phash=ffffffffffffffff&threshold=10&limit=10"
+```
 
 ## Development
 
 ```bash
-# Install dependencies
 bun install
-
-# Run in development mode
 bun run dev
+```
 
-# Build for production
-bun run build
+## Migrations
+
+Run migrations after building the dist bundle:
+
+```bash
+bun run build && bun run migrate
 ```
 
 ## Testing
-
-### Unit Tests
-
-Run all unit and integration tests (no server required):
 
 ```bash
 bun test
 ```
 
-This runs 110+ tests covering:
-
-- C2PA manifest creation and verification
-- Embedded JUMBF manifest reading (with real C2PA fixture)
-- pHash computation and similarity search
-- Thumbnail generation
-- ArNS undername management
-
-### End-to-End Tests
-
-Test the running server with real HTTP requests:
+Run integration tests (requires sidecar + gateway running):
 
 ```bash
-# Terminal 1: Start the sidecar
-bun run dev
-
-# Terminal 2: Run E2E tests
-bun run test:e2e
+RUN_INTEGRATION=1 bun test
+# or override the base URL
+RUN_INTEGRATION=1 INTEGRATION_BASE_URL=http://localhost:3003 bun test
 ```
 
-E2E tests verify:
+## Next Steps
 
-- Health and API endpoints
-- Search functionality
-- Upload flow (requires wallet for full test)
-- Webhook processing
-- Manifest verification
-
-### Full Test Suite
-
-Run both unit and E2E tests:
-
-```bash
-bun run test:all
-```
-
-### Test Fixtures
-
-Real C2PA images are stored in `tests/fixtures/` for reliable offline testing:
-
-- `c2pa-sample.jpg` - JPEG with embedded C2PA manifest from c2pa-rs project
-
-### Testing with Real Uploads
-
-For full end-to-end testing with Arweave uploads:
-
-1. Create a funded Arweave wallet
-2. Place it in `./wallets/your-wallet.json`
-3. Configure `.env`:
-   ```bash
-   ARWEAVE_WALLET_FILE=./wallets/your-wallet.json
-   ARNS_ROOT_NAME=your-arns-name  # Optional
-   ```
-4. Run: `DRY_RUN=false bun run test:e2e`
-
-### Verifying Network Isolation
-
-After deployment, verify the webhook is properly protected:
-
-```bash
-# Public endpoints should work
-curl http://localhost:3003/health
-curl http://localhost:3003/v1/search-similar?txId=test
-
-# Webhook should return 404 externally
-curl -X POST http://localhost:3003/webhook -d '{}'
-# Expected: 404 Not Found
-
-# Webhook works internally (from gateway container)
-docker exec -it core curl -X POST http://trusthash-sidecar:3003/webhook \
-  -H "Content-Type: application/json" \
-  -d '{"tx_id":"test"}'
-# Expected: 200 or appropriate response
-```
-
-## License
-
-MIT
+1. Run migrations as a separate deploy step in production and back up `data/provenance.duckdb` beforehand.
+2. Add integration tests for `/webhook`, `/v1/matches/*`, and `/v1/manifests/:manifestId`.
+3. Consider allowlist/denylist controls for `/v1/matches/byReference` in production deployments.

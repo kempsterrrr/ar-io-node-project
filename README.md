@@ -34,6 +34,21 @@ curl -L http://localhost:3000/4jBV3ofWh41KhuTs2pFvj-KBZWUkbrbCYlJH0vLA6LM
 # Expected output: test
 ```
 
+### Run Trusthash Sidecar (Optional)
+
+```bash
+# Start the gateway first
+cd apps/gateway
+docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d
+
+# Start the sidecar
+cd ../../packages/trusthash-sidecar
+docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d
+
+# Health check
+curl -s http://localhost:3003/health | jq .
+```
+
 ## Project Structure
 
 ```
@@ -127,6 +142,21 @@ git push origin main
 
 You can also trigger a manual deployment from the Actions tab.
 
+### Deploying Trusthash Sidecar Alongside Gateway
+
+The gateway workflow only deploys the gateway. To run the sidecar in production,
+deploy it in the same Docker network using the sidecar overlay compose file:
+
+```bash
+docker compose \
+  -f apps/gateway/docker-compose.yaml \
+  -f packages/trusthash-sidecar/docker-compose.sidecar.yaml \
+  up -d
+```
+
+The sidecar uses `.env.docker` for container settings, which defaults
+`GATEWAY_URL` to `http://core:4000`.
+
 ## Adding Sidecars
 
 Sidecars are additional services that extend the gateway. To add a new sidecar:
@@ -168,7 +198,9 @@ Sidecars are additional services that extend the gateway. To add a new sidecar:
        external: true
    ```
 
-5. **Add a GHCR publishing workflow** (optional, for public distribution)
+5. **Provide an overlay compose file** so operators can add the sidecar alongside the gateway
+
+6. **Add a GHCR publishing workflow** (optional, for public distribution)
 
 ## Architecture
 

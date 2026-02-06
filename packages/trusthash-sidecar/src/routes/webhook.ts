@@ -18,7 +18,7 @@ const webhook = new Hono();
  * POST /webhook
  *
  * Receive webhook notifications from the AR.IO gateway
- * when pHash-tagged transactions are indexed.
+ * when manifest sidecar transactions are indexed.
  *
  * The gateway sends notifications when transactions matching
  * the WEBHOOK_INDEX_FILTER are indexed.
@@ -95,7 +95,7 @@ webhook.post('/', async (c) => {
  * GET /webhook
  *
  * Health check for webhook endpoint.
- * Can be used by gateway to verify the endpoint is reachable.
+ * Can be used by gateway to confirm the endpoint is reachable.
  */
 webhook.get('/', (c) => {
   return c.json({

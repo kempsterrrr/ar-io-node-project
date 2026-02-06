@@ -2,14 +2,14 @@
  * Webhook service for processing gateway notifications.
  *
  * Handles incoming webhooks from the AR.IO gateway when
- * pHash-tagged transactions are indexed.
+ * manifest sidecar transactions are indexed.
  */
 
 import { logger } from '../utils/logger.js';
-import { insertManifest, getManifestByTxId } from '../db/index.js';
+import { insertManifest, getManifestByTxId, replaceSoftBindings } from '../db/index.js';
 import { parsePHash } from '../utils/bit-vector.js';
 import { binaryStringToFloatArray } from '../utils/bit-vector.js';
-import { buildArnsUrl, isArnsConfigured } from './arns.service.js';
+import { SOFT_BINDING_ALG_ID } from './softbinding.service.js';
 
 /**
  * Webhook payload tag
@@ -53,20 +53,31 @@ export interface WebhookResult {
  * Extract a tag value from the tags array.
  */
 function getTagValue(tags: WebhookTag[], name: string): string | undefined {
-  const tag = tags.find((t) => t.name.toLowerCase() === name.toLowerCase());
-  return tag?.value;
+  return getTagValues(tags, name)[0];
+}
+
+function getTagValues(tags: WebhookTag[], name: string): string[] {
+  return tags
+    .filter((t) => t.name.toLowerCase() === name.toLowerCase())
+    .map((t) => t.value);
 }
 
 /**
  * Process a webhook payload from the gateway.
  *
- * Expected payload structure (based on gateway webhook format):
+ * Expected payload structure (based on gateway webhook format).
+ * Required tags for indexing:
+ * - Content-Type=application/c2pa
+ * - Manifest-Type=sidecar
+ * - C2PA-Manifest-Id=urn:uuid:...
+ * - C2PA-SoftBinding-Alg (one per binding)
+ * - C2PA-SoftBinding-Value (one per binding, base64)
+ * - pHash (hex or binary, used for similarity search)
  * {
  *   tx_id: "abc123...",
  *   tags: [
  *     { name: "pHash", value: "a5a5a5a5a5a5a5a5" },
- *     { name: "Content-Type", value: "application/c2pa+json" },
- *     { name: "ArNS-Undername", value: "th-abc123" }
+ *     { name: "Content-Type", value: "application/c2pa" },
  *   ],
  *   owner: "xyz789...",
  *   block_height: 1500000,
@@ -104,15 +115,74 @@ export async function processWebhook(payload: WebhookPayload): Promise<WebhookRe
       };
     }
 
-    // Extract required tags
+    // Extract required tags (tag-only indexing)
+    const contentTypeTag = getTagValue(tags, 'Content-Type');
+    const manifestTypeTag = getTagValue(tags, 'Manifest-Type');
+    const manifestIdTag = getTagValue(tags, 'C2PA-Manifest-Id');
     const pHashValue = getTagValue(tags, 'pHash');
-    if (!pHashValue) {
-      logger.debug({ txId }, 'No pHash tag found, skipping');
+    const softBindingAlgs = getTagValues(tags, 'C2PA-SoftBinding-Alg');
+    const softBindingValues = getTagValues(tags, 'C2PA-SoftBinding-Value');
+    const softBindingScopes = getTagValues(tags, 'C2PA-SoftBinding-Scope');
+
+    if (!contentTypeTag || !manifestTypeTag || !manifestIdTag || !pHashValue) {
+      logger.debug(
+        {
+          txId,
+          contentTypeTag,
+          manifestTypeTag,
+          manifestIdTag,
+          pHashValue,
+        },
+        'Missing required tags, skipping'
+      );
       return {
         success: true,
         action: 'skipped',
         txId,
-        reason: 'No pHash tag',
+        reason: 'Missing required tags',
+      };
+    }
+
+    if (contentTypeTag !== 'application/c2pa' || manifestTypeTag !== 'sidecar') {
+      logger.debug({ txId, contentTypeTag, manifestTypeTag }, 'Non-sidecar manifest, skipping');
+      return {
+        success: true,
+        action: 'skipped',
+        txId,
+        reason: 'Non-sidecar manifest',
+      };
+    }
+
+    if (softBindingAlgs.length === 0 || softBindingValues.length === 0) {
+      logger.debug({ txId }, 'Missing soft binding tags, skipping');
+      return {
+        success: true,
+        action: 'skipped',
+        txId,
+        reason: 'Missing soft binding tags',
+      };
+    }
+
+    if (softBindingAlgs.length !== softBindingValues.length) {
+      logger.warn(
+        { txId, algCount: softBindingAlgs.length, valueCount: softBindingValues.length },
+        'Soft binding tag counts mismatch, skipping'
+      );
+      return {
+        success: true,
+        action: 'skipped',
+        txId,
+        reason: 'Soft binding tag counts mismatch',
+      };
+    }
+
+    if (!softBindingAlgs.some((alg) => alg === SOFT_BINDING_ALG_ID)) {
+      logger.debug({ txId, softBindingAlgs }, 'No supported soft binding algorithm present');
+      return {
+        success: true,
+        action: 'skipped',
+        txId,
+        reason: 'Unsupported soft binding algorithm',
       };
     }
 
@@ -132,22 +202,16 @@ export async function processWebhook(payload: WebhookPayload): Promise<WebhookRe
     }
 
     // Extract optional tags
-    const contentType = getTagValue(tags, 'Content-Type') || 'application/c2pa';
-    const arnsUndername = getTagValue(tags, 'ArNS-Undername') || `indexed-${txId.slice(0, 8)}`;
+    const originalContentType = getTagValue(tags, 'Original-Content-Type');
+    const contentType = originalContentType || contentTypeTag;
     const appName = getTagValue(tags, 'App-Name');
-
-    // Build ArNS URL using underscore format: undername_rootname.arweave.net
-    // If ArNS is configured, use our root name; otherwise use placeholder
-    const arnsFullUrl = isArnsConfigured()
-      ? buildArnsUrl(arnsUndername)
-      : `https://${arnsUndername}_unknown.arweave.net`;
+    const manifestId = manifestIdTag;
 
     // Index the manifest
     await insertManifest({
       manifestTxId: txId,
-      arnsUndername,
-      arnsFullUrl,
-      originalHash: '', // Not available from webhook
+      manifestId,
+      originalHash: null,
       contentType,
       phash: phashFloats,
       hasPriorManifest: false, // Unknown from webhook
@@ -156,6 +220,22 @@ export async function processWebhook(payload: WebhookPayload): Promise<WebhookRe
       blockHeight,
       blockTimestamp: blockTimestamp ? new Date(blockTimestamp * 1000) : undefined,
     });
+
+    const softBindings = softBindingAlgs.map((alg, index) => {
+      const valueB64 = softBindingValues[index];
+      const scopeRaw = softBindingScopes[index];
+      let scopeJson: string | null = null;
+      if (scopeRaw) {
+        try {
+          scopeJson = JSON.stringify(JSON.parse(scopeRaw));
+        } catch {
+          scopeJson = JSON.stringify(scopeRaw);
+        }
+      }
+      return { alg, valueB64, scopeJson };
+    });
+
+    await replaceSoftBindings(manifestId, softBindings);
 
     logger.info(
       {

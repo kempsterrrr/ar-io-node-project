@@ -1,8 +1,6 @@
 services:
   trusthash-sidecar:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ${TRUSTHASH_SIDECAR_IMAGE:-ghcr.io/ar-io/trusthash-sidecar:latest}
     container_name: trusthash-sidecar
     restart: unless-stopped
     expose:

@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import type { ApiResponse, HealthResponse } from '../types/index.js';
 import { getDatabase } from '../db/index.js';
 
 const health = new Hono();
@@ -25,7 +24,7 @@ health.get('/', async (c) => {
 
   const overallStatus = dbStatus === 'healthy' ? 'ok' : dbStatus === 'unhealthy' ? 'error' : 'ok';
 
-  const response: ApiResponse<HealthResponse> = {
+  const response = {
     success: true,
     data: {
       status: overallStatus,

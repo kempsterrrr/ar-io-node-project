@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { existsSync, readFileSync } from 'node:fs';
 
 const envSchema = z.object({
   // Server
@@ -12,33 +13,11 @@ const envSchema = z.object({
   // Gateway
   GATEWAY_URL: z.string().url().default('http://localhost:3000'),
 
-  // Turbo
-  TURBO_GATEWAY_URL: z.string().url().default('https://turbo.ardrive.io'),
-
-  // Wallet
-  ARWEAVE_WALLET_FILE: z.string().default('./wallets/arweave-wallet.json'),
-
-  // ArNS
-  ARNS_ROOT_NAME: z.string().optional(),
-  // Auto-purchase undername capacity when running low
-  ARNS_AUTO_PURCHASE_CAPACITY: z
-    .string()
-    .transform((v) => v === 'true')
-    .default('true'),
-  // Number of undernames to purchase at a time
-  ARNS_CAPACITY_PURCHASE_QTY: z.coerce.number().min(1).max(1000).default(100),
-  // Threshold to trigger auto-purchase (purchase when available < threshold)
-  ARNS_CAPACITY_THRESHOLD: z.coerce.number().min(1).default(10),
-
   // Image Processing
   MAX_IMAGE_SIZE_MB: z.coerce.number().default(50),
-  THUMBNAIL_WIDTH: z.coerce.number().default(400),
-  THUMBNAIL_QUALITY: z.coerce.number().min(1).max(100).default(80),
 
-  // C2PA
-  C2PA_CERT_PATH: z.string().default('./certs/certificate.pem'),
-  C2PA_KEY_PATH: z.string().default('./certs/private-key.pem'),
-  C2PA_TSA_URL: z.string().url().optional(), // Optional timestamp authority URL
+  // Reference Fetch
+  REFERENCE_FETCH_TIMEOUT_MS: z.coerce.number().default(10000),
 });
 
 export type Config = z.infer<typeof envSchema>;
@@ -52,16 +31,60 @@ function loadConfig(): Config {
     process.exit(1);
   }
 
-  return result.data;
+  const config = result.data;
+  validateDockerGateway(config);
+  return config;
 }
 
 export const config = loadConfig();
 
-/**
- * Determine if we're using ArNS testnet based on environment.
- * - development/test → testnet
- * - production → mainnet
- */
-export function isArnsTestnet(): boolean {
-  return config.NODE_ENV !== 'production';
+function isRunningInDocker(): boolean {
+  if (process.env.DOCKER || process.env.CONTAINER) {
+    return true;
+  }
+
+  if (existsSync('/.dockerenv')) {
+    return true;
+  }
+
+  try {
+    const cgroup = readFileSync('/proc/1/cgroup', 'utf8');
+    return (
+      cgroup.includes('docker') ||
+      cgroup.includes('containerd') ||
+      cgroup.includes('kubepods')
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isLocalhostHost(hostname: string): boolean {
+  const lower = hostname.toLowerCase();
+  return (
+    lower === 'localhost' ||
+    lower === '127.0.0.1' ||
+    lower === '::1' ||
+    lower.endsWith('.localhost')
+  );
+}
+
+function validateDockerGateway(config: Config): void {
+  if (!isRunningInDocker()) {
+    return;
+  }
+
+  try {
+    const url = new URL(config.GATEWAY_URL);
+    if (isLocalhostHost(url.hostname)) {
+      console.error(
+        'Invalid GATEWAY_URL for Docker: localhost resolves to the container itself. ' +
+          'Use the gateway service hostname (e.g. http://core:4000).'
+      );
+      process.exit(1);
+    }
+  } catch {
+    console.error('Invalid GATEWAY_URL configuration.');
+    process.exit(1);
+  }
 }

@@ -27,7 +27,7 @@ const search = new Hono();
  *   data: {
  *     query: { phash, threshold, limit },
  *     results: [
- *       { manifestTxId, arnsUrl, distance, contentType }
+ *       { manifestTxId, manifestId, distance, contentType, ownerAddress }
  *     ],
  *     total: 5
  *   }

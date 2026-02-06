@@ -70,25 +70,41 @@ docker compose -f docker-compose.yaml -f docker-compose.dev.yaml down -v
 
 ## Sidecar Testing
 
-When you add sidecars to `packages/`, each should have its own test script. The pattern:
+### Trusthash Sidecar (Local)
 
 ```bash
-# Start the gateway first (sidecars depend on it)
+# Start the gateway first (sidecar depends on it)
 cd apps/gateway
 docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d
 
-# Start the sidecar
-cd ../../packages/my-sidecar
-docker compose up -d
+# Start the Trusthash sidecar
+cd ../../packages/trusthash-sidecar
+docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d
 
-# Run sidecar-specific tests
+# Run unit tests
 bun test
+
+# Run integration tests (requires sidecar + gateway)
+RUN_INTEGRATION=1 INTEGRATION_BASE_URL=http://localhost:3003 bun test
 
 # Clean up
 docker compose down
 cd ../../apps/gateway
 docker compose -f docker-compose.yaml -f docker-compose.dev.yaml down
 ```
+
+### Trusthash Sidecar (Docker Overlay)
+
+If you want to run the sidecar alongside the gateway in one compose invocation:
+
+```bash
+docker compose \
+  -f apps/gateway/docker-compose.yaml \
+  -f packages/trusthash-sidecar/docker-compose.sidecar.yaml \
+  up -d
+```
+
+Note: The sidecar uses `.env.docker` for container settings.
 
 ## CI Testing
 

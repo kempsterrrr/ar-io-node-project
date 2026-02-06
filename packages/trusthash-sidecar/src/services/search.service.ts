@@ -12,6 +12,10 @@ import {
   binaryStringToFloatArray,
   floatArrayToBinaryString,
 } from '../utils/bit-vector.js';
+import {
+  SOFT_BINDING_ALG_ID,
+  softBindingValueToPHashHex,
+} from './softbinding.service.js';
 
 /**
  * Search result item
@@ -19,8 +23,8 @@ import {
 export interface SearchResultItem {
   /** Manifest transaction ID */
   manifestTxId: string;
-  /** Full ArNS URL */
-  arnsUrl: string;
+  /** C2PA manifest ID (URN) */
+  manifestId?: string | null;
   /** Hamming distance (0-64) */
   distance: number;
   /** Content type of original image */
@@ -112,7 +116,7 @@ export async function searchSimilar(options: SearchOptions): Promise<SearchResul
   // Transform results
   const results: SearchResultItem[] = matches.map((m) => ({
     manifestTxId: m.manifestTxId,
-    arnsUrl: m.arnsFullUrl,
+    manifestId: m.manifestId ?? null,
     distance: Math.round(m.distance), // Hamming distance is integer
     contentType: m.contentType,
     ownerAddress: m.ownerAddress,
@@ -136,6 +140,43 @@ export async function searchSimilar(options: SearchOptions): Promise<SearchResul
     results,
     total: results.length,
   };
+}
+
+export interface SoftBindingQueryResult {
+  manifestId: string;
+  similarityScore?: number;
+  endpoint?: string;
+}
+
+export async function searchBySoftBinding(options: {
+  alg: string;
+  valueB64: string;
+  maxResults?: number;
+}): Promise<SoftBindingQueryResult[]> {
+  const { alg, valueB64, maxResults = 10 } = options;
+
+  if (alg !== SOFT_BINDING_ALG_ID) {
+    throw new Error(`Unsupported soft binding algorithm: ${alg}`);
+  }
+
+  const pHashHex = softBindingValueToPHashHex(valueB64);
+  const binary = parsePHash(pHashHex);
+  const phashFloats = binaryStringToFloatArray(binary);
+
+  // Use a reasonable default threshold for perceptual hash
+  const threshold = 10;
+  const matches = await searchSimilarByPHash(phashFloats, threshold, maxResults);
+
+  return matches
+    .filter((m) => !!m.manifestId)
+    .map((m) => {
+      const distance = Math.round(m.distance);
+      const similarity = Math.max(0, 1 - distance / 64);
+      return {
+        manifestId: m.manifestId as string,
+        similarityScore: Math.round(similarity * 100),
+      };
+    });
 }
 
 /**
