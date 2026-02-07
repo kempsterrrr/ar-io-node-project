@@ -69,7 +69,7 @@ services:
     pull_policy: never
     build:
       context: ./packages/trusthash-sidecar
-      dockerfile: ./packages/trusthash-sidecar/Dockerfile
+      dockerfile: Dockerfile
     restart: "no"
     expose:
       - '3003'
