@@ -5,6 +5,40 @@ import { runMigrations } from './migrations.js';
 
 let db: Database | null = null;
 
+function requireDatabase(database?: Database | null): Database {
+  const resolved = database ?? getDatabase();
+  if (!resolved) {
+    throw new Error('Database not initialized');
+  }
+  return resolved;
+}
+
+async function runInTransaction<T>(database: Database, fn: () => Promise<T>): Promise<T> {
+  await database.run('BEGIN TRANSACTION');
+  try {
+    const result = await fn();
+    await database.run('COMMIT');
+    return result;
+  } catch (error) {
+    try {
+      await database.run('ROLLBACK');
+    } catch (rollbackError) {
+      logger.error({ error: rollbackError }, 'Failed to rollback database transaction');
+    }
+    throw error;
+  }
+}
+
+function parsePhashValue(value: unknown): number[] {
+  if (typeof value === 'string') {
+    return JSON.parse(value) as number[];
+  }
+  if (Array.isArray(value)) {
+    return value as number[];
+  }
+  return [];
+}
+
 export async function initDatabase(): Promise<Database> {
   if (db) {
     return db;
@@ -64,11 +98,11 @@ export interface SoftBindingRecord {
 /**
  * Insert a new manifest record into the database.
  */
-export async function insertManifest(record: ManifestRecord): Promise<void> {
-  const database = getDatabase();
-  if (!database) {
-    throw new Error('Database not initialized');
-  }
+export async function insertManifest(
+  record: ManifestRecord,
+  options: { database?: Database } = {}
+): Promise<void> {
+  const database = requireDatabase(options.database);
 
   const phashArray = `[${record.phash.join(', ')}]`;
 
@@ -104,23 +138,30 @@ export async function insertManifest(record: ManifestRecord): Promise<void> {
  */
 export async function replaceSoftBindings(
   manifestId: string,
-  bindings: SoftBindingRecord[]
+  bindings: SoftBindingRecord[],
+  options: { database?: Database; useTransaction?: boolean } = {}
 ): Promise<void> {
-  const database = getDatabase();
-  if (!database) {
-    throw new Error('Database not initialized');
-  }
+  const database = requireDatabase(options.database);
+  const useTransaction = options.useTransaction ?? true;
 
-  await database.run(`DELETE FROM soft_bindings WHERE manifest_id = ?`, manifestId);
+  const run = async () => {
+    await database.run(`DELETE FROM soft_bindings WHERE manifest_id = ?`, manifestId);
 
-  for (const binding of bindings) {
-    await database.run(
-      `INSERT INTO soft_bindings (manifest_id, alg, value_b64, scope_json) VALUES (?, ?, ?, ?)`,
-      manifestId,
-      binding.alg,
-      binding.valueB64,
-      binding.scopeJson ?? null
-    );
+    for (const binding of bindings) {
+      await database.run(
+        `INSERT INTO soft_bindings (manifest_id, alg, value_b64, scope_json) VALUES (?, ?, ?, ?)`,
+        manifestId,
+        binding.alg,
+        binding.valueB64,
+        binding.scopeJson ?? null
+      );
+    }
+  };
+
+  if (useTransaction) {
+    await runInTransaction(database, run);
+  } else {
+    await run();
   }
 }
 
@@ -128,10 +169,7 @@ export async function replaceSoftBindings(
  * Get a manifest by transaction ID.
  */
 export async function getManifestByTxId(txId: string): Promise<ManifestRecord | null> {
-  const database = getDatabase();
-  if (!database) {
-    throw new Error('Database not initialized');
-  }
+  const database = requireDatabase();
 
   const result = await database.all(`SELECT * FROM manifests WHERE manifest_tx_id = ?`, txId);
 
@@ -142,12 +180,7 @@ export async function getManifestByTxId(txId: string): Promise<ManifestRecord | 
   const row = result[0] as Record<string, unknown>;
 
   // DuckDB returns FLOAT[] as a string like "[0.0, 1.0, ...]", need to parse it
-  let phash: number[] = [];
-  if (typeof row.phash === 'string') {
-    phash = JSON.parse(row.phash);
-  } else if (Array.isArray(row.phash)) {
-    phash = row.phash;
-  }
+  const phash = parsePhashValue(row.phash);
 
   return {
     manifestTxId: row.manifest_tx_id as string,
@@ -167,10 +200,7 @@ export async function getManifestByTxId(txId: string): Promise<ManifestRecord | 
  * Get a manifest by C2PA manifest ID (URN).
  */
 export async function getManifestById(manifestId: string): Promise<ManifestRecord | null> {
-  const database = getDatabase();
-  if (!database) {
-    throw new Error('Database not initialized');
-  }
+  const database = requireDatabase();
 
   const result = await database.all(`SELECT * FROM manifests WHERE manifest_id = ?`, manifestId);
 
@@ -180,12 +210,7 @@ export async function getManifestById(manifestId: string): Promise<ManifestRecor
 
   const row = result[0] as Record<string, unknown>;
 
-  let phash: number[] = [];
-  if (typeof row.phash === 'string') {
-    phash = JSON.parse(row.phash);
-  } else if (Array.isArray(row.phash)) {
-    phash = row.phash;
-  }
+  const phash = parsePhashValue(row.phash);
 
   return {
     manifestTxId: row.manifest_tx_id as string,
@@ -209,20 +234,22 @@ export async function searchSimilarByPHash(
   threshold: number = 10,
   limit: number = 10
 ): Promise<Array<ManifestRecord & { distance: number }>> {
-  const database = getDatabase();
-  if (!database) {
-    throw new Error('Database not initialized');
-  }
+  const database = requireDatabase();
 
   const phashArray = `[${phash.join(', ')}]`;
 
-  // Use L2 distance which equals Hamming for binary vectors
+  // L2 distance squared equals Hamming distance for binary vectors.
   const result = await database.all(
-    `SELECT *,
-      array_distance(phash, ${phashArray}::FLOAT[64]) as distance
-    FROM manifests
-    WHERE manifest_id IS NOT NULL
-      AND array_distance(phash, ${phashArray}::FLOAT[64]) <= ?
+    `WITH candidates AS (
+      SELECT *,
+        array_distance(phash, ${phashArray}::FLOAT[64]) AS l2_distance
+      FROM manifests
+      WHERE manifest_id IS NOT NULL
+    )
+    SELECT *,
+      (l2_distance * l2_distance) AS distance
+    FROM candidates
+    WHERE (l2_distance * l2_distance) <= ?
     ORDER BY distance ASC
     LIMIT ?`,
     threshold,
@@ -234,13 +261,13 @@ export async function searchSimilarByPHash(
     manifestId: (row.manifest_id as string) || null,
     originalHash: (row.original_hash as string) ?? null,
     contentType: row.content_type as string,
-    phash: row.phash as number[],
+    phash: parsePhashValue(row.phash),
     hasPriorManifest: row.has_prior_manifest as boolean,
     claimGenerator: row.claim_generator as string,
     ownerAddress: row.owner_address as string,
     blockHeight: row.block_height as number | undefined,
     blockTimestamp: row.block_timestamp as Date | undefined,
-    distance: row.distance as number,
+    distance: Number(row.distance),
   }));
 }
 
@@ -248,12 +275,28 @@ export async function searchSimilarByPHash(
  * Get total count of manifests in database.
  */
 export async function getManifestCount(): Promise<number> {
-  const database = getDatabase();
-  if (!database) {
-    throw new Error('Database not initialized');
-  }
+  const database = requireDatabase();
 
   const result = await database.all('SELECT COUNT(*) as count FROM manifests');
   // DuckDB returns BigInt for COUNT(*), convert to Number for JSON serialization
   return Number((result[0] as { count: bigint }).count);
+}
+
+export async function insertManifestWithBindings(
+  record: ManifestRecord,
+  bindings: SoftBindingRecord[]
+): Promise<void> {
+  if (!record.manifestId) {
+    throw new Error('manifestId is required to store soft bindings');
+  }
+
+  const database = requireDatabase();
+
+  await runInTransaction(database, async () => {
+    await insertManifest(record, { database });
+    await replaceSoftBindings(record.manifestId as string, bindings, {
+      database,
+      useTransaction: false,
+    });
+  });
 }

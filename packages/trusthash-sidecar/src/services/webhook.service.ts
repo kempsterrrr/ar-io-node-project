@@ -6,7 +6,7 @@
  */
 
 import { logger } from '../utils/logger.js';
-import { insertManifest, getManifestByTxId, replaceSoftBindings } from '../db/index.js';
+import { insertManifestWithBindings, getManifestByTxId } from '../db/index.js';
 import { parsePHash } from '../utils/bit-vector.js';
 import { binaryStringToFloatArray } from '../utils/bit-vector.js';
 import { SOFT_BINDING_ALG_ID } from './softbinding.service.js';
@@ -205,35 +205,34 @@ export async function processWebhook(payload: WebhookPayload): Promise<WebhookRe
     const appName = getTagValue(tags, 'App-Name');
     const manifestId = manifestIdTag;
 
-    // Index the manifest
-    await insertManifest({
-      manifestTxId: txId,
-      manifestId,
-      originalHash: null,
-      contentType,
-      phash: phashFloats,
-      hasPriorManifest: false, // Unknown from webhook
-      claimGenerator: appName || 'External',
-      ownerAddress: owner || 'unknown',
-      blockHeight,
-      blockTimestamp: blockTimestamp ? new Date(blockTimestamp * 1000) : undefined,
-    });
-
-    const softBindings = softBindingAlgs.map((alg, index) => {
-      const valueB64 = softBindingValues[index];
-      const scopeRaw = softBindingScopes[index];
-      let scopeJson: string | null = null;
-      if (scopeRaw) {
-        try {
-          scopeJson = JSON.stringify(JSON.parse(scopeRaw));
-        } catch {
-          scopeJson = JSON.stringify(scopeRaw);
+    // Index the manifest and bindings together
+    await insertManifestWithBindings(
+      {
+        manifestTxId: txId,
+        manifestId,
+        originalHash: null,
+        contentType,
+        phash: phashFloats,
+        hasPriorManifest: false, // Unknown from webhook
+        claimGenerator: appName || 'External',
+        ownerAddress: owner || 'unknown',
+        blockHeight,
+        blockTimestamp: blockTimestamp ? new Date(blockTimestamp * 1000) : undefined,
+      },
+      softBindingAlgs.map((alg, index) => {
+        const valueB64 = softBindingValues[index];
+        const scopeRaw = softBindingScopes[index];
+        let scopeJson: string | null = null;
+        if (scopeRaw) {
+          try {
+            scopeJson = JSON.stringify(JSON.parse(scopeRaw));
+          } catch {
+            scopeJson = JSON.stringify(scopeRaw);
+          }
         }
-      }
-      return { alg, valueB64, scopeJson };
-    });
-
-    await replaceSoftBindings(manifestId, softBindings);
+        return { alg, valueB64, scopeJson };
+      })
+    );
 
     logger.info(
       {
