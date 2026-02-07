@@ -224,9 +224,10 @@ async function isColumnNotNull(
   tableName: string,
   columnName: string
 ): Promise<boolean> {
-  const rows = (await db.all(
-    `PRAGMA table_info('${tableName}')`
-  )) as Array<{ name: string; notnull: number }>;
+  const rows = (await db.all(`PRAGMA table_info('${tableName}')`)) as Array<{
+    name: string;
+    notnull: number;
+  }>;
 
   const match = rows.find((row) => row.name === columnName);
   if (!match) {
@@ -236,14 +237,8 @@ async function isColumnNotNull(
   return Number(match.notnull) === 1;
 }
 
-async function hasColumn(
-  db: Database,
-  tableName: string,
-  columnName: string
-): Promise<boolean> {
-  const rows = (await db.all(
-    `PRAGMA table_info('${tableName}')`
-  )) as Array<{ name: string }>;
+async function hasColumn(db: Database, tableName: string, columnName: string): Promise<boolean> {
+  const rows = (await db.all(`PRAGMA table_info('${tableName}')`)) as Array<{ name: string }>;
 
   return rows.some((row) => row.name === columnName);
 }
@@ -275,9 +270,9 @@ async function bumpSequence(
     `SELECT start_value, last_value, increment_by FROM duckdb_sequences() WHERE sequence_name = '${sequenceName}'`
   )) as Array<{ start_value: number; last_value: number | null; increment_by: number }>;
 
-  const rows = (await db.all(
-    `SELECT MAX(${columnName}) AS max_id FROM ${tableName}`
-  )) as Array<{ max_id: number | null }>;
+  const rows = (await db.all(`SELECT MAX(${columnName}) AS max_id FROM ${tableName}`)) as Array<{
+    max_id: number | null;
+  }>;
   const maxId = Number(rows[0]?.max_id ?? 0);
 
   if (seqRows.length === 0) {
@@ -294,8 +289,6 @@ async function bumpSequence(
 
   const delta = Math.floor(targetNext - nextValue);
   if (delta > 0) {
-    await db.all(
-      `SELECT max(nextval('${sequenceName}')) AS value FROM range(0, ${delta})`
-    );
+    await db.all(`SELECT max(nextval('${sequenceName}')) AS value FROM range(0, ${delta})`);
   }
 }

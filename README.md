@@ -130,16 +130,16 @@ bun run --filter @ar-io/gateway logs    # View gateway logs
 
 Add the following **secrets** to your repository (Settings → Secrets and variables → Actions):
 
-| Secret                | Description                            |
-| --------------------- | -------------------------------------- |
-| `HETZNER_HOST`        | Server IP address                      |
-| `HETZNER_USER`        | SSH username (usually `root`)          |
-| `HETZNER_SSH_KEY`     | Private SSH key for authentication     |
-| `AR_IO_WALLET`        | Your Arweave wallet address            |
-| `OBSERVER_WALLET`     | Observer hot wallet address            |
-| `OBSERVER_WALLET_KEY` | Observer wallet keyfile (JSON content) |
-| `GHCR_USERNAME`       | (Sidecar) GHCR username (if private)   |
-| `GHCR_TOKEN`          | (Sidecar) GHCR token (read:packages)   |
+| Secret                  | Description                                           |
+| ----------------------- | ----------------------------------------------------- |
+| `HETZNER_HOST`          | Server IP address                                     |
+| `HETZNER_USER`          | SSH username (usually `root`)                         |
+| `HETZNER_SSH_KEY`       | Private SSH key for authentication                    |
+| `AR_IO_WALLET`          | Your Arweave wallet address                           |
+| `OBSERVER_WALLET`       | Observer hot wallet address                           |
+| `OBSERVER_WALLET_KEY`   | Observer wallet keyfile (JSON content)                |
+| `GHCR_USERNAME`         | (Sidecar) GHCR username (if private)                  |
+| `GHCR_TOKEN`            | (Sidecar) GHCR token (read:packages)                  |
 | `GHCR_VISIBILITY_TOKEN` | (Sidecar) GHCR token (write:packages) to force public |
 
 Add the following **variables** (Settings → Secrets and variables → Actions → Variables):
@@ -215,6 +215,7 @@ To enforce public visibility, add:
 
 If `GHCR_VISIBILITY_TOKEN` is not set, the workflow will only succeed if the package
 is already public.
+
 ## OpenClaw Integration
 
 OpenClaw provides a Claude AI agent with direct access to your AR.IO gateway. Use natural language to query Arweave data, resolve ArNS names, and search transactions.

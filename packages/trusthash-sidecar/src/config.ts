@@ -50,9 +50,7 @@ function isRunningInDocker(): boolean {
   try {
     const cgroup = readFileSync('/proc/1/cgroup', 'utf8');
     return (
-      cgroup.includes('docker') ||
-      cgroup.includes('containerd') ||
-      cgroup.includes('kubepods')
+      cgroup.includes('docker') || cgroup.includes('containerd') || cgroup.includes('kubepods')
     );
   } catch {
     return false;

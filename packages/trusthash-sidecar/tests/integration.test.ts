@@ -1,10 +1,7 @@
 import { describe, expect, it, beforeAll, afterAll } from 'bun:test';
 import { Database } from 'duckdb-async';
 import sharp from 'sharp';
-import {
-  binaryStringToHex,
-  floatArrayToBinaryString,
-} from '../src/utils/bit-vector.js';
+import { binaryStringToHex, floatArrayToBinaryString } from '../src/utils/bit-vector.js';
 import {
   SOFT_BINDING_ALG_ID,
   pHashHexToSoftBindingValue,
@@ -15,8 +12,7 @@ const describeIntegration = runIntegration ? describe : describe.skip;
 
 const baseUrlEnv = process.env.INTEGRATION_BASE_URL;
 const dbPath = process.env.INTEGRATION_DB_PATH || './data/provenance.duckdb';
-const referenceUrl =
-  process.env.REFERENCE_TEST_URL || 'https://httpbin.org/image/png';
+const referenceUrl = process.env.REFERENCE_TEST_URL || 'https://httpbin.org/image/png';
 
 type SampleBinding = {
   manifestId: string;

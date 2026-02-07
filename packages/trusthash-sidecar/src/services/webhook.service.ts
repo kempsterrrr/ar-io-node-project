@@ -57,9 +57,7 @@ function getTagValue(tags: WebhookTag[], name: string): string | undefined {
 }
 
 function getTagValues(tags: WebhookTag[], name: string): string[] {
-  return tags
-    .filter((t) => t.name.toLowerCase() === name.toLowerCase())
-    .map((t) => t.value);
+  return tags.filter((t) => t.name.toLowerCase() === name.toLowerCase()).map((t) => t.value);
 }
 
 /**

@@ -31,7 +31,8 @@ app.get('/', (c) => {
   return c.json({
     name: 'Trusthash Sidecar',
     version: '0.1.0',
-    description: 'C2PA manifest repository, soft binding API, and pHash similarity search for Arweave',
+    description:
+      'C2PA manifest repository, soft binding API, and pHash similarity search for Arweave',
     endpoints: {
       health: 'GET /health',
       search: 'GET /v1/search-similar',

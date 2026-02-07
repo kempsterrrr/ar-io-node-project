@@ -12,10 +12,7 @@ import {
   binaryStringToFloatArray,
   floatArrayToBinaryString,
 } from '../utils/bit-vector.js';
-import {
-  SOFT_BINDING_ALG_ID,
-  softBindingValueToPHashHex,
-} from './softbinding.service.js';
+import { SOFT_BINDING_ALG_ID, softBindingValueToPHashHex } from './softbinding.service.js';
 
 /**
  * Search result item

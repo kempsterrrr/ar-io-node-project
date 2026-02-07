@@ -141,16 +141,16 @@ ANS104_INDEX_FILTER='{"tags":[{"name":"Content-Type","value":"application/c2pa"}
 
 ## API Endpoints
 
-| Endpoint                        | Method   | Access   | Description                                |
-| ------------------------------- | -------- | -------- | ------------------------------------------ |
-| `/health`                       | GET      | Public   | Health check and service status            |
-| `/v1/search-similar`            | GET      | Public   | pHash similarity search                    |
-| `/v1/matches/byBinding`         | GET/POST | Public   | Resolve soft bindings by value             |
-| `/v1/matches/byContent`         | POST     | Public   | Resolve soft bindings by content           |
-| `/v1/matches/byReference`       | POST     | Public   | Resolve soft bindings by reference URL     |
-| `/v1/manifests/:manifestId`     | GET      | Public   | Fetch C2PA manifest store                  |
-| `/v1/services/supportedAlgorithms` | GET   | Public   | Supported soft binding algorithms          |
-| `/webhook`                      | POST     | Internal | Receive gateway index notifications        |
+| Endpoint                           | Method   | Access   | Description                            |
+| ---------------------------------- | -------- | -------- | -------------------------------------- |
+| `/health`                          | GET      | Public   | Health check and service status        |
+| `/v1/search-similar`               | GET      | Public   | pHash similarity search                |
+| `/v1/matches/byBinding`            | GET/POST | Public   | Resolve soft bindings by value         |
+| `/v1/matches/byContent`            | POST     | Public   | Resolve soft bindings by content       |
+| `/v1/matches/byReference`          | POST     | Public   | Resolve soft bindings by reference URL |
+| `/v1/manifests/:manifestId`        | GET      | Public   | Fetch C2PA manifest store              |
+| `/v1/services/supportedAlgorithms` | GET      | Public   | Supported soft binding algorithms      |
+| `/webhook`                         | POST     | Internal | Receive gateway index notifications    |
 
 > The `/webhook` endpoint is expected to be reachable only from the gateway network. External requests should be blocked at the proxy layer.
 

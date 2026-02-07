@@ -433,10 +433,7 @@ softbinding.post('/byReference', async (c) => {
 
     let buffer: Buffer;
     try {
-      buffer = await readStreamWithLimit(
-        response.body,
-        Math.min(maxBytes, assetLength)
-      );
+      buffer = await readStreamWithLimit(response.body, Math.min(maxBytes, assetLength));
     } catch (error) {
       if (error instanceof SizeLimitError) {
         return c.json(
