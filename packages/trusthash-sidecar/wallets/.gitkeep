@@ -1,0 +1,5 @@
+# Place your Arweave wallet JSON file here
+# Example: arweave-wallet.json
+#
+# IMPORTANT: Wallet files are gitignored and should never be committed
+# Generate a wallet at: https://arweave.app or use the Arweave CLI

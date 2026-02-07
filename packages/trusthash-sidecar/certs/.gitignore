@@ -1,0 +1,15 @@
+# Ignore actual certificate files (sensitive)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.pub
+*.cnf
+*.srl
+*.csr
+
+# Keep the directory structure and scripts
+!.gitignore
+!README.md
+!generate-certs.sh

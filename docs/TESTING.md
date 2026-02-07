@@ -70,24 +70,51 @@ docker compose -f docker-compose.yaml -f docker-compose.dev.yaml down -v
 
 ## Sidecar Testing
 
-When you add sidecars to `packages/`, each should have its own test script. The pattern:
+### Trusthash Sidecar (Local)
 
 ```bash
-# Start the gateway first (sidecars depend on it)
+# Start the gateway first (sidecar depends on it)
 cd apps/gateway
 docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d
 
-# Start the sidecar
-cd ../../packages/my-sidecar
-docker compose up -d
+# Start gateway + Trusthash sidecar together
+cd ../../
+docker compose -f docker-compose.local.yaml up -d
 
-# Run sidecar-specific tests
+# Run unit tests
+cd packages/trusthash-sidecar
 bun test
 
+# Run integration tests (requires sidecar + gateway)
+RUN_INTEGRATION=1 INTEGRATION_BASE_URL=http://localhost:3003 bun test
+
 # Clean up
-docker compose down
-cd ../../apps/gateway
-docker compose -f docker-compose.yaml -f docker-compose.dev.yaml down
+cd ../../
+docker compose -f docker-compose.local.yaml down
+```
+
+### Trusthash Sidecar (Docker Overlay)
+
+Simplest local run (gateway + sidecar together):
+
+```bash
+docker compose -f docker-compose.local.yaml up -d
+```
+
+Production-style run (prebuilt sidecar image, requires access to `ghcr.io` or a custom `TRUSTHASH_SIDECAR_IMAGE`):
+
+```bash
+docker compose \
+  -f apps/gateway/docker-compose.yaml \
+  -f packages/trusthash-sidecar/docker-compose.sidecar.yaml \
+  up -d
+```
+
+If you prefer a helper script from the repo root:
+
+```bash
+./scripts/up-gateway-sidecar.sh -d
+./scripts/up-gateway-sidecar.sh --prod -d
 ```
 
 ## CI Testing
