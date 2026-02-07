@@ -10,12 +10,14 @@
 import { Hono } from 'hono';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { Agent } from 'undici';
 import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
 import { searchBySoftBinding } from '../services/search.service.js';
 import { computePHash } from '../services/phash.service.js';
 import { validateImage } from '../services/image.service.js';
 import { SizeLimitError, readStreamWithLimit } from '../utils/stream.js';
+import { fetchWithTimeout } from '../utils/http.js';
 import {
   SOFT_BINDING_ALG_ID,
   pHashHexToSoftBindingValue,
@@ -102,7 +104,12 @@ function isPrivateIp(ip: string): boolean {
   return true;
 }
 
-async function assertPublicHost(hostname: string): Promise<void> {
+type ResolvedAddress = {
+  address: string;
+  family: number;
+};
+
+async function resolvePublicHost(hostname: string): Promise<ResolvedAddress> {
   const lower = hostname.toLowerCase();
   if (
     lower === 'localhost' ||
@@ -113,17 +120,18 @@ async function assertPublicHost(hostname: string): Promise<void> {
     throw new Error('referenceUrl host is not allowed');
   }
 
-  if (isIP(hostname)) {
+  const version = isIP(hostname);
+  if (version) {
     if (isPrivateIp(hostname)) {
       throw new Error('referenceUrl host resolves to a private address');
     }
-    return;
+    return { address: hostname, family: version };
   }
 
-  let records: Array<{ address: string }>;
+  let records: Array<{ address: string; family?: number }>;
   try {
     records = await lookup(hostname, { all: true });
-  } catch (error) {
+  } catch {
     throw new Error('referenceUrl host could not be resolved');
   }
 
@@ -136,20 +144,37 @@ async function assertPublicHost(hostname: string): Promise<void> {
       throw new Error('referenceUrl host resolves to a private address');
     }
   }
+
+  const chosen = records[0];
+  return {
+    address: chosen.address,
+    family: chosen.family ?? isIP(chosen.address) || 4,
+  };
 }
 
-async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+async function fetchReference(
+  url: URL,
+  timeoutMs: number
+): Promise<{ response: Response; close: () => Promise<void> }> {
+  const { address, family } = await resolvePublicHost(url.hostname);
+  const dispatcher = new Agent({
+    connect: {
+      lookup: (_hostname, _options, callback) => {
+        callback(null, address, family);
+      },
+      servername: url.hostname,
+    },
+  });
 
-  try {
-    return await fetch(url, {
-      signal: controller.signal,
-      redirect: 'error',
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
+  const response = await fetchWithTimeout(url.toString(), timeoutMs, {
+    dispatcher,
+    redirect: 'error',
+  });
+
+  return {
+    response,
+    close: () => dispatcher.close(),
+  };
 }
 
 softbinding.get('/byBinding', async (c) => {
@@ -381,11 +406,12 @@ softbinding.post('/byReference', async (c) => {
       );
     }
 
-    await assertPublicHost(referenceUrl.hostname);
-
     let response: Response;
+    let closeDispatcher: (() => Promise<void>) | null = null;
     try {
-      response = await fetchWithTimeout(referenceUrl.toString(), config.REFERENCE_FETCH_TIMEOUT_MS);
+      const fetched = await fetchReference(referenceUrl, config.REFERENCE_FETCH_TIMEOUT_MS);
+      response = fetched.response;
+      closeDispatcher = fetched.close;
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
         return c.json(
@@ -399,43 +425,19 @@ softbinding.post('/byReference', async (c) => {
       throw error;
     }
 
-    if (!response.ok) {
-      return c.json(
-        {
-          success: false,
-          error: `Failed to fetch reference asset: ${response.status}`,
-        },
-        400
-      );
-    }
-
-    const responseLength = parseContentLength(response.headers.get('content-length'));
-    if (responseLength !== null && (responseLength > assetLength || responseLength > maxBytes)) {
-      return c.json(
-        {
-          success: false,
-          error: 'Fetched asset size exceeds declared or maximum length',
-        },
-        413
-      );
-    }
-
-    const fetchedType = response.headers.get('content-type')?.split(';')[0] || '';
-    if (fetchedType && fetchedType !== body.assetType) {
-      return c.json(
-        {
-          success: false,
-          error: `Fetched content-type (${fetchedType}) does not match assetType (${body.assetType})`,
-        },
-        415
-      );
-    }
-
-    let buffer: Buffer;
     try {
-      buffer = await readStreamWithLimit(response.body, Math.min(maxBytes, assetLength));
-    } catch (error) {
-      if (error instanceof SizeLimitError) {
+      if (!response.ok) {
+        return c.json(
+          {
+            success: false,
+            error: `Failed to fetch reference asset: ${response.status}`,
+          },
+          400
+        );
+      }
+
+      const responseLength = parseContentLength(response.headers.get('content-length'));
+      if (responseLength !== null && (responseLength > assetLength || responseLength > maxBytes)) {
         return c.json(
           {
             success: false,
@@ -444,50 +446,80 @@ softbinding.post('/byReference', async (c) => {
           413
         );
       }
-      throw error;
+
+      const fetchedType = response.headers.get('content-type')?.split(';')[0] || '';
+      if (fetchedType && fetchedType !== body.assetType) {
+        return c.json(
+          {
+            success: false,
+            error: `Fetched content-type (${fetchedType}) does not match assetType (${body.assetType})`,
+          },
+          415
+        );
+      }
+
+      let buffer: Buffer;
+      try {
+        buffer = await readStreamWithLimit(response.body, Math.min(maxBytes, assetLength));
+      } catch (error) {
+        if (error instanceof SizeLimitError) {
+          return c.json(
+            {
+              success: false,
+              error: 'Fetched asset size exceeds declared or maximum length',
+            },
+            413
+          );
+        }
+        throw error;
+      }
+
+      if (buffer.length === 0) {
+        return c.json(
+          {
+            success: false,
+            error: 'Fetched asset was empty',
+          },
+          400
+        );
+      }
+
+      if (buffer.length > assetLength || buffer.length > maxBytes) {
+        return c.json(
+          {
+            success: false,
+            error: 'Fetched asset size exceeds declared or maximum length',
+          },
+          413
+        );
+      }
+
+      const validation = await validateImage(buffer);
+      if (!validation.valid) {
+        return c.json(
+          {
+            success: false,
+            error: `Invalid image: ${validation.errors.join(', ')}`,
+          },
+          400
+        );
+      }
+
+      const phash = await computePHash(buffer);
+      const valueB64 = pHashHexToSoftBindingValue(phash.hex);
+      const maxResults = parseMaxResults(c.req.query('maxResults'));
+      const alg = c.req.query('alg') || SOFT_BINDING_ALG_ID;
+
+      const matches = await searchBySoftBinding({ alg, valueB64, maxResults });
+
+      return c.json({
+        matches,
+      });
+    } finally {
+      if (closeDispatcher) {
+        await closeDispatcher();
+      }
     }
-
-    if (buffer.length === 0) {
-      return c.json(
-        {
-          success: false,
-          error: 'Fetched asset was empty',
-        },
-        400
-      );
-    }
-
-    if (buffer.length > assetLength || buffer.length > maxBytes) {
-      return c.json(
-        {
-          success: false,
-          error: 'Fetched asset size exceeds declared or maximum length',
-        },
-        413
-      );
-    }
-
-    const validation = await validateImage(buffer);
-    if (!validation.valid) {
-      return c.json(
-        {
-          success: false,
-          error: `Invalid image: ${validation.errors.join(', ')}`,
-        },
-        400
-      );
-    }
-
-    const phash = await computePHash(buffer);
-    const valueB64 = pHashHexToSoftBindingValue(phash.hex);
-    const maxResults = parseMaxResults(c.req.query('maxResults'));
-    const alg = c.req.query('alg') || SOFT_BINDING_ALG_ID;
-
-    const matches = await searchBySoftBinding({ alg, valueB64, maxResults });
-
-    return c.json({
-      matches,
-    });
   } catch (error) {
     logger.error({ error }, 'Soft binding reference lookup failed');
     return c.json(

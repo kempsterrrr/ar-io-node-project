@@ -22,10 +22,10 @@ health.get('/', async (c) => {
     dbStatus = 'unhealthy';
   }
 
-  const overallStatus = dbStatus === 'healthy' ? 'ok' : dbStatus === 'unhealthy' ? 'error' : 'ok';
+  const overallStatus = dbStatus === 'healthy' ? 'ok' : 'error';
 
   const response = {
-    success: true,
+    success: overallStatus === 'ok',
     data: {
       status: overallStatus,
       timestamp: new Date().toISOString(),
@@ -39,7 +39,8 @@ health.get('/', async (c) => {
     },
   };
 
-  return c.json(response);
+  const statusCode = overallStatus === 'ok' ? 200 : 503;
+  return c.json(response, statusCode);
 });
 
 export default health;

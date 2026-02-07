@@ -95,12 +95,17 @@ search.get('/', async (c) => {
   } catch (error) {
     logger.error({ error }, 'Search request failed');
 
-    const statusCode = (error as Error).message.includes('not found') ? 404 : 400;
+    const message = (error as Error).message;
+    const statusCode = message.includes('not found')
+      ? 404
+      : message.includes('Invalid pHash format') || message.includes('must be provided')
+        ? 400
+        : 500;
 
     return c.json(
       {
         success: false,
-        error: (error as Error).message,
+        error: message,
       },
       statusCode
     );
