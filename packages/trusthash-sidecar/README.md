@@ -43,18 +43,48 @@ Trusthash Sidecar is a companion service for AR.IO gateways that provides a C2PA
 > Note: Docker uses `.env.docker` for container settings (default `GATEWAY_URL=http://core:4000`).  
 > Keep `.env` for local (non-Docker) development.
 
+## Local Development (Monorepo)
+
+From the repo root, you can run the gateway + sidecar together with a single compose file:
+
+```bash
+docker compose -f docker-compose.local.yaml up -d
+```
+
 ## Deployment (Gateway Operators)
 
 To run the sidecar alongside an AR.IO gateway, use the sidecar overlay compose file so both
 services share the same `ar-io-network`.
 
 ```bash
-# From the gateway directory (or a deployment directory containing both files)
+# Prebuilt image (recommended for production)
 docker compose \
   -f docker-compose.yaml \
   -f /path/to/packages/trusthash-sidecar/docker-compose.sidecar.yaml \
   up -d
 ```
+
+### Automated Releases
+
+Publishing is automatic. When changes land in `main` under `packages/trusthash-sidecar/**`,
+the `Publish Trusthash Sidecar` workflow:
+
+- Auto-increments the version tag (starting from `v0.1.0`, bumping patch each publish)
+- Pushes both the versioned tag and `latest`
+- Deploys the sidecar using `latest`
+
+If the image is private, add `GHCR_USERNAME` and `GHCR_TOKEN` secrets so the server can pull the image.
+To enforce public visibility, add `GHCR_VISIBILITY_TOKEN` (PAT with `write:packages`).
+
+If you run the overlay from a different working directory, set:
+
+```bash
+TRUSTHASH_SIDECAR_ENV_FILE=/path/to/trusthash-sidecar/.env.docker
+TRUSTHASH_SIDECAR_DATA_DIR=/path/to/trusthash-sidecar/data
+TRUSTHASH_SIDECAR_NGINX_CONF=/path/to/trusthash-sidecar/nginx.conf
+```
+
+Keep the sidecar data directory separate from the gateway `./data` volume to avoid collisions.
 
 ### Required Environment
 
@@ -62,7 +92,10 @@ docker compose \
 
 ### Optional Environment
 
-- `TRUSTHASH_SIDECAR_IMAGE` (defaults to `ghcr.io/ar-io/trusthash-sidecar:latest`)
+- `TRUSTHASH_SIDECAR_IMAGE` (defaults to `ghcr.io/ar-io/trusthash-sidecar:${TRUSTHASH_SIDECAR_TAG:-latest}`)
+- `TRUSTHASH_SIDECAR_TAG` (optional override for the image tag; production deploy uses `latest` by default)
+- `TRUSTHASH_SIDECAR_DATA_DIR` (defaults to `./sidecar-data` in the compose project dir for the overlay)
+- `TRUSTHASH_SIDECAR_NGINX_CONF` (defaults to `./nginx.conf` in the compose project dir)
 - `PROXY_PORT` (default `3003`)
 - `MAX_IMAGE_SIZE_MB` (default `50`)
 - `REFERENCE_FETCH_TIMEOUT_MS` (default `10000`)

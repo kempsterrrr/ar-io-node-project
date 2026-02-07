@@ -3,7 +3,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: trusthash-sidecar
     restart: unless-stopped
     expose:
       - '3003'
@@ -29,7 +28,6 @@ services:
 
   trusthash-proxy:
     image: nginx:alpine
-    container_name: trusthash-proxy
     restart: unless-stopped
     ports:
       - '${PROXY_PORT:-3003}:80'

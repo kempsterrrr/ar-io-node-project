@@ -1,12 +1,11 @@
 services:
   trusthash-sidecar:
-    image: ${TRUSTHASH_SIDECAR_IMAGE:-ghcr.io/ar-io/trusthash-sidecar:latest}
-    container_name: trusthash-sidecar
+    image: ${TRUSTHASH_SIDECAR_IMAGE:-ghcr.io/ar-io/trusthash-sidecar:${TRUSTHASH_SIDECAR_TAG:-latest}}
     restart: unless-stopped
     expose:
       - '3003'
     env_file:
-      - .env.docker
+      - ${TRUSTHASH_SIDECAR_ENV_FILE:-.env.docker}
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3003
@@ -15,7 +14,7 @@ services:
       - MAX_IMAGE_SIZE_MB=${MAX_IMAGE_SIZE_MB:-50}
       - REFERENCE_FETCH_TIMEOUT_MS=${REFERENCE_FETCH_TIMEOUT_MS:-10000}
     volumes:
-      - ./data:/app/data
+      - ${TRUSTHASH_SIDECAR_DATA_DIR:-./sidecar-data}:/app/data
     networks:
       - ar-io-network
     healthcheck:
@@ -27,12 +26,11 @@ services:
 
   trusthash-proxy:
     image: nginx:alpine
-    container_name: trusthash-proxy
     restart: unless-stopped
     ports:
       - '${PROXY_PORT:-3003}:80'
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${TRUSTHASH_SIDECAR_NGINX_CONF:-./nginx.conf}:/etc/nginx/nginx.conf:ro
     depends_on:
       - trusthash-sidecar
     networks:

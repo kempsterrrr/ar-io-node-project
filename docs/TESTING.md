@@ -77,25 +77,31 @@ docker compose -f docker-compose.yaml -f docker-compose.dev.yaml down -v
 cd apps/gateway
 docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d
 
-# Start the Trusthash sidecar
-cd ../../packages/trusthash-sidecar
-docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d
+# Start gateway + Trusthash sidecar together
+cd ../../
+docker compose -f docker-compose.local.yaml up -d
 
 # Run unit tests
+cd packages/trusthash-sidecar
 bun test
 
 # Run integration tests (requires sidecar + gateway)
 RUN_INTEGRATION=1 INTEGRATION_BASE_URL=http://localhost:3003 bun test
 
 # Clean up
-docker compose down
-cd ../../apps/gateway
-docker compose -f docker-compose.yaml -f docker-compose.dev.yaml down
+cd ../../
+docker compose -f docker-compose.local.yaml down
 ```
 
 ### Trusthash Sidecar (Docker Overlay)
 
-If you want to run the sidecar alongside the gateway in one compose invocation:
+Simplest local run (gateway + sidecar together):
+
+```bash
+docker compose -f docker-compose.local.yaml up -d
+```
+
+Production-style run (prebuilt sidecar image, requires access to `ghcr.io` or a custom `TRUSTHASH_SIDECAR_IMAGE`):
 
 ```bash
 docker compose \
@@ -104,7 +110,12 @@ docker compose \
   up -d
 ```
 
-Note: The sidecar uses `.env.docker` for container settings.
+If you prefer a helper script from the repo root:
+
+```bash
+./scripts/up-gateway-sidecar.sh -d
+./scripts/up-gateway-sidecar.sh --prod -d
+```
 
 ## CI Testing
 

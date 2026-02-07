@@ -1,0 +1,7 @@
+services:
+  trusthash-sidecar:
+    image: ${TRUSTHASH_SIDECAR_IMAGE_LOCAL:-trusthash-sidecar-local}
+    pull_policy: never
+    build:
+      context: ${TRUSTHASH_SIDECAR_CONTEXT:-.}
+      dockerfile: ${TRUSTHASH_SIDECAR_DOCKERFILE:-Dockerfile}

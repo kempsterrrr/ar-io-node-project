@@ -28,6 +28,9 @@ on:
       - main
     paths:
       - 'apps/gateway/**'
+      - 'packages/trusthash-sidecar/docker-compose.sidecar.yaml'
+      - 'packages/trusthash-sidecar/.env.docker'
+      - 'packages/trusthash-sidecar/nginx.conf'
       - '.github/workflows/deploy-gateway.yml'
   workflow_dispatch:
     inputs:
@@ -64,6 +67,7 @@ jobs:
           ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
             mkdir -p ${{ env.DEPLOY_PATH }}
             mkdir -p ${{ env.DEPLOY_PATH }}/wallets
+            mkdir -p ${{ env.DEPLOY_PATH }}/sidecar/data
           EOF
 
       - name: Copy gateway files
@@ -72,6 +76,13 @@ jobs:
               apps/gateway/docker-compose.dev.yaml \
               apps/gateway/scripts \
               ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:${{ env.DEPLOY_PATH }}/
+
+      - name: Copy sidecar files
+        run: |
+          scp packages/trusthash-sidecar/docker-compose.sidecar.yaml \
+              packages/trusthash-sidecar/.env.docker \
+              packages/trusthash-sidecar/nginx.conf \
+              ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:${{ env.DEPLOY_PATH }}/sidecar/
 
       - name: Generate .env file
         run: |
@@ -92,6 +103,12 @@ jobs:
 
           # Observer Configuration
           RUN_OBSERVER=${{ vars.RUN_OBSERVER || 'true' }}
+
+          # Trusthash Sidecar (compose overlay)
+          TRUSTHASH_SIDECAR_TAG=latest
+          TRUSTHASH_SIDECAR_ENV_FILE=sidecar/.env.docker
+          TRUSTHASH_SIDECAR_DATA_DIR=sidecar/data
+          TRUSTHASH_SIDECAR_NGINX_CONF=sidecar/nginx.conf
 
           # Production Settings
           LOG_LEVEL=${{ vars.LOG_LEVEL || 'info' }}
@@ -132,14 +149,14 @@ jobs:
         run: |
           ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
             cd ${{ env.DEPLOY_PATH }}
-            docker compose pull
+            docker compose -f docker-compose.yaml -f sidecar/docker-compose.sidecar.yaml pull
           EOF
 
       - name: Deploy containers
         run: |
           ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
             cd ${{ env.DEPLOY_PATH }}
-            docker compose up -d
+            docker compose -f docker-compose.yaml -f sidecar/docker-compose.sidecar.yaml up -d
           EOF
 
       - name: Verify deployment
@@ -151,7 +168,7 @@ jobs:
             sleep 10
             
             echo "Container status:"
-            docker compose ps
+            docker compose -f docker-compose.yaml -f sidecar/docker-compose.sidecar.yaml ps
             
             echo ""
             echo "Health check:"
