@@ -1,11 +1,7 @@
 import { describe, expect, it, beforeAll, afterAll } from 'bun:test';
-import { Database } from 'duckdb-async';
+import { Database, OPEN_READONLY } from 'duckdb-async';
 import sharp from 'sharp';
-import { binaryStringToHex, floatArrayToBinaryString } from '../src/utils/bit-vector.js';
-import {
-  SOFT_BINDING_ALG_ID,
-  pHashHexToSoftBindingValue,
-} from '../src/services/softbinding.service.js';
+import { SOFT_BINDING_ALG_ID } from '../src/services/softbinding.service.js';
 
 const runIntegration = process.env.RUN_INTEGRATION === '1';
 const describeIntegration = runIntegration ? describe : describe.skip;
@@ -23,7 +19,6 @@ type SampleBinding = {
 
 let db: Database;
 let sampleBinding: SampleBinding;
-let insertedBinding: SampleBinding | null = null;
 let baseUrl = baseUrlEnv || '';
 
 async function resolveBaseUrl(): Promise<string> {
@@ -58,69 +53,37 @@ describeIntegration('integration', () => {
   beforeAll(async () => {
     baseUrl = await resolveBaseUrl();
 
-    db = await Database.create(dbPath);
+    db = await Database.create(dbPath, OPEN_READONLY);
 
     const rows = (await db.all(
-      `SELECT manifest_id, manifest_tx_id, phash
-       FROM manifests
-       WHERE manifest_id IS NOT NULL
+      `SELECT sb.manifest_id, m.manifest_tx_id, sb.alg, sb.value_b64
+       FROM soft_bindings sb
+       JOIN manifests m ON m.manifest_id = sb.manifest_id
+       WHERE m.manifest_id IS NOT NULL
        LIMIT 1`
     )) as Array<{
       manifest_id: string;
       manifest_tx_id: string;
-      phash: unknown;
+      alg: string;
+      value_b64: string;
     }>;
 
     if (!rows.length) {
       throw new Error(
-        'No manifest data found in DuckDB. Ensure the sidecar has indexed manifests before running integration tests.'
+        'No soft binding data found in DuckDB. Ensure the sidecar has indexed manifests with soft bindings before running integration tests.'
       );
     }
 
     const row = rows[0];
-    let phash: number[] = [];
-    if (typeof row.phash === 'string') {
-      phash = JSON.parse(row.phash) as number[];
-    } else if (Array.isArray(row.phash)) {
-      phash = row.phash as number[];
-    }
-
-    if (!phash.length) {
-      throw new Error('Manifest record is missing pHash data.');
-    }
-
-    const binary = floatArrayToBinaryString(phash);
-    const hex = binaryStringToHex(binary);
-    const valueB64 = pHashHexToSoftBindingValue(hex);
-
-    await db.run(
-      `INSERT INTO soft_bindings (manifest_id, alg, value_b64, scope_json)
-       VALUES (?, ?, ?, ?)`,
-      row.manifest_id,
-      SOFT_BINDING_ALG_ID,
-      valueB64,
-      null
-    );
-
-    insertedBinding = {
+    sampleBinding = {
       manifestId: row.manifest_id,
       manifestTxId: row.manifest_tx_id,
-      alg: SOFT_BINDING_ALG_ID,
-      valueB64,
+      alg: row.alg || SOFT_BINDING_ALG_ID,
+      valueB64: row.value_b64,
     };
-
-    sampleBinding = insertedBinding;
   });
 
   afterAll(async () => {
-    if (insertedBinding) {
-      await db.run(
-        `DELETE FROM soft_bindings WHERE manifest_id = ? AND alg = ? AND value_b64 = ?`,
-        insertedBinding.manifestId,
-        insertedBinding.alg,
-        insertedBinding.valueB64
-      );
-    }
     await db?.close();
   });
 
