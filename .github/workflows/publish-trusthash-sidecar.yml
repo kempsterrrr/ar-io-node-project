@@ -217,9 +217,10 @@ jobs:
 
       - name: Deployment summary
         run: |
-          echo "## Sidecar Deployment Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Server:** ${{ secrets.HETZNER_HOST }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Published Tag:** ${{ needs.publish.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Deployed Tag:** latest" >> $GITHUB_STEP_SUMMARY
-          echo "**Time:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Sidecar Deployment Complete"
+            echo ""
+            echo "**Published Tag:** ${{ needs.publish.outputs.tag }}"
+            echo "**Deployed Tag:** latest"
+            echo "**Time (UTC):** $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          } >> "$GITHUB_STEP_SUMMARY"
