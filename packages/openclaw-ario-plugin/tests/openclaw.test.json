@@ -1,0 +1,30 @@
+{
+  "gateway": {
+    "mode": "local",
+    "auth": {
+      "mode": "token"
+    },
+    "controlUi": {
+      "enabled": true,
+      "allowInsecureAuth": true
+    }
+  },
+  "plugins": {
+    "enabled": true,
+    "load": {
+      "paths": ["/home/node/.openclaw/extensions/ario-gateway"]
+    },
+    "entries": {
+      "ario-gateway": {
+        "enabled": true,
+        "config": {
+          "gatewayUrl": "http://gateway-mock:4000",
+          "timeout": 10000
+        }
+      }
+    }
+  },
+  "tools": {
+    "profile": "full"
+  }
+}

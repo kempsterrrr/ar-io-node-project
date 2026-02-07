@@ -73,10 +73,16 @@ ar-io-node-project/
 │       ├── .env.example
 │       └── wallets/
 ├── packages/                  # Sidecar extensions (add your own!)
+│   ├── trusthash-sidecar/
+│   └── openclaw-ario-plugin/ # Claude AI agent with gateway access
+│       ├── docker-compose.yaml
+│       ├── .env.example
+│       └── ...
 ├── docker-compose.local.yaml  # Local gateway + sidecar compose
 ├── .github/
 │   └── workflows/
 │       ├── deploy-gateway.yml
+│       ├── openclaw-plugin.yaml
 │       └── ci.yml
 ├── turbo.json
 ├── package.json
@@ -209,6 +215,51 @@ To enforce public visibility, add:
 
 If `GHCR_VISIBILITY_TOKEN` is not set, the workflow will only succeed if the package
 is already public.
+## OpenClaw Integration
+
+OpenClaw provides a Claude AI agent with direct access to your AR.IO gateway. Use natural language to query Arweave data, resolve ArNS names, and search transactions.
+
+### Prerequisites
+
+- Running AR.IO gateway (see [Local Development](#local-development))
+- [Anthropic API key](https://console.anthropic.com/) for Claude AI
+
+### Quick Start
+
+```bash
+# 1. Start the gateway first (creates ar-io-network)
+cd apps/gateway
+docker compose up -d
+
+# 2. Configure OpenClaw
+cd packages/openclaw-ario-plugin
+cp .env.example .env
+# Edit .env and add your ANTHROPIC_API_KEY
+
+# 3. Start OpenClaw sidecar
+docker compose up -d
+
+# 4. Access OpenClaw UI
+open http://localhost:18789
+```
+
+### Available Tools
+
+| Tool              | Description                           |
+| ----------------- | ------------------------------------- |
+| `gateway_info`    | Get gateway status and information    |
+| `gateway_fetch`   | Fetch transaction data by ID          |
+| `gateway_resolve` | Resolve ArNS names to transaction IDs |
+| `gateway_search`  | Search transactions by tags or owners |
+
+### Example Prompts
+
+- "Get gateway info"
+- "What is stored at transaction abc123...?"
+- "Resolve the ArNS name 'ardrive'"
+- "Search for transactions with App-Name ArDrive"
+
+For detailed documentation, see [packages/openclaw-ario-plugin/README.md](packages/openclaw-ario-plugin/README.md).
 
 ## Adding Sidecars
 

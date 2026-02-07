@@ -75,6 +75,7 @@ jobs:
           scp -r apps/gateway/docker-compose.yaml \
               apps/gateway/docker-compose.dev.yaml \
               apps/gateway/scripts \
+              apps/gateway/nginx \
               ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:${{ env.DEPLOY_PATH }}/
 
       - name: Copy sidecar files
@@ -83,6 +84,13 @@ jobs:
               packages/trusthash-sidecar/.env.docker \
               packages/trusthash-sidecar/nginx.conf \
               ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:${{ env.DEPLOY_PATH }}/sidecar/
+      - name: Deploy nginx config
+        run: |
+          ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
+            cp ${{ env.DEPLOY_PATH }}/nginx/ario-agenticway /etc/nginx/sites-available/ario-agenticway
+            ln -sf /etc/nginx/sites-available/ario-agenticway /etc/nginx/sites-enabled/
+            nginx -t && systemctl reload nginx
+          EOF
 
       - name: Generate .env file
         run: |

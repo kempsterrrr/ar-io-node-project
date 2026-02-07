@@ -1,0 +1,62 @@
+{
+  "name": "@kempsterrrr/openclaw-ario-plugin",
+  "version": "0.1.4",
+  "description": "OpenClaw plugin providing tools for interacting with AR.IO gateways and Arweave",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kempsterrrr/ar-io-node-project.git",
+    "directory": "packages/openclaw-ario-plugin"
+  },
+  "homepage": "https://github.com/kempsterrrr/ar-io-node-project/tree/main/packages/openclaw-ario-plugin",
+  "bugs": {
+    "url": "https://github.com/kempsterrrr/ar-io-node-project/issues"
+  },
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test:integration": "docker compose -f tests/docker-compose.test.yaml up --build --abort-on-container-exit --exit-code-from test-runner",
+    "test:integration:down": "docker compose -f tests/docker-compose.test.yaml down -v"
+  },
+  "peerDependencies": {
+    "openclaw": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "arweave",
+    "ar-io",
+    "gateway"
+  ],
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  }
+}
