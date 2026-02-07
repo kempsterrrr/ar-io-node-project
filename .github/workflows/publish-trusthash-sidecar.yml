@@ -100,17 +100,29 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
             ${{ env.IMAGE_NAME }}:latest
 
-      - name: Ensure GHCR package is public (best effort)
+      - name: Ensure GHCR package is public
         env:
           GHCR_VISIBILITY_TOKEN: ${{ secrets.GHCR_VISIBILITY_TOKEN }}
           OWNER: ${{ github.repository_owner }}
         run: |
+          PACKAGE="trusthash-sidecar"
+
           if [ -z "${GHCR_VISIBILITY_TOKEN}" ]; then
-            echo "GHCR_VISIBILITY_TOKEN not set; skipping visibility update."
-            exit 0
+            for URL in \
+              "https://api.github.com/orgs/${OWNER}/packages/container/${PACKAGE}" \
+              "https://api.github.com/user/packages/container/${PACKAGE}"
+            do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${URL}")
+              if [ "${STATUS}" = "200" ]; then
+                echo "Package is already public (${URL})."
+                exit 0
+              fi
+            done
+
+            echo "GHCR_VISIBILITY_TOKEN not set and package is not public. Aborting." >&2
+            exit 1
           fi
 
-          PACKAGE="trusthash-sidecar"
           for URL in \
             "https://api.github.com/orgs/${OWNER}/packages/container/${PACKAGE}" \
             "https://api.github.com/user/packages/container/${PACKAGE}"
@@ -128,6 +140,7 @@ jobs:
           done
 
           echo "Failed to update package visibility; check GHCR_VISIBILITY_TOKEN permissions." >&2
+          exit 1
 
   deploy:
     name: Deploy Sidecar

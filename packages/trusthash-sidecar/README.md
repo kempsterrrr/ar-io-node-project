@@ -74,7 +74,8 @@ the `Publish Trusthash Sidecar` workflow:
 - Deploys the sidecar using `latest`
 
 If the image is private, add `GHCR_USERNAME` and `GHCR_TOKEN` secrets so the server can pull the image.
-To enforce public visibility, add `GHCR_VISIBILITY_TOKEN` (PAT with `write:packages`).
+To enforce public visibility, add `GHCR_VISIBILITY_TOKEN` (PAT with `write:packages`). If it is not set,
+the workflow will only succeed if the package is already public.
 
 If you run the overlay from a different working directory, set:
 

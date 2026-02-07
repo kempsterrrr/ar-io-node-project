@@ -207,6 +207,9 @@ To enforce public visibility, add:
 
 - `GHCR_VISIBILITY_TOKEN` (a PAT with `write:packages`)
 
+If `GHCR_VISIBILITY_TOKEN` is not set, the workflow will only succeed if the package
+is already public.
+
 ## Adding Sidecars
 
 Sidecars are additional services that extend the gateway. To add a new sidecar:
