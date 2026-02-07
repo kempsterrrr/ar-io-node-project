@@ -148,7 +148,7 @@ async function resolvePublicHost(hostname: string): Promise<ResolvedAddress> {
   const chosen = records[0];
   return {
     address: chosen.address,
-    family: chosen.family ?? isIP(chosen.address) || 4,
+    family: (chosen.family ?? isIP(chosen.address)) || 4,
   };
 }
 
