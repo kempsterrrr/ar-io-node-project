@@ -18,6 +18,9 @@ const envSchema = z.object({
 
   // Reference Fetch
   REFERENCE_FETCH_TIMEOUT_MS: z.coerce.number().default(10000),
+
+  // Integration/Testing
+  ALLOW_INSECURE_REFERENCE_URL: z.coerce.boolean().default(false),
 });
 
 export type Config = z.infer<typeof envSchema>;

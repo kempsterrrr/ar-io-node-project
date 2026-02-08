@@ -109,20 +109,25 @@ type ResolvedAddress = {
   family: number;
 };
 
-async function resolvePublicHost(hostname: string): Promise<ResolvedAddress> {
+async function resolvePublicHost(
+  hostname: string,
+  allowPrivate: boolean
+): Promise<ResolvedAddress> {
   const lower = hostname.toLowerCase();
-  if (
-    lower === 'localhost' ||
-    lower.endsWith('.localhost') ||
-    lower.endsWith('.local') ||
-    lower.endsWith('.internal')
-  ) {
-    throw new Error('referenceUrl host is not allowed');
+  if (!allowPrivate) {
+    if (
+      lower === 'localhost' ||
+      lower.endsWith('.localhost') ||
+      lower.endsWith('.local') ||
+      lower.endsWith('.internal')
+    ) {
+      throw new Error('referenceUrl host is not allowed');
+    }
   }
 
   const version = isIP(hostname);
   if (version) {
-    if (isPrivateIp(hostname)) {
+    if (!allowPrivate && isPrivateIp(hostname)) {
       throw new Error('referenceUrl host resolves to a private address');
     }
     return { address: hostname, family: version };
@@ -140,12 +145,13 @@ async function resolvePublicHost(hostname: string): Promise<ResolvedAddress> {
   }
 
   for (const record of records) {
-    if (isPrivateIp(record.address)) {
+    if (!allowPrivate && isPrivateIp(record.address)) {
       throw new Error('referenceUrl host resolves to a private address');
     }
   }
 
-  const chosen = records[0];
+  const ipv4Record = records.find((record) => (record.family ?? isIP(record.address)) === 4);
+  const chosen = ipv4Record || records[0];
   return {
     address: chosen.address,
     family: (chosen.family ?? isIP(chosen.address)) || 4,
@@ -154,9 +160,20 @@ async function resolvePublicHost(hostname: string): Promise<ResolvedAddress> {
 
 async function fetchReference(
   url: URL,
-  timeoutMs: number
+  timeoutMs: number,
+  allowPrivate: boolean
 ): Promise<{ response: Response; close: () => Promise<void> }> {
-  const { address, family } = await resolvePublicHost(url.hostname);
+  if (allowPrivate) {
+    const response = await fetchWithTimeout(url.toString(), timeoutMs, {
+      redirect: 'error',
+    });
+    return {
+      response,
+      close: async () => undefined,
+    };
+  }
+
+  const { address, family } = await resolvePublicHost(url.hostname, false);
   const dispatcher = new Agent({
     connect: {
       lookup: (_hostname, _options, callback) => {
@@ -375,7 +392,9 @@ softbinding.post('/byReference', async (c) => {
       );
     }
 
-    if (referenceUrl.protocol !== 'https:') {
+    const isHttps = referenceUrl.protocol === 'https:';
+    const isHttp = referenceUrl.protocol === 'http:';
+    if (!isHttps && !(config.ALLOW_INSECURE_REFERENCE_URL && isHttp)) {
       return c.json(
         {
           success: false,
@@ -409,7 +428,11 @@ softbinding.post('/byReference', async (c) => {
     let response: Response;
     let closeDispatcher: (() => Promise<void>) | null = null;
     try {
-      const fetched = await fetchReference(referenceUrl, config.REFERENCE_FETCH_TIMEOUT_MS);
+      const fetched = await fetchReference(
+        referenceUrl,
+        config.REFERENCE_FETCH_TIMEOUT_MS,
+        config.ALLOW_INSECURE_REFERENCE_URL
+      );
       response = fetched.response;
       closeDispatcher = fetched.close;
     } catch (error) {

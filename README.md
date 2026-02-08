@@ -100,6 +100,7 @@ bun run build            # Build all packages
 bun run lint             # Lint all packages
 bun run format           # Format all files with Prettier
 bun run format:check     # Check formatting
+./scripts/run-trusthash-integration.sh  # Run isolated trusthash integration tests
 
 # Gateway-specific (from apps/gateway/)
 bun run --filter @ar-io/gateway dev     # Start gateway in dev mode

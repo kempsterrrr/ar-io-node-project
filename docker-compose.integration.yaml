@@ -1,0 +1,48 @@
+# =============================================================================
+# Local Integration: Trusthash Sidecar + Gateway Stub
+# =============================================================================
+# Usage: ./scripts/run-trusthash-integration.sh
+# =============================================================================
+
+services:
+  gateway-stub:
+    image: nginx:alpine
+    restart: "no"
+    ports:
+      - '8081:80'
+    volumes:
+      - ./packages/trusthash-sidecar/tests/fixtures/gateway:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:80']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  trusthash-sidecar:
+    image: ${TRUSTHASH_SIDECAR_IMAGE_LOCAL:-trusthash-sidecar-local}
+    pull_policy: never
+    build:
+      context: ./packages/trusthash-sidecar
+      dockerfile: Dockerfile
+    restart: "no"
+    ports:
+      - '3003:3003'
+    environment:
+      - NODE_ENV=test
+      - PORT=3003
+      - LOG_LEVEL=debug
+      - DUCKDB_PATH=/app/data/provenance.test.duckdb
+      - GATEWAY_URL=http://gateway-stub
+      - ALLOW_INSECURE_REFERENCE_URL=true
+      - MAX_IMAGE_SIZE_MB=${MAX_IMAGE_SIZE_MB:-50}
+      - REFERENCE_FETCH_TIMEOUT_MS=${REFERENCE_FETCH_TIMEOUT_MS:-10000}
+    volumes:
+      - ./packages/trusthash-sidecar/data-test:/app/data
+    depends_on:
+      - gateway-stub
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3003/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s

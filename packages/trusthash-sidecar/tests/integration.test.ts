@@ -1,4 +1,6 @@
 import { describe, expect, it, beforeAll, afterAll } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { extname } from 'node:path';
 import { Database, OPEN_READONLY } from 'duckdb-async';
 import sharp from 'sharp';
 import { SOFT_BINDING_ALG_ID } from '../src/services/softbinding.service.js';
@@ -7,8 +9,9 @@ const runIntegration = process.env.RUN_INTEGRATION === '1';
 const describeIntegration = runIntegration ? describe : describe.skip;
 
 const baseUrlEnv = process.env.INTEGRATION_BASE_URL;
-const dbPath = process.env.INTEGRATION_DB_PATH || './data/provenance.duckdb';
-const referenceUrl = process.env.REFERENCE_TEST_URL || 'https://httpbin.org/image/png';
+const dbPath = process.env.INTEGRATION_DB_PATH || './data-test/provenance.test.duckdb';
+const referenceUrl = process.env.REFERENCE_TEST_URL || 'http://gateway-stub/reference.png';
+const referenceFile = process.env.REFERENCE_TEST_FILE;
 
 type SampleBinding = {
   manifestId: string;
@@ -20,6 +23,14 @@ type SampleBinding = {
 let db: Database;
 let sampleBinding: SampleBinding;
 let baseUrl = baseUrlEnv || '';
+
+function detectContentType(filePath: string): string {
+  const ext = extname(filePath).toLowerCase();
+  if (ext === '.png') return 'image/png';
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  if (ext === '.webp') return 'image/webp';
+  return 'application/octet-stream';
+}
 
 async function resolveBaseUrl(): Promise<string> {
   if (baseUrlEnv) {
@@ -70,7 +81,7 @@ describeIntegration('integration', () => {
 
     if (!rows.length) {
       throw new Error(
-        'No soft binding data found in DuckDB. Ensure the sidecar has indexed manifests with soft bindings before running integration tests.'
+        'No soft binding data found in DuckDB. Seed the integration DB first (for example with ./scripts/run-trusthash-integration.sh).'
       );
     }
 
@@ -130,15 +141,24 @@ describeIntegration('integration', () => {
   });
 
   it('hits /v1/matches/byReference with a real reference URL', async () => {
-    const refResponse = await fetch(referenceUrl);
-    if (!refResponse.ok) {
-      throw new Error(`Failed to fetch reference URL (${referenceUrl}): ${refResponse.status}`);
-    }
+    let assetLength: number;
+    let assetType: string;
 
-    const refBuffer = Buffer.from(await refResponse.arrayBuffer());
-    const assetLength = refBuffer.length;
-    const assetType =
-      refResponse.headers.get('content-type')?.split(';')[0] || 'application/octet-stream';
+    if (referenceFile) {
+      const refBuffer = readFileSync(referenceFile);
+      assetLength = refBuffer.length;
+      assetType = detectContentType(referenceFile);
+    } else {
+      const refResponse = await fetch(referenceUrl);
+      if (!refResponse.ok) {
+        throw new Error(`Failed to fetch reference URL (${referenceUrl}): ${refResponse.status}`);
+      }
+
+      const refBuffer = Buffer.from(await refResponse.arrayBuffer());
+      assetLength = refBuffer.length;
+      assetType =
+        refResponse.headers.get('content-type')?.split(';')[0] || 'application/octet-stream';
+    }
 
     if (!assetType.startsWith('image/')) {
       throw new Error(`Reference URL did not return an image: ${assetType}`);

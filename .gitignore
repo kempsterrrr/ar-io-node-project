@@ -56,4 +56,4 @@ Thumbs.db
 # Docker data directories (keep .gitkeep for structure)
 **/data/*
 !**/data/.gitkeep
-
+**/data-test/*

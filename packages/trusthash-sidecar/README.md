@@ -100,6 +100,7 @@ Keep the sidecar data directory separate from the gateway `./data` volume to avo
 - `PROXY_PORT` (default `3003`)
 - `MAX_IMAGE_SIZE_MB` (default `50`)
 - `REFERENCE_FETCH_TIMEOUT_MS` (default `10000`)
+- `ALLOW_INSECURE_REFERENCE_URL` (default `false`, only for local integration testing)
 
 > If you are not using the default gateway service name (`core`), update `GATEWAY_URL` in `.env.docker`.
 
@@ -216,16 +217,27 @@ bun run build && bun run migrate
 bun test
 ```
 
-Run integration tests (requires sidecar + gateway running):
+Run integration tests locally (isolated test DB + gateway stub) from the repo root:
 
 ```bash
-RUN_INTEGRATION=1 bun test
-# or override the base URL
-RUN_INTEGRATION=1 INTEGRATION_BASE_URL=http://localhost:3003 bun test
+./scripts/run-trusthash-integration.sh
 ```
+
+The integration script will:
+
+1. Start the sidecar plus a local gateway stub.
+2. Seed a dedicated test DB under `packages/trusthash-sidecar/data-test`.
+3. Run the integration suite (`RUN_INTEGRATION=1`).
+4. Tear down containers and delete the test DB (set `KEEP_INTEGRATION_DATA=1` or
+   `KEEP_INTEGRATION_CONTAINERS=1` to keep them).
+
+By default the `/v1/matches/byReference` test uses a local fixture served at
+`http://gateway-stub/reference.png` and reads the local fixture file to compute
+asset length. The integration compose enables
+`ALLOW_INSECURE_REFERENCE_URL=true` so HTTP is only allowed for this local test.
 
 ## Next Steps
 
 1. Run migrations as a separate deploy step in production and back up `data/provenance.duckdb` beforehand.
-2. Add integration tests for `/webhook`, `/v1/matches/*`, and `/v1/manifests/:manifestId`.
+2. Add a manual or scheduled CI job to run `./scripts/run-trusthash-integration.sh`.
 3. Consider allowlist/denylist controls for `/v1/matches/byReference` in production deployments.

@@ -85,11 +85,21 @@ docker compose -f docker-compose.local.yaml up -d
 cd packages/trusthash-sidecar
 bun test
 
-# Run integration tests (requires sidecar + gateway)
-RUN_INTEGRATION=1 INTEGRATION_BASE_URL=http://localhost:3003 bun test
+# Run integration tests (isolated test DB + gateway stub)
+cd ../../
+./scripts/run-trusthash-integration.sh
+
+# The integration compose serves a local reference fixture at:
+# http://gateway-stub/reference.png (container network)
+# http://localhost:8081/reference.png (host access)
+# The test suite reads the local fixture file to compute asset length.
+# It sets ALLOW_INSECURE_REFERENCE_URL=true for this local test only.
+
+# Optional: keep the test DB or containers for debugging
+# KEEP_INTEGRATION_DATA=1 ./scripts/run-trusthash-integration.sh
+# KEEP_INTEGRATION_CONTAINERS=1 ./scripts/run-trusthash-integration.sh
 
 # Clean up
-cd ../../
 docker compose -f docker-compose.local.yaml down
 ```
 
