@@ -30,7 +30,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Create directories with proper permissions
 RUN mkdir -p /home/node/.openclaw/workspace /home/node/.ssh \
-    && chown -R node:node /home/node
+    && chown -R node:node /home/node \
+    && chmod 700 /home/node/.openclaw
 
 # Install OpenClaw globally
 RUN npm install -g openclaw@latest
@@ -40,7 +41,7 @@ ENV HOME=/home/node
 RUN npx openclaw plugins install @kempsterrrr/openclaw-ario-plugin
 
 # Copy default config (can be overridden by volume mount)
-COPY --chown=node:node openclaw.json /home/node/.openclaw/openclaw.json
+COPY --chown=node:node --chmod=600 openclaw.json /home/node/.openclaw/openclaw.json
 
 USER node
 WORKDIR /home/node
