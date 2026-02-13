@@ -9,14 +9,10 @@
       "enabled": true,
       "allowInsecureAuth": false
     },
-    "trustedProxies": [
-      "127.0.0.1"
-    ]
+    "trustedProxies": ["127.0.0.1"]
   },
   "plugins": {
-    "allow": [
-      "openclaw-ario-plugin"
-    ],
+    "allow": ["openclaw-ario-plugin"],
     "entries": {
       "openclaw-ario-plugin": {
         "enabled": true,
