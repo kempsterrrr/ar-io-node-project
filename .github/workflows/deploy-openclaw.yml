@@ -102,42 +102,57 @@ jobs:
       - name: Update openclaw.json with gateway config
         run: |
           ssh ${{ secrets.OPENCLAW_USER }}@${{ secrets.OPENCLAW_HOST }} << 'EOF'
+            set -euo pipefail
             cd ${{ env.DEPLOY_PATH }}
+            PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "$PWD")}"
+            NETWORK_NAME="${PROJECT_NAME}_openclaw-network"
+            docker network create "$NETWORK_NAME" >/dev/null 2>&1 || true
             GATEWAY_PUBLIC_IP="${{ vars.GATEWAY_PUBLIC_IP }}"
+            TRUSTED_PROXY_IP="$(docker network inspect "$NETWORK_NAME" -f '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)"
+            if [ -z "$TRUSTED_PROXY_IP" ]; then
+              TRUSTED_PROXY_IP="$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)"
+            fi
+            if [ -z "$TRUSTED_PROXY_IP" ]; then
+              echo "Error: unable to determine trusted proxy IP"
+              exit 1
+            fi
+            if [ ! -f openclaw.json ]; then
+              echo "Error: openclaw.json not found in ${{ env.DEPLOY_PATH }}"
+              exit 1
+            fi
+            if ! command -v python3 >/dev/null 2>&1; then
+              echo "Error: python3 not found on host"
+              exit 1
+            fi
 
-            # Update the gateway URL and SSH host in openclaw.json
-            cat > openclaw.json << CONFIGFILE
-          {
-            "gateway": {
-              "mode": "local",
-              "bind": "lan",
-              "auth": {
-                "mode": "token"
-              },
-              "controlUi": {
-                "enabled": true,
-                "allowInsecureAuth": true
-              }
-            },
-            "plugins": {
-              "entries": {
-                "openclaw-ario-plugin": {
-                  "enabled": true,
-                  "config": {
-                    "gatewayUrl": "https://ario.agenticway.io",
-                    "timeout": 30000,
-                    "ssh": {
-                      "host": "${GATEWAY_PUBLIC_IP}",
-                      "user": "root",
-                      "keyPath": "/home/node/.ssh/gateway_key",
-                      "workingDirectory": "/root/ar-io-gateway"
-                    }
-                  }
-                }
-              }
-            }
-          }
-          CONFIGFILE
+            export GATEWAY_PUBLIC_IP
+            export TRUSTED_PROXY_IP
+            python3 - << 'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("openclaw.json")
+          data = json.loads(path.read_text())
+
+          try:
+              data["plugins"]["entries"]["openclaw-ario-plugin"]["config"]["ssh"]["host"] = os.environ["GATEWAY_PUBLIC_IP"]
+          except KeyError as exc:
+              raise SystemExit(f"Error: missing plugin ssh host path in openclaw.json: {exc}") from exc
+
+          gateway = data.setdefault("gateway", {})
+          existing = gateway.get("trustedProxies", [])
+          if not isinstance(existing, list):
+              existing = []
+          merged = []
+          for value in [*existing, os.environ["TRUSTED_PROXY_IP"]]:
+              if value and value not in merged:
+                  merged.append(value)
+          gateway["trustedProxies"] = merged
+
+          path.write_text(json.dumps(data, indent=2) + "\n")
+          PY
+            chmod 600 openclaw.json
           EOF
 
       - name: Build and deploy containers
