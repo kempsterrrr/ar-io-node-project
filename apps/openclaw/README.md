@@ -49,6 +49,8 @@ cp .env.example .env
 vim .env
 ```
 
+**Permissions note:** The container runs as the `node` user (uid 1000). Ensure `openclaw.json` and `gateway_key` are owned by uid 1000 and `chmod 600`, or OpenClaw will fail to start with `EACCES`.
+
 ### 2. Set Up SSH Key for Gateway
 
 ```bash
@@ -121,11 +123,12 @@ docker compose restart
 
 ## Volumes
 
-| Volume            | Purpose                                |
-| ----------------- | -------------------------------------- |
-| `openclaw-config` | OpenClaw config, tokens, auth profiles |
+| Volume              | Purpose                                          |
+| ------------------- | ------------------------------------------------ |
+| `openclaw-workspace` | Agent workspace and artifacts                    |
+| `openclaw-devices`   | Device pairing approvals (`~/.openclaw/devices`) |
 
-The workspace is nested inside the config volume at `/home/node/.openclaw/workspace/`.
+The workspace is mounted at `/home/node/.openclaw/workspace/`.
 
 ## Environment Variables
 
