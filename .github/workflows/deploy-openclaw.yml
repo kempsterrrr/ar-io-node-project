@@ -104,8 +104,14 @@ jobs:
           ssh ${{ secrets.OPENCLAW_USER }}@${{ secrets.OPENCLAW_HOST }} << 'EOF'
             set -euo pipefail
             cd ${{ env.DEPLOY_PATH }}
+            PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "$PWD")}"
+            NETWORK_NAME="${PROJECT_NAME}_openclaw-network"
+            docker network create "$NETWORK_NAME" >/dev/null 2>&1 || true
             GATEWAY_PUBLIC_IP="${{ vars.GATEWAY_PUBLIC_IP }}"
-            TRUSTED_PROXY_IP="$(docker network inspect openclaw-network -f '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)"
+            TRUSTED_PROXY_IP="$(docker network inspect "$NETWORK_NAME" -f '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)"
+            if [ -z "$TRUSTED_PROXY_IP" ]; then
+              TRUSTED_PROXY_IP="$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)"
+            fi
             if [ -z "$TRUSTED_PROXY_IP" ]; then
               echo "Error: unable to determine trusted proxy IP"
               exit 1
@@ -135,7 +141,14 @@ jobs:
               raise SystemExit(f"Error: missing plugin ssh host path in openclaw.json: {exc}") from exc
 
           gateway = data.setdefault("gateway", {})
-          gateway["trustedProxies"] = [os.environ["TRUSTED_PROXY_IP"]]
+          existing = gateway.get("trustedProxies", [])
+          if not isinstance(existing, list):
+              existing = []
+          merged = []
+          for value in [*existing, os.environ["TRUSTED_PROXY_IP"]]:
+              if value and value not in merged:
+                  merged.append(value)
+          gateway["trustedProxies"] = merged
 
           path.write_text(json.dumps(data, indent=2) + "\n")
           PY
