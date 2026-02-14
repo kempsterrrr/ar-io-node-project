@@ -92,6 +92,7 @@ jobs:
           ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
           OPENCLAW_GATEWAY_TOKEN=${{ secrets.OPENCLAW_GATEWAY_TOKEN }}
           ENVFILE
+          ssh ${{ secrets.OPENCLAW_USER }}@${{ secrets.OPENCLAW_HOST }} "chmod 600 ${{ env.DEPLOY_PATH }}/.env"
 
       - name: Validate required variables
         run: |
