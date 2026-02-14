@@ -6,6 +6,8 @@ import path from "node:path";
 const root = process.cwd();
 const errors = [];
 const warnings = [];
+const modeArg = process.argv.find((arg) => arg.startsWith("--mode="));
+const mode = modeArg ? modeArg.slice("--mode=".length) : "validate";
 
 function rel(filePath) {
   return path.relative(root, filePath) || ".";
@@ -25,7 +27,8 @@ function addIssue(list, code, message) {
 }
 
 function extractFrontmatter(content) {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n?/);
+  const normalized = content.replace(/\r\n/g, "\n");
+  const match = normalized.match(/^---\n([\s\S]*?)\n---\n?/);
   return match ? match[1] : null;
 }
 
@@ -75,7 +78,17 @@ async function main() {
   }
 
   for (const rule of policy.forbidden_patterns || []) {
-    const regex = new RegExp(rule.pattern, "i");
+    let regex;
+    try {
+      regex = new RegExp(rule.pattern, "i");
+    } catch (error) {
+      addIssue(
+        errors,
+        "INVALID_PATTERN",
+        `Invalid forbidden pattern "${rule.id || "unknown"}": ${error.message}`
+      );
+      continue;
+    }
     for (const file of rule.scope || []) {
       const fullPath = path.join(root, file);
       if (!(await exists(fullPath))) {
@@ -100,9 +113,15 @@ async function main() {
       continue;
     }
     const content = await readFile(fullPath, "utf8");
-    const lineCount = content.split("\n").length;
+    const lineCount = content.endsWith("\n")
+      ? content.slice(0, -1).split("\n").length
+      : content.split("\n").length;
 
-    if (!content.includes(shimRules.required_reference)) {
+    if (
+      typeof shimRules.required_reference === "string" &&
+      shimRules.required_reference.length > 0 &&
+      !content.includes(shimRules.required_reference)
+    ) {
       addIssue(
         errors,
         "SHIM_REFERENCE",
@@ -175,11 +194,11 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`Agentic policy validation passed (${rel(policyPath)}).`);
+  const modeLabel = mode === "drift" ? "drift check" : "validation";
+  console.log(`Agentic policy ${modeLabel} passed (${rel(policyPath)}).`);
 }
 
 main().catch((error) => {
   console.error(`Validation execution error: ${error.message}`);
   process.exit(1);
 });
-

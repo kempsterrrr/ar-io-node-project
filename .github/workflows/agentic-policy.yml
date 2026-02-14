@@ -31,15 +31,13 @@ on:
   schedule:
     - cron: "0 14 * * 1"
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
   validate:
     name: Validate Policy
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -56,6 +54,9 @@ jobs:
     name: Weekly Learning Proposal
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -71,6 +72,7 @@ jobs:
           OUTPUT_DIR="agentic/learning/proposals"
           OUTPUT_FILE="${OUTPUT_DIR}/${WEEK}.md"
           mkdir -p "${OUTPUT_DIR}"
+          echo "week=${WEEK}" >> "$GITHUB_OUTPUT"
 
           if [[ -f "${OUTPUT_FILE}" ]]; then
             echo "proposal_exists=true" >> "$GITHUB_OUTPUT"
@@ -112,7 +114,7 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           commit-message: "chore(agentic): weekly learning proposal"
-          title: "chore(agentic): weekly learning proposal (${{ github.run_id }})"
+          title: "chore(agentic): weekly learning proposal (${{ steps.proposal.outputs.week }})"
           body: |
             Weekly PR-gated proposal generated from recent repository signals.
 
@@ -123,8 +125,7 @@ jobs:
 
             Validate using:
             - `node scripts/agentic-validate.mjs`
-          branch: codex/agentic-learning-${{ github.run_id }}
+          branch: codex/agentic-learning-${{ steps.proposal.outputs.week }}
           delete-branch: true
           add-paths: |
             ${{ steps.proposal.outputs.proposal_file }}
-

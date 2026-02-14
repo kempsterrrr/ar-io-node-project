@@ -10,6 +10,16 @@ If any tool-specific file conflicts with this document, this document wins.
 Use AI agents to accelerate delivery while preserving code quality, safety, and reproducibility.
 Optimize for reliability per unit complexity.
 
+## Repository Context
+
+- Monorepo with `apps/*` and `packages/*` workspaces.
+- Primary quality gates: `bun run format:check` and `bun run build`.
+- Core references:
+  - `README.md`
+  - `docs/TESTING.md`
+  - `apps/gateway/README.md`
+  - `.github/workflows/ci.yml`
+
 ## Safety & Guardrails
 
 - Do not push directly to `main`; use pull requests.

@@ -11,8 +11,8 @@
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "agentic:validate": "node scripts/agentic-validate.mjs",
-    "agentic:check-drift": "node scripts/agentic-validate.mjs",
+    "agentic:validate": "node scripts/agentic-validate.mjs --mode=validate",
+    "agentic:check-drift": "node scripts/agentic-validate.mjs --mode=drift",
     "clean": "turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {
