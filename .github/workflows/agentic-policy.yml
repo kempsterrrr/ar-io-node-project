@@ -1,0 +1,131 @@
+name: Agentic Policy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "AGENTS.md"
+      - "SKILLS.md"
+      - "skills/**"
+      - "CLAUDE.md"
+      - ".cursorrules"
+      - "agentic.policy.json"
+      - "scripts/agentic-validate.mjs"
+      - ".github/workflows/agentic-policy.yml"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
+      - ".github/CODEOWNERS"
+  pull_request:
+    branches: [main]
+    paths:
+      - "AGENTS.md"
+      - "SKILLS.md"
+      - "skills/**"
+      - "CLAUDE.md"
+      - ".cursorrules"
+      - "agentic.policy.json"
+      - "scripts/agentic-validate.mjs"
+      - ".github/workflows/agentic-policy.yml"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
+      - ".github/CODEOWNERS"
+  workflow_dispatch:
+  schedule:
+    - cron: "0 14 * * 1"
+
+jobs:
+  validate:
+    name: Validate Policy
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate agentic policy
+        run: node scripts/agentic-validate.mjs
+
+  weekly-learning:
+    name: Weekly Learning Proposal
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build weekly proposal
+        id: proposal
+        shell: bash
+        run: |
+          set -euo pipefail
+          WEEK="$(date -u +%G-W%V)"
+          OUTPUT_DIR="agentic/learning/proposals"
+          OUTPUT_FILE="${OUTPUT_DIR}/${WEEK}.md"
+          mkdir -p "${OUTPUT_DIR}"
+          echo "week=${WEEK}" >> "$GITHUB_OUTPUT"
+
+          if [[ -f "${OUTPUT_FILE}" ]]; then
+            echo "proposal_exists=true" >> "$GITHUB_OUTPUT"
+            echo "proposal_file=${OUTPUT_FILE}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          {
+            echo "# Weekly Agentic Learning Proposal (${WEEK})"
+            echo
+            echo "This PR is PR-gated and does not auto-merge."
+            echo
+            echo "## Signals (last 7 days)"
+            echo
+            git log --since='7 days ago' --pretty='- %h %s (%an, %ad)' --date=short || true
+            echo
+            echo "## Proposed Updates"
+            echo
+            echo "### AGENTS.md"
+            echo "- Review guardrails for any new failure modes in recent changes."
+            echo
+            echo "### SKILLS.md"
+            echo "- Confirm skills index status and ownership are still accurate."
+            echo
+            echo "### skills/*/SKILL.md"
+            echo "- Add or refine skill triggers based on recurring task patterns."
+            echo
+            echo "## Review Checklist"
+            echo "- [ ] Proposed updates are still minimal and tool-agnostic."
+            echo "- [ ] No policy duplicated into shim files."
+            echo "- [ ] Serena remains optional unless explicitly re-decided."
+          } > "${OUTPUT_FILE}"
+
+          echo "proposal_exists=false" >> "$GITHUB_OUTPUT"
+          echo "proposal_file=${OUTPUT_FILE}" >> "$GITHUB_OUTPUT"
+
+      - name: Create learning PR
+        if: steps.proposal.outputs.proposal_exists == 'false'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore(agentic): weekly learning proposal"
+          title: "chore(agentic): weekly learning proposal (${{ steps.proposal.outputs.week }})"
+          body: |
+            Weekly PR-gated proposal generated from recent repository signals.
+
+            This PR proposes updates to:
+            - `AGENTS.md`
+            - `SKILLS.md`
+            - `skills/*/SKILL.md`
+
+            Validate using:
+            - `node scripts/agentic-validate.mjs`
+          branch: codex/agentic-learning-${{ steps.proposal.outputs.week }}
+          delete-branch: true
+          add-paths: |
+            ${{ steps.proposal.outputs.proposal_file }}
