@@ -204,11 +204,11 @@ jobs:
             cd ${{ env.DEPLOY_PATH }}
 
             echo "OpenClaw channel status (probe):"
-            docker compose exec -T openclaw npx openclaw channels status --probe || true
+            docker compose exec -T openclaw npx openclaw channels status --probe < /dev/null || true
 
             echo ""
             echo "Slack pairing records:"
-            docker compose exec -T openclaw npx openclaw pairing list slack || true
+            docker compose exec -T openclaw npx openclaw pairing list slack < /dev/null || true
 
             echo ""
             echo "Slack-related logs (tail 200):"
