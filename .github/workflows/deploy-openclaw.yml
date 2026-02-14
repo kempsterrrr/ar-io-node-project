@@ -79,6 +79,7 @@ jobs:
           # Copy to remote server
           scp "$TMPKEY" ${{ secrets.OPENCLAW_USER }}@${{ secrets.OPENCLAW_HOST }}:${{ env.DEPLOY_PATH }}/gateway_key
           ssh ${{ secrets.OPENCLAW_USER }}@${{ secrets.OPENCLAW_HOST }} "chmod 600 ${{ env.DEPLOY_PATH }}/gateway_key"
+          ssh ${{ secrets.OPENCLAW_USER }}@${{ secrets.OPENCLAW_HOST }} "chown 1000:1000 ${{ env.DEPLOY_PATH }}/gateway_key"
           rm -f "$TMPKEY"
 
       - name: Generate .env
@@ -91,6 +92,7 @@ jobs:
           ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
           OPENCLAW_GATEWAY_TOKEN=${{ secrets.OPENCLAW_GATEWAY_TOKEN }}
           ENVFILE
+          ssh ${{ secrets.OPENCLAW_USER }}@${{ secrets.OPENCLAW_HOST }} "chmod 600 ${{ env.DEPLOY_PATH }}/.env"
 
       - name: Validate required variables
         run: |
@@ -153,6 +155,7 @@ jobs:
           path.write_text(json.dumps(data, indent=2) + "\n")
           PY
             chmod 600 openclaw.json
+            chown 1000:1000 openclaw.json
           EOF
 
       - name: Build and deploy containers
