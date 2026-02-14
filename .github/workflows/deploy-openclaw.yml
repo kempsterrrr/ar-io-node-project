@@ -197,6 +197,51 @@ jobs:
             docker compose logs --tail=20 openclaw
           EOF
 
+      - name: Slack diagnostics
+        run: |
+          ssh ${{ secrets.OPENCLAW_USER }}@${{ secrets.OPENCLAW_HOST }} << 'EOF'
+            set -euo pipefail
+            cd ${{ env.DEPLOY_PATH }}
+            set -a
+            . ./.env
+            set +a
+
+            echo "Slack token presence:"
+            if [ -n "${SLACK_APP_TOKEN:-}" ]; then
+              echo "  SLACK_APP_TOKEN: set (length=${#SLACK_APP_TOKEN})"
+            else
+              echo "  SLACK_APP_TOKEN: missing"
+            fi
+            if [ -n "${SLACK_BOT_TOKEN:-}" ]; then
+              echo "  SLACK_BOT_TOKEN: set (length=${#SLACK_BOT_TOKEN})"
+            else
+              echo "  SLACK_BOT_TOKEN: missing"
+            fi
+
+            echo ""
+            echo "Slack API checks:"
+            if [ -n "${SLACK_BOT_TOKEN:-}" ]; then
+              curl -sS -H "Authorization: Bearer $SLACK_BOT_TOKEN" https://slack.com/api/auth.test \
+                | python3 -c 'import json,sys; d=json.load(sys.stdin); print({"ok":d.get("ok"),"error":d.get("error"),"team":d.get("team"),"bot_id":d.get("bot_id"),"user_id":d.get("user_id")})'
+            fi
+            if [ -n "${SLACK_APP_TOKEN:-}" ]; then
+              curl -sS -X POST -H "Authorization: Bearer $SLACK_APP_TOKEN" https://slack.com/api/apps.connections.open \
+                | python3 -c 'import json,sys; d=json.load(sys.stdin); print({"ok":d.get("ok"),"error":d.get("error"),"has_url":bool(d.get("url"))})'
+            fi
+
+            echo ""
+            echo "OpenClaw channel status (probe):"
+            docker compose exec -T openclaw npx openclaw channels status --probe < /dev/null || true
+
+            echo ""
+            echo "Slack pairing records:"
+            docker compose exec -T openclaw npx openclaw pairing list slack < /dev/null || true
+
+            echo ""
+            echo "Slack-related logs (tail 300):"
+            docker compose logs --tail=300 openclaw | grep -Ei "slack|socket|pair|auth|token|error|warn" || true
+          EOF
+
       - name: Deployment summary
         run: |
           echo "## OpenClaw Deployment Complete" >> $GITHUB_STEP_SUMMARY
