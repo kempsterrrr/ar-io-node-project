@@ -129,6 +129,7 @@ docker compose restart
 | `openclaw-devices`   | Device pairing approvals (`~/.openclaw/devices`) |
 
 The workspace is mounted at `/home/node/.openclaw/workspace/`.
+The container entrypoint will ensure the devices directory is owned by uid 1000 on startup.
 
 ## Environment Variables
 

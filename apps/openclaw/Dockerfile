@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
     git \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Create directories with proper permissions
@@ -43,7 +44,6 @@ RUN npx openclaw plugins install @kempsterrrr/openclaw-ario-plugin
 # Copy default config (can be overridden by volume mount)
 COPY --chown=node:node --chmod=600 openclaw.json /home/node/.openclaw/openclaw.json
 
-USER node
 WORKDIR /home/node
 
 ENV NODE_ENV=production
@@ -51,4 +51,8 @@ ENV HOME=/home/node
 
 EXPOSE 18789
 
+COPY entrypoint.sh /usr/local/bin/openclaw-entrypoint
+RUN chmod 755 /usr/local/bin/openclaw-entrypoint
+
+ENTRYPOINT ["openclaw-entrypoint"]
 CMD ["npx", "openclaw", "gateway"]
