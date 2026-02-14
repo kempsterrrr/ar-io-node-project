@@ -223,11 +223,25 @@ jobs:
             if [ -n "${SLACK_BOT_TOKEN:-}" ]; then
               curl -sS -H "Authorization: Bearer $SLACK_BOT_TOKEN" https://slack.com/api/auth.test \
                 | python3 -c 'import json,sys; d=json.load(sys.stdin); print({"ok":d.get("ok"),"error":d.get("error"),"team":d.get("team"),"bot_id":d.get("bot_id"),"user_id":d.get("user_id")})'
+              curl -sS -H "Authorization: Bearer $SLACK_BOT_TOKEN" https://slack.com/api/auth.scopes \
+                | python3 -c 'import json,sys; d=json.load(sys.stdin); print({"ok":d.get("ok"),"error":d.get("error"),"scopes":d.get("scopes"),"acceptedScopes":d.get("acceptedScopes"),"needed":d.get("needed"),"provided":d.get("provided")})'
+              curl -sS -H "Authorization: Bearer $SLACK_BOT_TOKEN" "https://slack.com/api/conversations.list?types=public_channel,private_channel,im,mpim&limit=200" \
+                | python3 -c 'import json,sys; d=json.load(sys.stdin); chans=d.get("channels") or []; print({"ok":d.get("ok"),"error":d.get("error"),"needed":d.get("needed"),"provided":d.get("provided"),"count":len(chans)})'
             fi
             if [ -n "${SLACK_APP_TOKEN:-}" ]; then
               curl -sS -X POST -H "Authorization: Bearer $SLACK_APP_TOKEN" https://slack.com/api/apps.connections.open \
                 | python3 -c 'import json,sys; d=json.load(sys.stdin); print({"ok":d.get("ok"),"error":d.get("error"),"has_url":bool(d.get("url"))})'
             fi
+
+            echo ""
+            echo "Active Slack config from openclaw.json:"
+            python3 - << 'PY'
+          import json
+          from pathlib import Path
+
+          cfg = json.loads(Path("openclaw.json").read_text())
+          print(cfg.get("channels", {}).get("slack"))
+          PY
 
             echo ""
             echo "OpenClaw channel status (probe):"
