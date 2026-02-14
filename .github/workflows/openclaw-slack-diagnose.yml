@@ -1,0 +1,79 @@
+name: OpenClaw Slack Diagnose
+
+on:
+  workflow_dispatch:
+
+env:
+  DEPLOY_PATH: ~/openclaw
+
+jobs:
+  diagnose:
+    name: Slack Diagnostics
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.OPENCLAW_SSH_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.OPENCLAW_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Run diagnostics on OpenClaw host
+        run: |
+          ssh ${{ secrets.OPENCLAW_USER }}@${{ secrets.OPENCLAW_HOST }} << 'EOF'
+            set -euo pipefail
+            cd ${{ env.DEPLOY_PATH }}
+
+            set -a
+            . ./.env
+            set +a
+
+            echo "Token presence:"
+            if [ -n "${SLACK_APP_TOKEN:-}" ]; then
+              echo "  SLACK_APP_TOKEN set (len=${#SLACK_APP_TOKEN})"
+            else
+              echo "  SLACK_APP_TOKEN missing"
+            fi
+            if [ -n "${SLACK_BOT_TOKEN:-}" ]; then
+              echo "  SLACK_BOT_TOKEN set (len=${#SLACK_BOT_TOKEN})"
+            else
+              echo "  SLACK_BOT_TOKEN missing"
+            fi
+
+            echo ""
+            echo "Slack auth.test:"
+            curl -sS -H "Authorization: Bearer $SLACK_BOT_TOKEN" https://slack.com/api/auth.test \
+              | python3 -c 'import json,sys; d=json.load(sys.stdin); print({"ok":d.get("ok"),"error":d.get("error"),"team":d.get("team"),"bot_id":d.get("bot_id"),"user_id":d.get("user_id")})'
+
+            echo ""
+            echo "Slack auth.scopes:"
+            curl -sS -H "Authorization: Bearer $SLACK_BOT_TOKEN" https://slack.com/api/auth.scopes \
+              | python3 -c 'import json,sys; d=json.load(sys.stdin); print({"ok":d.get("ok"),"error":d.get("error"),"scopes":d.get("scopes"),"acceptedScopes":d.get("acceptedScopes"),"needed":d.get("needed"),"provided":d.get("provided")})'
+
+            echo ""
+            echo "Socket test (apps.connections.open):"
+            curl -sS -X POST -H "Authorization: Bearer $SLACK_APP_TOKEN" https://slack.com/api/apps.connections.open \
+              | python3 -c 'import json,sys; d=json.load(sys.stdin); print({"ok":d.get("ok"),"error":d.get("error"),"has_url":bool(d.get("url"))})'
+
+            echo ""
+            echo "Conversations visibility:"
+            curl -sS -H "Authorization: Bearer $SLACK_BOT_TOKEN" "https://slack.com/api/conversations.list?types=public_channel,private_channel,im,mpim&limit=200" \
+              | python3 -c 'import json,sys; d=json.load(sys.stdin); chans=d.get("channels") or []; print({"ok":d.get("ok"),"error":d.get("error"),"needed":d.get("needed"),"provided":d.get("provided"),"count":len(chans)})'
+
+            echo ""
+            echo "Active OpenClaw Slack config (host openclaw.json):"
+            python3 - << 'PY'
+          import json
+          from pathlib import Path
+
+          cfg = json.loads(Path("openclaw.json").read_text())
+          print(cfg.get("channels", {}).get("slack"))
+          PY
+
+            echo ""
+            echo "OpenClaw logs (Slack excerpts):"
+            docker compose logs --tail=400 openclaw | grep -Ei "slack|socket|pair|error|warn" || true
+          EOF
