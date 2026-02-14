@@ -133,11 +133,15 @@ The container entrypoint will ensure the devices directory is owned by uid 1000 
 
 ## Environment Variables
 
-| Variable                    | Required | Description                |
-| --------------------------- | -------- | -------------------------- |
-| `ANTHROPIC_API_KEY`         | Yes      | Claude API key             |
-| `OPENCLAW_GATEWAY_TOKEN`    | Yes      | UI authentication token    |
-| `OPENCLAW_KEYRING_PASSWORD` | No       | Encrypted storage password |
+| Variable                    | Required | Description                              |
+| --------------------------- | -------- | ---------------------------------------- |
+| `ANTHROPIC_API_KEY`         | Yes      | Claude API key                           |
+| `OPENCLAW_GATEWAY_TOKEN`    | Yes      | UI authentication token                  |
+| `OPENCLAW_KEYRING_PASSWORD` | No       | Encrypted storage password               |
+| `SLACK_APP_TOKEN`           | No       | Slack Socket Mode app token (`xapp-...`) |
+| `SLACK_BOT_TOKEN`           | No       | Slack bot OAuth token (`xoxb-...`)       |
+
+To enable Slack, set both `SLACK_APP_TOKEN` and `SLACK_BOT_TOKEN` in `.env`, then redeploy with `docker compose up -d`.
 
 ## GitHub Actions Deployment
 
@@ -151,6 +155,11 @@ Required GitHub Secrets:
 - `GATEWAY_SSH_KEY`: SSH key for agent to access gateway
 - `ANTHROPIC_API_KEY`: Claude API key
 - `OPENCLAW_GATEWAY_TOKEN`: UI auth token
+
+Optional GitHub Secrets (for Slack integration):
+
+- `SLACK_APP_TOKEN`: Slack Socket Mode app token (`xapp-...`)
+- `SLACK_BOT_TOKEN`: Slack bot OAuth token (`xoxb-...`)
 
 ## Available Tools
 
