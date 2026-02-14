@@ -33,6 +33,8 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
       OPENCLAW_KEYRING_PASSWORD: ${OPENCLAW_KEYRING_PASSWORD:-}
+      SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:-}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
     volumes:
       # Persist workspace only (agent artifacts, memories)
       # DO NOT mount over /home/node/.openclaw - it wipes the extensions installed during build

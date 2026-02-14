@@ -11,6 +11,10 @@
 #   - GATEWAY_SSH_KEY: Private SSH key for agent to access gateway
 #   - ANTHROPIC_API_KEY: Claude API key
 #   - OPENCLAW_GATEWAY_TOKEN: UI auth token
+# Optional Secrets:
+#   - OPENCLAW_KEYRING_PASSWORD: Keyring password
+#   - SLACK_APP_TOKEN: Slack Socket Mode app token (xapp-...)
+#   - SLACK_BOT_TOKEN: Slack bot OAuth token (xoxb-...)
 #
 # Required Variables:
 #   - GATEWAY_PUBLIC_IP: Gateway server's public IP (for SSH access)
@@ -91,6 +95,9 @@ jobs:
 
           ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
           OPENCLAW_GATEWAY_TOKEN=${{ secrets.OPENCLAW_GATEWAY_TOKEN }}
+          OPENCLAW_KEYRING_PASSWORD=${{ secrets.OPENCLAW_KEYRING_PASSWORD }}
+          SLACK_APP_TOKEN=${{ secrets.SLACK_APP_TOKEN }}
+          SLACK_BOT_TOKEN=${{ secrets.SLACK_BOT_TOKEN }}
           ENVFILE
           ssh ${{ secrets.OPENCLAW_USER }}@${{ secrets.OPENCLAW_HOST }} "chmod 600 ${{ env.DEPLOY_PATH }}/.env"
 
