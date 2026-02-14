@@ -123,8 +123,8 @@ docker compose restart
 
 ## Volumes
 
-| Volume              | Purpose                                          |
-| ------------------- | ------------------------------------------------ |
+| Volume               | Purpose                                          |
+| -------------------- | ------------------------------------------------ |
 | `openclaw-workspace` | Agent workspace and artifacts                    |
 | `openclaw-devices`   | Device pairing approvals (`~/.openclaw/devices`) |
 
