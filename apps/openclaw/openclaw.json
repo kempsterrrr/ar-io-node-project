@@ -13,7 +13,12 @@
   },
   "channels": {
     "slack": {
-      "enabled": true
+      "enabled": true,
+      "groupPolicy": "open",
+      "dm": {
+        "policy": "open",
+        "allowFrom": ["*"]
+      }
     }
   },
   "plugins": {
