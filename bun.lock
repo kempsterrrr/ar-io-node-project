@@ -14,25 +14,9 @@
       "name": "@ar-io/gateway",
       "version": "0.1.0",
     },
-    "packages/openclaw-ario-plugin": {
-      "name": "@kempsterrrr/openclaw-ario-plugin",
-      "version": "0.1.0",
-      "devDependencies": {
-        "@types/node": "^22.10.0",
-        "typescript": "^5.7.0",
-      },
-      "peerDependencies": {
-        "openclaw": ">=1.0.0",
-      },
-      "optionalPeers": [
-        "openclaw",
-      ],
-    },
   },
   "packages": {
     "@ar-io/gateway": ["@ar-io/gateway@workspace:apps/gateway"],
-
-    "@kempsterrrr/openclaw-ario-plugin": ["@kempsterrrr/openclaw-ario-plugin@workspace:packages/openclaw-ario-plugin"],
 
     "@types/node": ["@types/node@25.1.0", "", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-t7frlewr6+cbx+9Ohpl0NOTKXZNV9xHRmNOvql47BFJKcEG1CxtxlPEEe+gR9uhVWM4DwhnvTF110mIL4yP9RA=="],
 
@@ -55,9 +39,5 @@
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "undici-types": ["undici-types@7.16.0", "", {}, "sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw=="],
-
-    "@kempsterrrr/openclaw-ario-plugin/@types/node": ["@types/node@22.19.7", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-MciR4AKGHWl7xwxkBa6xUGxQJ4VBOmPTF7sL+iGzuahOFaO0jHCsuEfS80pan1ef4gWId1oWOweIhrDEYLuaOw=="],
-
-    "@kempsterrrr/openclaw-ario-plugin/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
   }
 }
