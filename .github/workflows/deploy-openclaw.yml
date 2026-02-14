@@ -197,6 +197,24 @@ jobs:
             docker compose logs --tail=20 openclaw
           EOF
 
+      - name: Slack diagnostics
+        run: |
+          ssh ${{ secrets.OPENCLAW_USER }}@${{ secrets.OPENCLAW_HOST }} << 'EOF'
+            set -euo pipefail
+            cd ${{ env.DEPLOY_PATH }}
+
+            echo "OpenClaw channel status (probe):"
+            docker compose exec -T openclaw npx openclaw channels status --probe || true
+
+            echo ""
+            echo "Slack pairing records:"
+            docker compose exec -T openclaw npx openclaw pairing list slack || true
+
+            echo ""
+            echo "Slack-related logs (tail 200):"
+            docker compose logs --tail=200 openclaw | grep -Ei "slack|socket|pair|auth|token|error|warn" || true
+          EOF
+
       - name: Deployment summary
         run: |
           echo "## OpenClaw Deployment Complete" >> $GITHUB_STEP_SUMMARY
