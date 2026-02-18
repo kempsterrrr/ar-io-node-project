@@ -1,0 +1,13 @@
+# Default owner for repository changes
+* @williamkempster
+
+# Agentic policy surfaces
+/AGENTS.md @williamkempster
+/SKILLS.md @williamkempster
+/skills/** @williamkempster
+/agentic.policy.json @williamkempster
+/CLAUDE.md @williamkempster
+/.cursorrules @williamkempster
+/.github/workflows/agentic-policy.yml @williamkempster
+/.github/PULL_REQUEST_TEMPLATE.md @williamkempster
+

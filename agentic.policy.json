@@ -1,0 +1,82 @@
+{
+  "policy_version": "1.0.0",
+  "required_files": [
+    "AGENTS.md",
+    "SKILLS.md",
+    "CLAUDE.md",
+    ".cursorrules",
+    "agentic.policy.json",
+    "scripts/agentic-validate.mjs",
+    ".github/workflows/agentic-policy.yml",
+    ".github/CODEOWNERS"
+  ],
+  "required_sections": {
+    "AGENTS.md": [
+      "## Mission",
+      "## Safety & Guardrails",
+      "## Code Change Workflow",
+      "## Testing & Verification",
+      "## Review Standard",
+      "## Tooling Policy",
+      "## MCP Policy",
+      "## Escalation Rules"
+    ],
+    "SKILLS.md": ["## Skill Index", "## Skill Invocation Rules"]
+  },
+  "skill_frontmatter_required": [
+    "name",
+    "description",
+    "inputs",
+    "outputs",
+    "triggers",
+    "version",
+    "owner"
+  ],
+  "forbidden_patterns": [
+    {
+      "id": "direct-main-push",
+      "pattern": "git\\s+push\\s+origin\\s+main",
+      "severity": "error",
+      "scope": ["AGENTS.md", "SKILLS.md", "CLAUDE.md", ".cursorrules"]
+    },
+    {
+      "id": "force-kill",
+      "pattern": "kill\\s+-9",
+      "severity": "error",
+      "scope": ["AGENTS.md", "SKILLS.md", "CLAUDE.md", ".cursorrules"]
+    },
+    {
+      "id": "hard-reset",
+      "pattern": "git\\s+reset\\s+--hard",
+      "severity": "error",
+      "scope": ["AGENTS.md", "SKILLS.md", "CLAUDE.md", ".cursorrules"]
+    },
+    {
+      "id": "mandatory-serena",
+      "pattern": "(must|required)\\b[^\\n]{0,80}\\bserena\\b",
+      "severity": "error",
+      "scope": ["AGENTS.md", "SKILLS.md", "CLAUDE.md", ".cursorrules"]
+    }
+  ],
+  "shim_consistency_rules": {
+    "canonical_file": "AGENTS.md",
+    "shim_files": ["CLAUDE.md", ".cursorrules"],
+    "required_reference": "AGENTS.md",
+    "max_lines": 80,
+    "disallow_headings": [
+      "## Mission",
+      "## Safety & Guardrails",
+      "## Code Change Workflow",
+      "## Testing & Verification",
+      "## Review Standard",
+      "## Tooling Policy",
+      "## MCP Policy",
+      "## Escalation Rules"
+    ]
+  },
+  "mcp_baseline": {
+    "default_mode": "minimal-readonly",
+    "optional_servers": ["serena"],
+    "requires_task_justification_for": ["write", "exec"]
+  }
+}
