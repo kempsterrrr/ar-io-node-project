@@ -53,6 +53,7 @@ coverage/
 # OS
 Thumbs.db
 
-# Docker
-data/
-
+# Docker data directories (keep .gitkeep for structure)
+**/data/*
+!**/data/.gitkeep
+**/data-test/*

@@ -1,0 +1,226 @@
+# =============================================================================
+# Publish + Deploy Trusthash Sidecar
+# =============================================================================
+# Builds and pushes the Trusthash sidecar image to GHCR and deploys it
+# alongside the gateway using the latest tag. Auto-increments version tags.
+# =============================================================================
+
+name: Publish Trusthash Sidecar
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/trusthash-sidecar/**'
+      - '.github/workflows/publish-trusthash-sidecar.yml'
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy after publish'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/ar-io/trusthash-sidecar
+  DEPLOY_PATH: ~/ar-io-gateway
+  SIDECAR_DIR: sidecar
+
+concurrency:
+  group: trusthash-sidecar-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build + Push Image
+    runs-on: ubuntu-latest
+
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Create next version tag
+        id: tag
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          BASE_VERSION="0.1.0"
+          LATEST_TAG=$(git tag -l 'trusthash-sidecar/v*' | sort -V | tail -n 1 || true)
+          if [ -z "${LATEST_TAG}" ]; then
+            LATEST_TAG="trusthash-sidecar/v${BASE_VERSION}"
+          fi
+
+          VERSION="${LATEST_TAG#trusthash-sidecar/v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION}"
+          PATCH=$((PATCH + 1))
+          NEW_GIT_TAG="trusthash-sidecar/v${MAJOR}.${MINOR}.${PATCH}"
+          IMAGE_TAG="${NEW_GIT_TAG#trusthash-sidecar/}"
+
+          if git rev-parse "${NEW_GIT_TAG}" >/dev/null 2>&1; then
+            echo "Tag ${NEW_GIT_TAG} already exists. Aborting." >&2
+            exit 1
+          fi
+
+          git tag "${NEW_GIT_TAG}"
+          git push origin "${NEW_GIT_TAG}"
+
+          echo "git_tag=${NEW_GIT_TAG}" >> "$GITHUB_OUTPUT"
+          echo "tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: packages/trusthash-sidecar
+          file: packages/trusthash-sidecar/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
+            ${{ env.IMAGE_NAME }}:latest
+
+      - name: Ensure GHCR package is public
+        env:
+          GHCR_VISIBILITY_TOKEN: ${{ secrets.GHCR_VISIBILITY_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          PACKAGE="trusthash-sidecar"
+
+          if [ -z "${GHCR_VISIBILITY_TOKEN}" ]; then
+            for URL in \
+              "https://api.github.com/orgs/${OWNER}/packages/container/${PACKAGE}" \
+              "https://api.github.com/user/packages/container/${PACKAGE}"
+            do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${URL}")
+              if [ "${STATUS}" = "200" ]; then
+                echo "Package is already public (${URL})."
+                exit 0
+              fi
+            done
+
+            echo "GHCR_VISIBILITY_TOKEN not set and package is not public. Aborting." >&2
+            exit 1
+          fi
+
+          for URL in \
+            "https://api.github.com/orgs/${OWNER}/packages/container/${PACKAGE}" \
+            "https://api.github.com/user/packages/container/${PACKAGE}"
+          do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PATCH \
+              -H "Authorization: Bearer ${GHCR_VISIBILITY_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -d '{"visibility":"public"}' \
+              "${URL}")
+
+            if [ "${STATUS}" = "200" ] || [ "${STATUS}" = "201" ] || [ "${STATUS}" = "204" ]; then
+              echo "Set package visibility to public via ${URL}"
+              exit 0
+            fi
+          done
+
+          echo "Failed to update package visibility; check GHCR_VISIBILITY_TOKEN permissions." >&2
+          exit 1
+
+  deploy:
+    name: Deploy Sidecar
+    runs-on: ubuntu-latest
+    needs: publish
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.deploy == true }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.HETZNER_SSH_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.HETZNER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create sidecar directory
+        run: |
+          ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
+            mkdir -p ${{ env.DEPLOY_PATH }}/${{ env.SIDECAR_DIR }}/data
+          EOF
+
+      - name: Copy sidecar files
+        run: |
+          scp packages/trusthash-sidecar/docker-compose.sidecar.yaml \
+              packages/trusthash-sidecar/.env.docker \
+              packages/trusthash-sidecar/nginx.conf \
+              ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:${{ env.DEPLOY_PATH }}/${{ env.SIDECAR_DIR }}/
+
+      - name: Deploy sidecar
+        env:
+          SIDE_CAR_TAG: latest
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << EOF
+            set -euo pipefail
+
+            cd ${{ env.DEPLOY_PATH }}
+
+            if [ ! -f docker-compose.yaml ]; then
+              echo "Missing gateway docker-compose.yaml in ${{ env.DEPLOY_PATH }}. Deploy the gateway first." >&2
+              exit 1
+            fi
+
+            if [ ! -f .env ]; then
+              echo "Missing gateway .env in ${{ env.DEPLOY_PATH }}. Deploy the gateway first." >&2
+              exit 1
+            fi
+
+            if [ -n "${GHCR_TOKEN}" ]; then
+              echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+            fi
+
+            docker network create ar-io-network >/dev/null 2>&1 || true
+
+            TRUSTHASH_SIDECAR_ENV_FILE=${{ env.SIDECAR_DIR }}/.env.docker \
+            TRUSTHASH_SIDECAR_DATA_DIR=${{ env.SIDECAR_DIR }}/data \
+            TRUSTHASH_SIDECAR_NGINX_CONF=${{ env.SIDECAR_DIR }}/nginx.conf \
+            TRUSTHASH_SIDECAR_TAG=${SIDE_CAR_TAG} \
+            docker compose -f docker-compose.yaml -f ${{ env.SIDECAR_DIR }}/docker-compose.sidecar.yaml pull
+
+            TRUSTHASH_SIDECAR_ENV_FILE=${{ env.SIDECAR_DIR }}/.env.docker \
+            TRUSTHASH_SIDECAR_DATA_DIR=${{ env.SIDECAR_DIR }}/data \
+            TRUSTHASH_SIDECAR_NGINX_CONF=${{ env.SIDECAR_DIR }}/nginx.conf \
+            TRUSTHASH_SIDECAR_TAG=${SIDE_CAR_TAG} \
+            docker compose -f docker-compose.yaml -f ${{ env.SIDECAR_DIR }}/docker-compose.sidecar.yaml up -d
+          EOF
+
+      - name: Deployment summary
+        run: |
+          {
+            echo "## Sidecar Deployment Complete"
+            echo ""
+            echo "**Published Tag:** ${{ needs.publish.outputs.tag }}"
+            echo "**Deployed Tag:** latest"
+            echo "**Time (UTC):** $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          } >> "$GITHUB_STEP_SUMMARY"

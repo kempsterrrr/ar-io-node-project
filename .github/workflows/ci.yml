@@ -57,6 +57,10 @@ jobs:
           cd apps/gateway
           docker compose -f docker-compose.yaml -f docker-compose.dev.yaml config --quiet
 
+      - name: Validate local gateway + sidecar compose
+        run: |
+          docker compose -f docker-compose.local.yaml config --quiet
+
   build:
     name: Build Check
     runs-on: ubuntu-latest

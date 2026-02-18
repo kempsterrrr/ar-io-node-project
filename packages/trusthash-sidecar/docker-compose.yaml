@@ -1,0 +1,48 @@
+services:
+  trusthash-sidecar:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - '3003'
+    env_file:
+      - .env.docker
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3003
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DUCKDB_PATH=/app/data/provenance.duckdb
+      - MAX_IMAGE_SIZE_MB=${MAX_IMAGE_SIZE_MB:-50}
+      - REFERENCE_FETCH_TIMEOUT_MS=${REFERENCE_FETCH_TIMEOUT_MS:-10000}
+    volumes:
+      - ./data:/app/data
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3003/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  trusthash-proxy:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - '${PROXY_PORT:-3003}:80'
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - trusthash-sidecar
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:80/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  ar-io-network:
+    external: true

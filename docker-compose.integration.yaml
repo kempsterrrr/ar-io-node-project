@@ -1,0 +1,59 @@
+# =============================================================================
+# Local Integration: Trusthash Sidecar + Gateway Stub
+# =============================================================================
+# Usage: ./scripts/run-trusthash-integration.sh
+# =============================================================================
+
+services:
+  gateway-stub:
+    image: node:20-alpine
+    restart: "no"
+    ports:
+      - '8081:80'
+    working_dir: /fixtures
+    command: ['node', '/fixtures/stub-server.mjs']
+    environment:
+      - PORT=80
+      - GATEWAY_FIXTURES_DIR=/fixtures
+      - GATEWAY_STUB_MANIFEST_TX_ID=${INTEGRATION_MANIFEST_TX_ID:-test-tx-0001}
+      - GATEWAY_STUB_MANIFEST_ID=${INTEGRATION_MANIFEST_ID:-urn:uuid:00000000-0000-0000-0000-000000000000}
+      - GATEWAY_STUB_SOFT_BINDING_ALG=org.ar-io.phash
+      - GATEWAY_STUB_SOFT_BINDING_VALUE=AAAAAAAAAAA=
+      - GATEWAY_STUB_REPO_URL=http://gateway-stub/v1
+      - GATEWAY_STUB_FETCH_URL=http://gateway-stub/${INTEGRATION_MANIFEST_TX_ID:-test-tx-0001}
+    volumes:
+      - ./packages/trusthash-sidecar/tests/fixtures/gateway:/fixtures:ro
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:80/health']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  trusthash-sidecar:
+    image: ${TRUSTHASH_SIDECAR_IMAGE_LOCAL:-trusthash-sidecar-local}
+    pull_policy: never
+    build:
+      context: ./packages/trusthash-sidecar
+      dockerfile: Dockerfile
+    restart: "no"
+    ports:
+      - '3003:3003'
+    environment:
+      - NODE_ENV=test
+      - PORT=3003
+      - LOG_LEVEL=debug
+      - DUCKDB_PATH=/app/data/provenance.test.duckdb
+      - GATEWAY_URL=http://gateway-stub
+      - ALLOW_INSECURE_REFERENCE_URL=true
+      - MAX_IMAGE_SIZE_MB=${MAX_IMAGE_SIZE_MB:-50}
+      - REFERENCE_FETCH_TIMEOUT_MS=${REFERENCE_FETCH_TIMEOUT_MS:-10000}
+    volumes:
+      - ./packages/trusthash-sidecar/data-test:/app/data
+    depends_on:
+      - gateway-stub
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3003/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s

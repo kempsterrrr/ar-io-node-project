@@ -1,0 +1,303 @@
+openapi: 3.0.3
+info:
+  title: Trusthash Sidecar C2PA Soft Binding Resolution API
+  version: 1.1.0-partial
+  description: |
+    Partial C2PA 2.3 Soft Binding Resolution API implementation.
+
+    Current scope:
+    - byBinding: implemented via exact GraphQL tag translation
+    - byContent: implemented for org.ar-io.phash (image-only, near-match behavior)
+    - byReference: declared but not implemented (501)
+    - manifests: redirect-first with compatibility fallback to manifest bytes
+servers:
+  - url: https://c2pa.ar-io.dev/v1
+paths:
+  /matches/byBinding:
+    get:
+      summary: Resolve by soft binding value
+      operationId: getByBinding
+      parameters:
+        - in: query
+          name: alg
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: value
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: maxResults
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Matching manifests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ByBindingResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream GraphQL resolution failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Resolve by soft binding value (body form)
+      operationId: postByBinding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [alg, value]
+              properties:
+                alg:
+                  type: string
+                value:
+                  type: string
+      responses:
+        '200':
+          description: Matching manifests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ByBindingResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream GraphQL resolution failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /matches/byContent:
+    post:
+      summary: Resolve by uploaded content
+      operationId: postByContent
+      parameters:
+        - in: query
+          name: alg
+          required: false
+          schema:
+            type: string
+            default: org.ar-io.phash
+        - in: query
+          name: hintAlg
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: hintValue
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: maxResults
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Matching manifests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ByContentResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: Payload too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '415':
+          description: Unsupported media type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /matches/byReference:
+    post:
+      summary: Resolve by reference URL
+      operationId: postByReference
+      description: |
+        Endpoint contract is reserved for Phase 2b. Current behavior is explicit 501.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                referenceUrl:
+                  type: string
+                  format: uri
+                assetLength:
+                  type: number
+                assetType:
+                  type: string
+                hintAlg:
+                  type: string
+                hintValue:
+                  type: string
+      responses:
+        '501':
+          description: Not implemented in current milestone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /manifests/{manifestId}:
+    get:
+      summary: Retrieve manifest by manifest ID
+      operationId: getManifestById
+      parameters:
+        - in: path
+          name: manifestId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: returnActiveManifest
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Manifest bytes (fallback path)
+          headers:
+            X-Manifest-Resolution:
+              schema:
+                type: string
+                enum: [fallback-manifest-store]
+          content:
+            application/c2pa:
+              schema:
+                type: string
+                format: binary
+        '302':
+          description: Redirect to repository or fetch URL
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+            X-Manifest-Resolution:
+              schema:
+                type: string
+                enum: [fetch-url, repo-url]
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Manifest not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '501':
+          description: returnActiveManifest=true is not yet implemented
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    ManifestResult:
+      type: object
+      required: [manifestId]
+      properties:
+        manifestId:
+          type: string
+        repoUrl:
+          type: string
+          format: uri
+        fetchUrl:
+          type: string
+          format: uri
+        endpoint:
+          type: string
+          format: uri
+        similarityScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+
+    ByBindingResponse:
+      type: object
+      required: [manifestResults, matches]
+      properties:
+        manifestResults:
+          type: array
+          items:
+            $ref: '#/components/schemas/ManifestResult'
+        matches:
+          type: array
+          items:
+            $ref: '#/components/schemas/ManifestResult'
+
+    ByContentResponse:
+      type: object
+      required: [matches]
+      properties:
+        matches:
+          type: array
+          items:
+            $ref: '#/components/schemas/ManifestResult'
+
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string

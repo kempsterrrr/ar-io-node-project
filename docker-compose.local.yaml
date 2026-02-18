@@ -1,0 +1,116 @@
+# =============================================================================
+# Local Development: Gateway + Trusthash Sidecar
+# =============================================================================
+# Usage: docker compose -f docker-compose.local.yaml up -d
+# Requires apps/gateway/.env and packages/trusthash-sidecar/.env.docker
+# =============================================================================
+
+services:
+  envoy:
+    image: ghcr.io/ar-io/ar-io-envoy:${ENVOY_IMAGE_TAG:-latest}
+    restart: "no"
+    ports:
+      - "${GATEWAY_PORT:-3000}:3000"
+    env_file:
+      - ./apps/gateway/.env
+    environment:
+      - LOG_LEVEL=debug
+      - TVAL_AR_IO_HOST=core
+      - TVAL_AR_IO_PORT=4000
+      - TVAL_OBSERVER_HOST=core
+      - TVAL_OBSERVER_PORT=5050
+      - TVAL_TRUSTED_NODE_HOST=${TRUSTED_NODE_HOST:-arweave.net}
+      - TVAL_TRUSTED_NODE_PORT=${TRUSTED_NODE_PORT:-443}
+      - TVAL_FALLBACK_NODE_HOST=${FALLBACK_NODE_HOST:-}
+      - TVAL_FALLBACK_NODE_PORT=${FALLBACK_NODE_PORT:-1984}
+      - TVAL_GRAPHQL_HOST=core
+      - TVAL_GRAPHQL_PORT=4000
+      - TVAL_DATASETS_HOST=core
+      - TVAL_DATASETS_PORT=4000
+      - TVAL_ARNS_ROOT_HOST=${ARNS_ROOT_HOST:-}
+      - TVAL_ARWEAVE_POST_DRY_RUN=${ARWEAVE_POST_DRY_RUN:-false}
+    depends_on:
+      - core
+    networks:
+      - ar-io-network
+
+  core:
+    image: ghcr.io/ar-io/ar-io-core:${CORE_IMAGE_TAG:-latest}
+    restart: "no"
+    env_file:
+      - ./apps/gateway/.env
+    environment:
+      - NODE_ENV=development
+      - LOG_LEVEL=debug
+      - LOG_FORMAT=${LOG_FORMAT:-simple}
+      - GRAPHQL_HOST=${GRAPHQL_HOST:-arweave.net}
+      - GRAPHQL_PORT=${GRAPHQL_PORT:-443}
+      - START_HEIGHT=${START_HEIGHT:-1400000}
+      - ARNS_ROOT_HOST=${ARNS_ROOT_HOST:-}
+      - AR_IO_WALLET=${AR_IO_WALLET:-}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
+      - TRUSTED_NODE_URL=${TRUSTED_NODE_URL:-https://arweave.net}
+      - RUN_OBSERVER=false
+      - OBSERVER_WALLET=${OBSERVER_WALLET:-}
+    volumes:
+      - ${DATA_PATH:-./apps/gateway/data}:/app/data
+      - ./apps/gateway/wallets:/app/wallets:ro
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/ar-io/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  trusthash-sidecar:
+    image: ${TRUSTHASH_SIDECAR_IMAGE_LOCAL:-trusthash-sidecar-local}
+    pull_policy: never
+    build:
+      context: ./packages/trusthash-sidecar
+      dockerfile: Dockerfile
+    restart: "no"
+    expose:
+      - '3003'
+    env_file:
+      - ./packages/trusthash-sidecar/.env.docker
+    environment:
+      - NODE_ENV=development
+      - PORT=3003
+      - LOG_LEVEL=debug
+      - DUCKDB_PATH=/app/data/provenance.duckdb
+      - MAX_IMAGE_SIZE_MB=${MAX_IMAGE_SIZE_MB:-50}
+      - REFERENCE_FETCH_TIMEOUT_MS=${REFERENCE_FETCH_TIMEOUT_MS:-10000}
+    volumes:
+      - ./packages/trusthash-sidecar/data:/app/data
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3003/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  trusthash-proxy:
+    image: nginx:alpine
+    restart: "no"
+    ports:
+      - '${PROXY_PORT:-3003}:80'
+    volumes:
+      - ./packages/trusthash-sidecar/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - trusthash-sidecar
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:80/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  ar-io-network:
+    driver: bridge
+    name: ar-io-network
