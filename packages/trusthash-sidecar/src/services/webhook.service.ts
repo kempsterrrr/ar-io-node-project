@@ -60,6 +60,15 @@ function getTagValues(tags: WebhookTag[], name: string): string[] {
   return tags.filter((t) => t.name.toLowerCase() === name.toLowerCase()).map((t) => t.value);
 }
 
+function getTagValueByNames(tags: WebhookTag[], names: string[]): string | undefined {
+  return getTagValuesByNames(tags, names)[0];
+}
+
+function getTagValuesByNames(tags: WebhookTag[], names: string[]): string[] {
+  const normalized = new Set(names.map((name) => name.toLowerCase()));
+  return tags.filter((t) => normalized.has(t.name.toLowerCase())).map((t) => t.value);
+}
+
 /**
  * Process a webhook payload from the gateway.
  *
@@ -67,9 +76,9 @@ function getTagValues(tags: WebhookTag[], name: string): string[] {
  * Required tags for indexing:
  * - Content-Type=application/c2pa
  * - Manifest-Type=sidecar
- * - C2PA-Manifest-Id=urn:uuid:...
- * - C2PA-SoftBinding-Alg (one per binding)
- * - C2PA-SoftBinding-Value (one per binding, base64)
+ * - C2PA-Manifest-Id or C2PA-Manifest-ID (URN, e.g. urn:uuid:...)
+ * - C2PA-SoftBinding-Alg or C2PA-Soft-Binding-Alg (one per binding)
+ * - C2PA-SoftBinding-Value or C2PA-Soft-Binding-Value (one per binding, base64)
  * - pHash (hex or binary, used for similarity search)
  * {
  *   tx_id: "abc123...",
@@ -87,8 +96,8 @@ export async function processWebhook(payload: WebhookPayload): Promise<WebhookRe
   const txId = payload.tx_id || payload.id;
   const tags = payload.tags || [];
   const owner = payload.owner || payload.owner_address;
-  const blockHeight = payload.block_height || payload.height;
-  const blockTimestamp = payload.block_timestamp || payload.timestamp;
+  const blockHeight = payload.block_height ?? payload.height;
+  const blockTimestamp = payload.block_timestamp ?? payload.timestamp;
 
   if (!txId) {
     return {
@@ -116,11 +125,20 @@ export async function processWebhook(payload: WebhookPayload): Promise<WebhookRe
     // Extract required tags (tag-only indexing)
     const contentTypeTag = getTagValue(tags, 'Content-Type');
     const manifestTypeTag = getTagValue(tags, 'Manifest-Type');
-    const manifestIdTag = getTagValue(tags, 'C2PA-Manifest-Id');
+    const manifestIdTag = getTagValueByNames(tags, ['C2PA-Manifest-Id', 'C2PA-Manifest-ID']);
     const pHashValue = getTagValue(tags, 'pHash');
-    const softBindingAlgs = getTagValues(tags, 'C2PA-SoftBinding-Alg');
-    const softBindingValues = getTagValues(tags, 'C2PA-SoftBinding-Value');
-    const softBindingScopes = getTagValues(tags, 'C2PA-SoftBinding-Scope');
+    const softBindingAlgs = getTagValuesByNames(tags, [
+      'C2PA-SoftBinding-Alg',
+      'C2PA-Soft-Binding-Alg',
+    ]);
+    const softBindingValues = getTagValuesByNames(tags, [
+      'C2PA-SoftBinding-Value',
+      'C2PA-Soft-Binding-Value',
+    ]);
+    const softBindingScopes = getTagValuesByNames(tags, [
+      'C2PA-SoftBinding-Scope',
+      'C2PA-Soft-Binding-Scope',
+    ]);
 
     if (!contentTypeTag || !manifestTypeTag || !manifestIdTag || !pHashValue) {
       logger.debug(

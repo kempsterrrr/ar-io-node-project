@@ -217,6 +217,22 @@ To enforce public visibility, add:
 If `GHCR_VISIBILITY_TOKEN` is not set, the workflow will only succeed if the package
 is already public.
 
+### Trusthash C2PA Conformance (Current)
+
+The Trusthash Sidecar currently targets **C2PA 2.3 partial conformance**.
+
+| Area                                                                          | Status          | Notes                                                                                         |
+| ----------------------------------------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------- |
+| Soft binding lookup (`/v1/matches/byBinding`)                                 | Implemented     | Exact GraphQL tag resolution (`C2PA-Soft-Binding-*` and `C2PA-SoftBinding-*`).              |
+| Content lookup (`/v1/matches/byContent`)                                      | Partial         | Image-first `org.ar-io.phash` extraction with near-match behavior and `hintAlg`/`hintValue`. |
+| Reference lookup (`/v1/matches/byReference`)                                  | Not implemented | Reserved for follow-up milestone; currently returns `501`.                                    |
+| Manifest retrieval (`/v1/manifests/:manifestId`)                              | Partial         | Redirect-first using repo/fetch tags, with compatibility fallback to manifest bytes.         |
+| OAuth2 SBR auth and SBAL/decentralized lookup contract                        | Not implemented | Planned follow-up work.                                                                       |
+
+Intentional divergence from gist Phase 2a: `byContent` remains implemented in this milestone for `org.ar-io.phash`; `byReference` is deferred.
+
+See `packages/trusthash-sidecar/README.md` for endpoint-level details.
+
 ## OpenClaw Integration
 
 OpenClaw provides a Claude AI agent with direct access to your AR.IO gateway. Use natural language to query Arweave data, resolve ArNS names, and search transactions.

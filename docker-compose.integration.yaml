@@ -6,14 +6,25 @@
 
 services:
   gateway-stub:
-    image: nginx:alpine
+    image: node:20-alpine
     restart: "no"
     ports:
       - '8081:80'
+    working_dir: /fixtures
+    command: ['node', '/fixtures/stub-server.mjs']
+    environment:
+      - PORT=80
+      - GATEWAY_FIXTURES_DIR=/fixtures
+      - GATEWAY_STUB_MANIFEST_TX_ID=${INTEGRATION_MANIFEST_TX_ID:-test-tx-0001}
+      - GATEWAY_STUB_MANIFEST_ID=${INTEGRATION_MANIFEST_ID:-urn:uuid:00000000-0000-0000-0000-000000000000}
+      - GATEWAY_STUB_SOFT_BINDING_ALG=org.ar-io.phash
+      - GATEWAY_STUB_SOFT_BINDING_VALUE=AAAAAAAAAAA=
+      - GATEWAY_STUB_REPO_URL=http://gateway-stub/v1
+      - GATEWAY_STUB_FETCH_URL=http://gateway-stub/${INTEGRATION_MANIFEST_TX_ID:-test-tx-0001}
     volumes:
-      - ./packages/trusthash-sidecar/tests/fixtures/gateway:/usr/share/nginx/html:ro
+      - ./packages/trusthash-sidecar/tests/fixtures/gateway:/fixtures:ro
     healthcheck:
-      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:80']
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:80/health']
       interval: 5s
       timeout: 3s
       retries: 5

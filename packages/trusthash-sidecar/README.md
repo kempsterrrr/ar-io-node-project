@@ -4,8 +4,8 @@ Trusthash Sidecar is a companion service for AR.IO gateways that provides a C2PA
 
 ## Features
 
-- **Manifest Repository** - Serve `application/c2pa` manifest stores by manifest ID (URN)
-- **Soft Binding Resolution API** - Resolve manifests by binding, content, or reference URL
+- **Manifest Repository** - Redirect-first manifest retrieval with compatibility fallback for `application/c2pa` bytes
+- **Soft Binding Resolution API** - Resolve manifests by binding and content (`byReference` reserved for Phase 2b)
 - **Similarity Search** - 64-bit pHash nearest-neighbor search using Hamming distance
 - **Gateway Integration** - Webhook-driven indexing based on gateway tags
 
@@ -112,16 +112,16 @@ Required tags:
 
 - `Content-Type=application/c2pa`
 - `Manifest-Type=sidecar`
-- `C2PA-Manifest-Id` (URN, e.g. `urn:uuid:...`)
-- `C2PA-SoftBinding-Alg` (one per binding)
-- `C2PA-SoftBinding-Value` (one per binding, base64-encoded CBOR bstr)
+- `C2PA-Manifest-Id` or `C2PA-Manifest-ID` (URN, e.g. `urn:uuid:...`)
+- `C2PA-SoftBinding-Alg` or `C2PA-Soft-Binding-Alg` (one per binding)
+- `C2PA-SoftBinding-Value` or `C2PA-Soft-Binding-Value` (one per binding, base64-encoded CBOR bstr)
 - `pHash` (16-char hex or 64-bit binary string, used for similarity search)
 
 Recommended tags:
 
 - `Original-Content-Type` (e.g. `image/jpeg`)
 - `App-Name` (stored as claim generator)
-- `C2PA-SoftBinding-Scope` (optional, one per binding, JSON string or scalar)
+- `C2PA-SoftBinding-Scope` or `C2PA-Soft-Binding-Scope` (optional, one per binding, JSON string or scalar)
 
 The sidecar requires `C2PA-SoftBinding-Alg` and `C2PA-SoftBinding-Value` to have matching counts.
 
@@ -133,6 +133,8 @@ Configure the gateway to send webhooks for C2PA sidecar transactions:
 WEBHOOK_INDEX_FILTER='{"tags":[{"name":"Content-Type","value":"application/c2pa"},{"name":"Manifest-Type","value":"sidecar"},{"name":"C2PA-Manifest-Id"},{"name":"C2PA-SoftBinding-Alg","value":"org.ar-io.phash"},{"name":"C2PA-SoftBinding-Value"},{"name":"pHash"}]}'
 WEBHOOK_TARGET_SERVERS="http://trusthash-sidecar:3003/webhook"
 ```
+
+> The sidecar accepts both `C2PA-SoftBinding-*` and `C2PA-Soft-Binding-*` naming families, and both `C2PA-Manifest-Id` and `C2PA-Manifest-ID`.
 
 If you also want the gateway to index these transactions for GraphQL queries:
 
@@ -146,14 +148,34 @@ ANS104_INDEX_FILTER='{"tags":[{"name":"Content-Type","value":"application/c2pa"}
 | ---------------------------------- | -------- | -------- | -------------------------------------- |
 | `/health`                          | GET      | Public   | Health check and service status        |
 | `/v1/search-similar`               | GET      | Public   | pHash similarity search                |
-| `/v1/matches/byBinding`            | GET/POST | Public   | Resolve soft bindings by value         |
-| `/v1/matches/byContent`            | POST     | Public   | Resolve soft bindings by content       |
-| `/v1/matches/byReference`          | POST     | Public   | Resolve soft bindings by reference URL |
-| `/v1/manifests/:manifestId`        | GET      | Public   | Fetch C2PA manifest store              |
+| `/v1/matches/byBinding`            | GET/POST | Public   | Resolve by exact soft-binding tag match |
+| `/v1/matches/byContent`            | POST     | Public   | Resolve by uploaded image (`org.ar-io.phash`) |
+| `/v1/matches/byReference`          | POST     | Public   | Reserved for Phase 2b (`501` for now) |
+| `/v1/manifests/:manifestId`        | GET      | Public   | Redirect-first manifest retrieval (fallback bytes) |
 | `/v1/services/supportedAlgorithms` | GET      | Public   | Supported soft binding algorithms      |
 | `/webhook`                         | POST     | Internal | Receive gateway index notifications    |
 
 > The `/webhook` endpoint is expected to be reachable only from the gateway network. External requests should be blocked at the proxy layer.
+
+OpenAPI contract for current SBR surface: `openapi/c2pa-sbr-1.1.0.yaml`.
+
+## C2PA 2.3 Conformance (Partial)
+
+| Area                                                                          | Status          | Notes                                                                                                       |
+| ----------------------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------- |
+| `GET/POST /v1/matches/byBinding`                                              | Implemented     | Exact GraphQL tag lookup for both `C2PA-Soft-Binding-*` and `C2PA-SoftBinding-*` families.                |
+| `POST /v1/matches/byContent`                                                  | Partial         | Image-only `org.ar-io.phash` extraction + near-match lookup; accepts `hintAlg`/`hintValue`.                |
+| `POST /v1/matches/byReference`                                                | Not implemented | Returns `501` (`byReference not implemented yet`).                                                         |
+| `GET /v1/manifests/{manifestId}`                                              | Partial         | Redirect-first via `C2PA-Manifest-Fetch-URL`/`C2PA-Manifest-Repo-URL`; local fallback returns bytes.      |
+| `GET /v1/services/supportedAlgorithms`                                        | Implemented     | Returns currently supported soft binding algorithms.                                                        |
+| OAuth2 `clientCredentials` auth                                               | Not implemented | Endpoints are currently public.                                                                             |
+| SBAL/decentralized lookup contract (`describe`, smart-contract-backed lookup) | Not implemented | Current lookup is HTTPS + GraphQL tag-index-backed.                                                        |
+
+### Gist Alignment and Intentional Divergences
+
+- Aligned with gist `0.3.0` by making `byBinding` exact-match GraphQL and `manifests` redirect-first.
+- Intentional divergence: `byContent` remains implemented for `org.ar-io.phash` in this milestone instead of returning `501`.
+- `byReference` is deferred and explicitly returns `501`.
 
 ## Soft Binding Resolution (C2PA)
 
@@ -173,19 +195,34 @@ curl -X POST http://localhost:3003/v1/matches/byContent?alg=org.ar-io.phash \
   -H "Content-Type: image/jpeg" \
   --data-binary "@image.jpg"
 
-# By reference (POST)
+# By content with hint pair (POST)
+curl -X POST "http://localhost:3003/v1/matches/byContent?hintAlg=org.ar-io.phash&hintValue=BASE64" \
+  -H "Content-Type: image/jpeg" \
+  --data-binary "@image.jpg"
+
+# By reference (POST) - currently not implemented
 curl -X POST http://localhost:3003/v1/matches/byReference \
   -H "Content-Type: application/json" \
-  -d '{"referenceUrl":"https://example.com/image.jpg","assetLength":12345,"assetType":"image/jpeg"}'
+  -d '{"referenceUrl":"https://example.com/image.jpg","assetLength":12345}'
+# => 501 {"success":false,"error":"byReference not implemented yet"}
 ```
 
 ## Manifest Repository (C2PA)
 
-Fetch a manifest store by manifest ID (URN). The response content type is `application/c2pa`.
+Fetch a manifest store by manifest ID (URN).
+
+Resolution behavior:
+
+- If `C2PA-Manifest-Fetch-URL` exists in indexed proof tags: `302` redirect to that URL.
+- Else if `C2PA-Manifest-Repo-URL` exists: `302` redirect to `{repoUrl}/manifests/{manifestId}`.
+- Else: fallback to local indexed record + gateway transaction fetch, returning `application/c2pa`.
 
 ```bash
-curl -o manifest.c2pa \
-  "http://localhost:3003/v1/manifests/urn:uuid:YOUR-MANIFEST-ID"
+# inspect redirect-first behavior
+curl -i "http://localhost:3003/v1/manifests/urn:uuid:YOUR-MANIFEST-ID"
+
+# returnActiveManifest is recognized, but true is not implemented yet
+curl "http://localhost:3003/v1/manifests/urn:uuid:YOUR-MANIFEST-ID?returnActiveManifest=true"
 ```
 
 ## Similarity Search

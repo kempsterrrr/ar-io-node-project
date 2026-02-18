@@ -10,9 +10,12 @@ REFERENCE_URL="${REFERENCE_TEST_URL:-http://gateway-stub/reference.png}"
 
 MANIFEST_TX_ID="${INTEGRATION_MANIFEST_TX_ID:-test-tx-0001}"
 MANIFEST_ID="${INTEGRATION_MANIFEST_ID:-urn:uuid:00000000-0000-0000-0000-000000000000}"
+FALLBACK_MANIFEST_TX_ID="${INTEGRATION_FALLBACK_MANIFEST_TX_ID:-test-tx-0002}"
+FALLBACK_MANIFEST_ID="${INTEGRATION_FALLBACK_MANIFEST_ID:-urn:uuid:00000000-0000-0000-0000-000000000002}"
 
 FIXTURES_DIR="${ROOT_DIR}/packages/trusthash-sidecar/tests/fixtures/gateway"
 MANIFEST_FILE="${FIXTURES_DIR}/${MANIFEST_TX_ID}"
+FALLBACK_MANIFEST_FILE="${FIXTURES_DIR}/${FALLBACK_MANIFEST_TX_ID}"
 REFERENCE_FILE="${REFERENCE_TEST_FILE:-${FIXTURES_DIR}/reference.png}"
 
 PHASH_HEX="0000000000000000"
@@ -36,6 +39,10 @@ fi
 
 if [[ ! -f "${MANIFEST_FILE}" ]]; then
   echo "Missing gateway fixture: ${MANIFEST_FILE}"
+  exit 1
+fi
+if [[ ! -f "${FALLBACK_MANIFEST_FILE}" ]]; then
+  echo "Missing gateway fixture: ${FALLBACK_MANIFEST_FILE}"
   exit 1
 fi
 if [[ ! -f "${REFERENCE_FILE}" ]]; then
@@ -83,6 +90,28 @@ EOF
 curl -sf -X POST "${BASE_URL}/webhook" \
   -H "Content-Type: application/json" \
   -d "${seed_payload}" >/dev/null
+
+fallback_seed_payload=$(cat <<EOF
+{
+  "tx_id": "${FALLBACK_MANIFEST_TX_ID}",
+  "tags": [
+    { "name": "Content-Type", "value": "application/c2pa" },
+    { "name": "Manifest-Type", "value": "sidecar" },
+    { "name": "C2PA-Manifest-Id", "value": "${FALLBACK_MANIFEST_ID}" },
+    { "name": "C2PA-SoftBinding-Alg", "value": "org.ar-io.phash" },
+    { "name": "C2PA-SoftBinding-Value", "value": "${SOFT_BINDING_VALUE}" },
+    { "name": "pHash", "value": "${PHASH_HEX}" }
+  ],
+  "owner": "integration-test-fallback",
+  "block_height": 2,
+  "block_timestamp": 1700000001
+}
+EOF
+)
+
+curl -sf -X POST "${BASE_URL}/webhook" \
+  -H "Content-Type: application/json" \
+  -d "${fallback_seed_payload}" >/dev/null
 
 (
   cd "${ROOT_DIR}/packages/trusthash-sidecar"
