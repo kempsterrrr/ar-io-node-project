@@ -4,7 +4,6 @@
     "AGENTS.md",
     "SKILLS.md",
     "CLAUDE.md",
-    ".cursorrules",
     "agentic.policy.json",
     "scripts/agentic-validate.mjs",
     ".github/workflows/agentic-policy.yml",
@@ -37,30 +36,30 @@
       "id": "direct-main-push",
       "pattern": "git\\s+push\\s+origin\\s+main",
       "severity": "error",
-      "scope": ["AGENTS.md", "SKILLS.md", "CLAUDE.md", ".cursorrules"]
+      "scope": ["AGENTS.md", "SKILLS.md", "CLAUDE.md"]
     },
     {
       "id": "force-kill",
       "pattern": "kill\\s+-9",
       "severity": "error",
-      "scope": ["AGENTS.md", "SKILLS.md", "CLAUDE.md", ".cursorrules"]
+      "scope": ["AGENTS.md", "SKILLS.md", "CLAUDE.md"]
     },
     {
       "id": "hard-reset",
       "pattern": "git\\s+reset\\s+--hard",
       "severity": "error",
-      "scope": ["AGENTS.md", "SKILLS.md", "CLAUDE.md", ".cursorrules"]
+      "scope": ["AGENTS.md", "SKILLS.md", "CLAUDE.md"]
     },
     {
       "id": "mandatory-serena",
       "pattern": "(must|required)\\b[^\\n]{0,80}\\bserena\\b",
       "severity": "error",
-      "scope": ["AGENTS.md", "SKILLS.md", "CLAUDE.md", ".cursorrules"]
+      "scope": ["AGENTS.md", "SKILLS.md", "CLAUDE.md"]
     }
   ],
   "shim_consistency_rules": {
     "canonical_file": "AGENTS.md",
-    "shim_files": ["CLAUDE.md", ".cursorrules"],
+    "shim_files": ["CLAUDE.md"],
     "required_reference": "AGENTS.md",
     "max_lines": 80,
     "disallow_headings": [

@@ -10,7 +10,7 @@ outputs:
   - Updated validation rules and CI checks
   - Drift and contradiction findings with file references
 triggers:
-  - Changes to AGENTS.md, SKILLS.md, CLAUDE.md, .cursorrules, agentic.policy.json
+  - Changes to AGENTS.md, SKILLS.md, CLAUDE.md, agentic.policy.json
   - Repeated policy violations in CI
   - Review feedback indicating agent workflow confusion
 version: 1.0.0

@@ -13,9 +13,10 @@ Optimize for reliability per unit complexity.
 ## Repository Context
 
 - Monorepo with `apps/*` and `packages/*` workspaces.
+- Packages: `trusthash-sidecar` (C2PA), `turbo-c2pa` (SDK), `c2pa-protocol` (tags), `x402-bundler-sidecar`.
 - Primary quality gates: `bun run format:check` and `bun run build`.
 - Core references:
-  - `README.md`
+  - `docs/PROJECT.md` (full project docs, patterns, conventions)
   - `docs/TESTING.md`
   - `apps/gateway/README.md`
   - `.github/workflows/ci.yml`
