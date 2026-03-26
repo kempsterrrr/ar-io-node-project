@@ -385,6 +385,17 @@ softbinding.post('/byReference', async (c) => {
       hintValue: body.hintValue,
     });
 
+    // Reject unsupported algorithms before fetching the remote image
+    if (!hintAlg && !(COMPUTABLE_ALGS as readonly string[]).includes(alg)) {
+      return c.json(
+        {
+          success: false,
+          error: `Content-based computation not supported for algorithm: ${alg}. Supported: ${COMPUTABLE_ALGS.join(', ')}`,
+        },
+        400
+      );
+    }
+
     const maxBytes = config.MAX_IMAGE_SIZE_MB * 1024 * 1024;
     if (typeof body.assetLength === 'number' && body.assetLength > maxBytes) {
       return c.json(

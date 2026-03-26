@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 
 const port = Number(process.env.PORT || 80);
 const fixturesDir = process.env.GATEWAY_FIXTURES_DIR || '/fixtures';
@@ -97,7 +97,16 @@ function handleGraphql(req, res) {
 
 function serveFixture(pathname, res) {
   const safePath = pathname.replace(/^\/+/, '');
-  const fullPath = join(fixturesDir, safePath);
+  const baseDir = resolve(fixturesDir);
+  const fullPath = resolve(join(fixturesDir, safePath));
+
+  // Prevent path traversal outside fixtures directory
+  if (fullPath !== baseDir && !fullPath.startsWith(baseDir + sep)) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
+
   if (!existsSync(fullPath)) {
     res.writeHead(404);
     res.end('Not found');

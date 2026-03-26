@@ -22,7 +22,8 @@ health.get('/', async (c) => {
     dbStatus = 'unhealthy';
   }
 
-  const overallStatus = dbStatus === 'healthy' ? 'ok' : 'error';
+  const overallStatus =
+    dbStatus === 'healthy' ? 'ok' : dbStatus === 'unknown' ? 'degraded' : 'error';
 
   const response = {
     success: overallStatus === 'ok',
@@ -39,7 +40,7 @@ health.get('/', async (c) => {
     },
   };
 
-  const statusCode = overallStatus === 'ok' ? 200 : 503;
+  const statusCode = overallStatus === 'ok' ? 200 : 503; // degraded and error both return 503
   return c.json(response, statusCode);
 });
 

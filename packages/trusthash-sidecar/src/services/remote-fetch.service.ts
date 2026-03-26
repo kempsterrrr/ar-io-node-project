@@ -1,4 +1,5 @@
 import { isIP } from 'node:net';
+import dns from 'node:dns/promises';
 import { config } from '../config.js';
 import { fetchWithTimeout } from '../utils/http.js';
 import { readStreamWithLimit, SizeLimitError } from '../utils/stream.js';
@@ -91,6 +92,52 @@ export function parseAndValidateRemoteUrl(
   return parsed;
 }
 
+/**
+ * Resolve DNS and validate the resolved IP is not private.
+ * Returns the resolved IP to pin the connection and prevent DNS rebinding.
+ */
+async function resolveAndValidateIp(hostname: string): Promise<string | null> {
+  const ipVersion = isIP(hostname);
+  if (ipVersion !== 0) {
+    // Already an IP address — validate directly
+    if (ipVersion === 4 && isPrivateIpv4(hostname)) {
+      throw new RemoteFetchError(400, 'Private IPv4 reference hosts are not allowed');
+    }
+    if (ipVersion === 6 && isPrivateIpv6(hostname)) {
+      throw new RemoteFetchError(400, 'Private IPv6 reference hosts are not allowed');
+    }
+    return null; // Already an IP, no DNS pinning needed
+  }
+
+  let addresses: string[] = [];
+  try {
+    addresses = await dns.resolve4(hostname);
+  } catch {
+    try {
+      addresses = await dns.resolve6(hostname);
+    } catch {
+      // DNS resolution failed — fall through without pinning.
+      // The hostname-based validation still blocks local/private hostnames.
+      return null;
+    }
+  }
+
+  if (addresses.length === 0) {
+    return null; // No addresses resolved, fall through
+  }
+
+  const resolvedIp = addresses[0];
+  const resolvedIpVersion = isIP(resolvedIp);
+  if (resolvedIpVersion === 4 && isPrivateIpv4(resolvedIp)) {
+    throw new RemoteFetchError(400, 'Resolved IP is a private IPv4 address');
+  }
+  if (resolvedIpVersion === 6 && isPrivateIpv6(resolvedIp)) {
+    throw new RemoteFetchError(400, 'Resolved IP is a private IPv6 address');
+  }
+
+  return resolvedIp;
+}
+
 export async function fetchRemoteBytes(
   rawUrl: string,
   options: {
@@ -102,13 +149,24 @@ export async function fetchRemoteBytes(
 ): Promise<{ buffer: Buffer; contentType: string }> {
   const url = parseAndValidateRemoteUrl(rawUrl, { allowInsecure: options.allowInsecure });
 
+  // Resolve DNS once and validate the resolved IP to prevent DNS rebinding
+  const resolvedIp = await resolveAndValidateIp(url.hostname);
+
+  // Pin the fetch to the resolved IP, preserving the original Host header
+  const fetchUrl = new URL(url.toString());
+  const fetchHeaders: Record<string, string> = { ...options.headers };
+  if (resolvedIp) {
+    fetchHeaders['Host'] = url.hostname;
+    fetchUrl.hostname = resolvedIp;
+  }
+
   let response: Response;
   try {
     response = await fetchWithTimeout(
-      url.toString(),
+      fetchUrl.toString(),
       options.timeoutMs ?? config.REFERENCE_FETCH_TIMEOUT_MS,
       {
-        headers: options.headers,
+        headers: fetchHeaders,
         redirect: 'follow',
       }
     );

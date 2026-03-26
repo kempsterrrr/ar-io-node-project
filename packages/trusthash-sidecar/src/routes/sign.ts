@@ -123,6 +123,18 @@ sign.post('/identity/sign', async (c) => {
     return c.json({ error: 'Invalid wallet signature' }, 400);
   }
 
+  // Validate base64 format and size before decoding
+  const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+  if (!base64Regex.test(payload)) {
+    return c.json({ error: 'Payload must be valid base64' }, 400);
+  }
+
+  const maxPayloadBytes = 10 * 1024 * 1024; // 10 MB
+  const estimatedBytes = Math.ceil((payload.length * 3) / 4);
+  if (estimatedBytes > maxPayloadBytes) {
+    return c.json({ error: 'Payload exceeds size limit' }, 413);
+  }
+
   // Sign the payload with the X.509 key (DER format for COSE identity assertion)
   try {
     const payloadBytes = Buffer.from(payload, 'base64');

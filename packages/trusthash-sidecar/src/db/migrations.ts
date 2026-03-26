@@ -370,6 +370,7 @@ async function hasColumn(db: Database, tableName: string, columnName: string): P
 }
 
 async function recreateManifestsIndexes(db: Database): Promise<void> {
+  // Indexes on columns that exist since v1
   await db.run(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_manifests_manifest_id
     ON manifests(manifest_id)
@@ -385,15 +386,20 @@ async function recreateManifestsIndexes(db: Database): Promise<void> {
     ON manifests(content_type)
   `);
 
-  await db.run(`
-    CREATE INDEX IF NOT EXISTS idx_manifests_artifact_kind
-    ON manifests(artifact_kind)
-  `);
+  // Indexes on columns added in v4 — guard for v2/v3 replay safety
+  if (await hasColumn(db, 'manifests', 'artifact_kind')) {
+    await db.run(`
+      CREATE INDEX IF NOT EXISTS idx_manifests_artifact_kind
+      ON manifests(artifact_kind)
+    `);
+  }
 
-  await db.run(`
-    CREATE INDEX IF NOT EXISTS idx_manifests_remote_manifest_url
-    ON manifests(remote_manifest_url)
-  `);
+  if (await hasColumn(db, 'manifests', 'remote_manifest_url')) {
+    await db.run(`
+      CREATE INDEX IF NOT EXISTS idx_manifests_remote_manifest_url
+      ON manifests(remote_manifest_url)
+    `);
+  }
 }
 
 async function bumpSequence(

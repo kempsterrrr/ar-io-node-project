@@ -18,6 +18,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CERT_DIR="${SCRIPT_DIR}/../.dev-certs"
 mkdir -p "$CERT_DIR"
+chmod 700 "$CERT_DIR"
 
 CA_KEY="${CERT_DIR}/ca-key.pem"
 CA_CERT="${CERT_DIR}/ca-cert.pem"

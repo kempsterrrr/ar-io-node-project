@@ -112,5 +112,5 @@ services:
 
 networks:
   ar-io-network:
-    driver: bridge
+    external: true
     name: ar-io-network

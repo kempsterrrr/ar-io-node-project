@@ -292,7 +292,8 @@ export async function getManifestArtifactById(
 }
 
 /**
- * Search for similar manifests by pHash using Hamming distance.
+ * Search for similar manifests by pHash using L2 (Euclidean) distance
+ * on the normalized float-array representation.
  */
 export async function searchSimilarByPHash(
   phash: number[],
@@ -304,16 +305,11 @@ export async function searchSimilarByPHash(
   const phashArray = `[${phash.join(', ')}]`;
 
   const result = await database.all(
-    `WITH candidates AS (
-      SELECT *,
-        array_distance(phash, ${phashArray}::FLOAT[64]) AS l2_distance
-      FROM manifests
-      WHERE manifest_id IS NOT NULL AND phash IS NOT NULL
-    )
-    SELECT *,
-      (l2_distance * l2_distance) AS distance
-    FROM candidates
-    WHERE (l2_distance * l2_distance) <= ?
+    `SELECT *,
+      array_distance(phash, ${phashArray}::FLOAT[64]) AS distance
+    FROM manifests
+    WHERE manifest_id IS NOT NULL AND phash IS NOT NULL
+      AND array_distance(phash, ${phashArray}::FLOAT[64]) <= ?
     ORDER BY distance ASC
     LIMIT ?`,
     threshold,
