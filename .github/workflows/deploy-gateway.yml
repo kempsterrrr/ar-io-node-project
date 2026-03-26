@@ -167,30 +167,55 @@ jobs:
 
       - name: Build sidecar image
         run: |
-          ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
-            REPO_DIR="${HOME}/ar-io-node-project"
-            if [ -d "${REPO_DIR}/.git" ]; then
-              cd "${REPO_DIR}"
-              git fetch origin main
-              git reset --hard origin/main
-              docker build -t trusthash-sidecar:latest -f packages/trusthash-sidecar/Dockerfile .
-            else
-              echo "Repo not cloned yet — sidecar deploy will handle it. Skipping build."
+          ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << EOF
+            set -euo pipefail
+            REPO_DIR="\${HOME}/ar-io-node-project"
+            if [ ! -d "\${REPO_DIR}/.git" ]; then
+              echo "Cloning repository..."
+              git clone https://github.com/${{ github.repository }}.git "\${REPO_DIR}"
             fi
+            cd "\${REPO_DIR}"
+            git fetch origin
+            git checkout ${{ github.sha }}
+            docker build -t trusthash-sidecar:latest -f packages/trusthash-sidecar/Dockerfile .
           EOF
 
-      - name: Deploy containers
+      - name: Write signing secrets to server
         env:
           SIGNING_CERT_PEM: ${{ secrets.SIGNING_CERT_PEM }}
           SIGNING_PRIVATE_KEY_PEM: ${{ secrets.SIGNING_PRIVATE_KEY_PEM }}
         run: |
-          ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << EOF
+          ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} "mkdir -p ${{ env.DEPLOY_PATH }}/sidecar"
+          if [ -n "${SIGNING_CERT_PEM}" ]; then
+            echo "${SIGNING_CERT_PEM}" | ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} "cat > ${{ env.DEPLOY_PATH }}/sidecar/.signing-cert-pem"
+            echo "${SIGNING_PRIVATE_KEY_PEM}" | ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} "cat > ${{ env.DEPLOY_PATH }}/sidecar/.signing-key-pem"
+            ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} "chmod 600 ${{ env.DEPLOY_PATH }}/sidecar/.signing-cert-pem ${{ env.DEPLOY_PATH }}/sidecar/.signing-key-pem"
+            echo "Signing secrets written to server"
+          else
+            echo "No signing secrets configured — sidecar will run without signing"
+          fi
+
+      - name: Deploy containers
+        run: |
+          ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
+            set -euo pipefail
             cd ${{ env.DEPLOY_PATH }}
+
+            # Read signing secrets from files if present
+            ENABLE_SIGNING=false
+            SIGNING_CERT_PEM=""
+            SIGNING_PRIVATE_KEY_PEM=""
+            if [ -f sidecar/.signing-cert-pem ]; then
+              ENABLE_SIGNING=true
+              SIGNING_CERT_PEM="$(cat sidecar/.signing-cert-pem)"
+              SIGNING_PRIVATE_KEY_PEM="$(cat sidecar/.signing-key-pem)"
+            fi
+
             TRUSTHASH_SIDECAR_IMAGE=trusthash-sidecar:latest \
             TRUSTHASH_SIDECAR_ENV_FILE=./sidecar/.env.docker \
             TRUSTHASH_SIDECAR_DATA_DIR=./sidecar/data \
             TRUSTHASH_SIDECAR_NGINX_CONF=./sidecar/nginx.conf \
-            ENABLE_SIGNING=${SIGNING_CERT_PEM:+true} \
+            ENABLE_SIGNING="${ENABLE_SIGNING}" \
             SIGNING_CERT_PEM="${SIGNING_CERT_PEM}" \
             SIGNING_PRIVATE_KEY_PEM="${SIGNING_PRIVATE_KEY_PEM}" \
             docker compose -f docker-compose.yaml -f sidecar/docker-compose.sidecar.yaml up -d
