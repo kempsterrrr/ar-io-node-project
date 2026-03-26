@@ -60,6 +60,10 @@ jobs:
       - name: Add server to known hosts
         run: |
           mkdir -p ~/.ssh
+          if [ -z "${{ secrets.HETZNER_HOST }}" ]; then
+            echo "HETZNER_HOST secret is not set. Skipping deployment." >&2
+            exit 1
+          fi
           ssh-keyscan -H ${{ secrets.HETZNER_HOST }} >> ~/.ssh/known_hosts
 
       - name: Create deployment directory
