@@ -87,8 +87,11 @@ jobs:
               ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:${{ env.DEPLOY_PATH }}/${{ env.SIDECAR_DIR }}/
 
       - name: Build and deploy sidecar
+        env:
+          SIGNING_CERT_PEM: ${{ secrets.SIGNING_CERT_PEM }}
+          SIGNING_PRIVATE_KEY_PEM: ${{ secrets.SIGNING_PRIVATE_KEY_PEM }}
         run: |
-          ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
+          ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << EOF
             set -euo pipefail
 
             cd ${{ env.DEPLOY_PATH }}
@@ -101,14 +104,17 @@ jobs:
             docker network create ar-io-network >/dev/null 2>&1 || true
 
             # Build sidecar image from repo root (workspace dependencies require root context)
-            REPO_DIR="${HOME}/ar-io-node-project"
-            docker build -t trusthash-sidecar:latest -f "${REPO_DIR}/packages/trusthash-sidecar/Dockerfile" "${REPO_DIR}"
+            REPO_DIR="\${HOME}/ar-io-node-project"
+            docker build -t trusthash-sidecar:latest -f "\${REPO_DIR}/packages/trusthash-sidecar/Dockerfile" "\${REPO_DIR}"
 
-            # Deploy with the locally-built image
+            # Deploy with the locally-built image + signing secrets
             TRUSTHASH_SIDECAR_IMAGE=trusthash-sidecar:latest \
-            TRUSTHASH_SIDECAR_ENV_FILE=${{ env.SIDECAR_DIR }}/.env.docker \
-            TRUSTHASH_SIDECAR_DATA_DIR=${{ env.SIDECAR_DIR }}/data \
-            TRUSTHASH_SIDECAR_NGINX_CONF=${{ env.SIDECAR_DIR }}/nginx.conf \
+            TRUSTHASH_SIDECAR_ENV_FILE=./${{ env.SIDECAR_DIR }}/.env.docker \
+            TRUSTHASH_SIDECAR_DATA_DIR=./${{ env.SIDECAR_DIR }}/data \
+            TRUSTHASH_SIDECAR_NGINX_CONF=./${{ env.SIDECAR_DIR }}/nginx.conf \
+            ENABLE_SIGNING=${SIGNING_CERT_PEM:+true} \
+            SIGNING_CERT_PEM="${SIGNING_CERT_PEM}" \
+            SIGNING_PRIVATE_KEY_PEM="${SIGNING_PRIVATE_KEY_PEM}" \
             docker compose -f docker-compose.yaml -f ${{ env.SIDECAR_DIR }}/docker-compose.sidecar.yaml up -d
 
             echo "Waiting for sidecar to start..."
