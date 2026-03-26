@@ -112,7 +112,7 @@ jobs:
             TRUSTHASH_SIDECAR_ENV_FILE=./${{ env.SIDECAR_DIR }}/.env.docker \
             TRUSTHASH_SIDECAR_DATA_DIR=./${{ env.SIDECAR_DIR }}/data \
             TRUSTHASH_SIDECAR_NGINX_CONF=./${{ env.SIDECAR_DIR }}/nginx.conf \
-            ENABLE_SIGNING=\${SIGNING_CERT_PEM:+true} \
+            ENABLE_SIGNING=${SIGNING_CERT_PEM:+true} \
             SIGNING_CERT_PEM="${SIGNING_CERT_PEM}" \
             SIGNING_PRIVATE_KEY_PEM="${SIGNING_PRIVATE_KEY_PEM}" \
             docker compose -f docker-compose.yaml -f ${{ env.SIDECAR_DIR }}/docker-compose.sidecar.yaml up -d
