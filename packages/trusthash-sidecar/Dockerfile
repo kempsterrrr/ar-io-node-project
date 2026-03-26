@@ -11,8 +11,8 @@ COPY packages/c2pa-protocol/package.json packages/c2pa-protocol/
 COPY packages/c2pa-protocol/src/ packages/c2pa-protocol/src/
 COPY packages/trusthash-sidecar/package.json packages/trusthash-sidecar/
 
-# Install dependencies
-RUN bun install --frozen-lockfile
+# Install dependencies (no --frozen-lockfile: partial workspace context differs from full lockfile)
+RUN bun install
 
 # Copy sidecar source code
 COPY packages/trusthash-sidecar/ packages/trusthash-sidecar/
