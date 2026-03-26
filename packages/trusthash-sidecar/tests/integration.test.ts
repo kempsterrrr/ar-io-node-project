@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { extname } from 'node:path';
 import { Database, OPEN_READONLY } from 'duckdb-async';
 import sharp from 'sharp';
-import { SOFT_BINDING_ALG_ID } from '../src/services/softbinding.service.js';
+import { SOFT_BINDING_ALG_PHASH } from '../src/services/softbinding.service.js';
 
 const runIntegration = process.env.RUN_INTEGRATION === '1';
 const describeIntegration = runIntegration ? describe : describe.skip;
@@ -97,8 +97,7 @@ describeIntegration('integration', () => {
        FROM soft_bindings sb
        JOIN manifests m ON m.manifest_id = sb.manifest_id
        WHERE m.manifest_id = ?
-       LIMIT 1`
-      ,
+       LIMIT 1`,
       seededManifestId
     )) as Array<{
       manifest_id: string;
@@ -117,7 +116,7 @@ describeIntegration('integration', () => {
     sampleBinding = {
       manifestId: row.manifest_id,
       manifestTxId: row.manifest_tx_id,
-      alg: row.alg || SOFT_BINDING_ALG_ID,
+      alg: row.alg || SOFT_BINDING_ALG_PHASH,
       valueB64: row.value_b64,
     };
   });
@@ -136,12 +135,12 @@ describeIntegration('integration', () => {
     const bodyText = await response.text();
     expect(status).toBe(200);
     const body = JSON.parse(bodyText) as {
-      matches: Array<{ manifestId: string }>;
-      manifestResults: Array<{ manifestId: string }>;
+      matches: Array<{ manifestId: string; endpoint?: string; similarityScore?: number }>;
     };
     expect(Array.isArray(body.matches)).toBe(true);
-    expect(Array.isArray(body.manifestResults)).toBe(true);
     expect(body.matches.some((m) => m.manifestId === sampleBinding.manifestId)).toBe(true);
+    // Response should NOT include legacy manifestResults field
+    expect('manifestResults' in body).toBe(false);
   });
 
   it('hits /v1/matches/byContent with real image data', async () => {
@@ -203,7 +202,7 @@ describeIntegration('integration', () => {
     expect(body.error).toContain('hintValue requires hintAlg');
   });
 
-  it('returns 501 for /v1/matches/byReference', async () => {
+  it('resolves /v1/matches/byReference using a remote image URL', async () => {
     const { assetLength } = await resolveReferenceMetadata();
     const response = await fetch(`${baseUrl}/v1/matches/byReference`, {
       method: 'POST',
@@ -218,9 +217,11 @@ describeIntegration('integration', () => {
 
     const status = response.status;
     const bodyText = await response.text();
-    expect(status).toBe(501);
-    const body = JSON.parse(bodyText) as { error?: string };
-    expect(body.error).toContain('byReference not implemented yet');
+    expect(status).toBe(200);
+    const body = JSON.parse(bodyText) as {
+      matches?: Array<{ manifestId: string }>;
+    };
+    expect(Array.isArray(body.matches)).toBe(true);
   });
 
   it('indexes webhook payloads using C2PA tag aliases', async () => {
@@ -236,11 +237,11 @@ describeIntegration('integration', () => {
         tx_id: aliasTxId,
         tags: [
           { name: 'Content-Type', value: 'application/c2pa' },
-          { name: 'Manifest-Type', value: 'sidecar' },
+          { name: 'Protocol', value: 'C2PA-Manifest-Proof' },
+          { name: 'C2PA-Storage-Mode', value: 'manifest' },
           { name: 'C2PA-Manifest-ID', value: aliasManifestId },
           { name: 'C2PA-Soft-Binding-Alg', value: sampleBinding.alg },
           { name: 'C2PA-Soft-Binding-Value', value: sampleBinding.valueB64 },
-          { name: 'pHash', value: '0000000000000000' },
         ],
         owner: 'integration-alias-owner',
         block_height: 2,
@@ -266,11 +267,11 @@ describeIntegration('integration', () => {
         tx_id: aliasTxId,
         tags: [
           { name: 'Content-Type', value: 'application/c2pa' },
-          { name: 'Manifest-Type', value: 'sidecar' },
+          { name: 'Protocol', value: 'C2PA-Manifest-Proof' },
+          { name: 'C2PA-Storage-Mode', value: 'manifest' },
           { name: 'C2PA-Manifest-ID', value: aliasManifestId },
           { name: 'C2PA-Soft-Binding-Alg', value: sampleBinding.alg },
           { name: 'C2PA-Soft-Binding-Value', value: sampleBinding.valueB64 },
-          { name: 'pHash', value: '0000000000000000' },
         ],
         owner: 'integration-alias-owner',
         block_height: 2,
@@ -330,9 +331,8 @@ describeIntegration('integration', () => {
       `${baseUrl}/v1/manifests/${encodeURIComponent(sampleBinding.manifestId)}?returnActiveManifest=true`
     );
     const status = response.status;
-    const bodyText = await response.text();
     expect(status).toBe(501);
-    const body = JSON.parse(bodyText) as { error?: string };
-    expect(body.error).toContain('returnActiveManifest not implemented yet');
+    const body = JSON.parse(await response.text()) as { error?: string };
+    expect(body.error).toContain('not supported');
   });
 });

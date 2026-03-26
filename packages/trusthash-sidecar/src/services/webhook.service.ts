@@ -6,10 +6,23 @@
  */
 
 import { logger } from '../utils/logger.js';
-import { insertManifestWithBindings, getManifestByTxId } from '../db/index.js';
-import { parsePHash } from '../utils/bit-vector.js';
-import { binaryStringToFloatArray } from '../utils/bit-vector.js';
-import { SOFT_BINDING_ALG_ID } from './softbinding.service.js';
+import { upsertManifestArtifactWithBindings, getManifestByTxId } from '../db/index.js';
+import { parsePHash, binaryStringToFloatArray } from '../utils/bit-vector.js';
+import { config } from '../config.js';
+import {
+  PROTOCOL_NAME,
+  TAG_PROTOCOL,
+  TAG_STORAGE_MODE,
+  TAG_MANIFEST_ID,
+  TAG_MANIFEST_STORE_HASH,
+  TAG_MANIFEST_REPO_URL,
+  TAG_MANIFEST_FETCH_URL,
+  TAG_ASSET_CONTENT_TYPE,
+  TAG_SOFT_BINDING_ALG,
+  TAG_SOFT_BINDING_VALUE,
+  TAG_CLAIM_GENERATOR,
+  ALG_PHASH,
+} from '@ar-io/c2pa-protocol';
 
 /**
  * Webhook payload tag
@@ -50,49 +63,27 @@ export interface WebhookResult {
 }
 
 /**
- * Extract a tag value from the tags array.
+ * Extract a tag value from the tags array (case-insensitive).
  */
 function getTagValue(tags: WebhookTag[], name: string): string | undefined {
-  return getTagValues(tags, name)[0];
-}
-
-function getTagValues(tags: WebhookTag[], name: string): string[] {
-  return tags.filter((t) => t.name.toLowerCase() === name.toLowerCase()).map((t) => t.value);
-}
-
-function getTagValueByNames(tags: WebhookTag[], names: string[]): string | undefined {
-  return getTagValuesByNames(tags, names)[0];
-}
-
-function getTagValuesByNames(tags: WebhookTag[], names: string[]): string[] {
-  const normalized = new Set(names.map((name) => name.toLowerCase()));
-  return tags.filter((t) => normalized.has(t.name.toLowerCase())).map((t) => t.value);
+  const lower = name.toLowerCase();
+  return tags.find((t) => t.name.toLowerCase() === lower)?.value;
 }
 
 /**
  * Process a webhook payload from the gateway.
  *
- * Expected payload structure (based on gateway webhook format).
- * Required tags for indexing:
- * - Content-Type=application/c2pa
- * - Manifest-Type=sidecar
- * - C2PA-Manifest-Id or C2PA-Manifest-ID (URN, e.g. urn:uuid:...)
- * - C2PA-SoftBinding-Alg or C2PA-Soft-Binding-Alg (one per binding)
- * - C2PA-SoftBinding-Value or C2PA-Soft-Binding-Value (one per binding, base64)
- * - pHash (hex or binary, used for similarity search)
- * {
- *   tx_id: "abc123...",
- *   tags: [
- *     { name: "pHash", value: "a5a5a5a5a5a5a5a5" },
- *     { name: "Content-Type", value: "application/c2pa" },
- *   ],
- *   owner: "xyz789...",
- *   block_height: 1500000,
- *   block_timestamp: 1704067200
- * }
+ * Required tags (Protocol: C2PA-Manifest-Proof schema):
+ * - Protocol=C2PA-Manifest-Proof
+ * - C2PA-Storage-Mode=full|manifest|proof
+ * - C2PA-Manifest-ID (URN)
+ * - C2PA-Soft-Binding-Alg + C2PA-Soft-Binding-Value
+ *
+ * For proof mode, also required:
+ * - C2PA-Manifest-Fetch-URL
+ * - C2PA-Manifest-Store-Hash (base64url SHA-256, used for digest verification)
  */
 export async function processWebhook(payload: WebhookPayload): Promise<WebhookResult> {
-  // Normalize field names (gateway may use different formats)
   const txId = payload.tx_id || payload.id;
   const tags = payload.tags || [];
   const owner = payload.owner || payload.owner_address;
@@ -110,90 +101,84 @@ export async function processWebhook(payload: WebhookPayload): Promise<WebhookRe
   logger.info({ txId, tagCount: tags.length }, 'Processing webhook');
 
   try {
-    // Check if we already have this manifest
     const existing = await getManifestByTxId(txId);
     if (existing) {
       logger.debug({ txId }, 'Manifest already indexed, skipping');
-      return {
-        success: true,
-        action: 'skipped',
-        txId,
-        reason: 'Already indexed',
-      };
+      return { success: true, action: 'skipped', txId, reason: 'Already indexed' };
     }
 
-    // Extract required tags (tag-only indexing)
+    // Extract tags
+    const protocolTag = getTagValue(tags, TAG_PROTOCOL);
+    const storageModeTag = getTagValue(tags, TAG_STORAGE_MODE);
+    const manifestIdTag = getTagValue(tags, TAG_MANIFEST_ID);
+    const manifestStoreHash = getTagValue(tags, TAG_MANIFEST_STORE_HASH);
+    const repoUrl = getTagValue(tags, TAG_MANIFEST_REPO_URL);
+    const fetchUrl = getTagValue(tags, TAG_MANIFEST_FETCH_URL);
+    const assetContentType = getTagValue(tags, TAG_ASSET_CONTENT_TYPE);
     const contentTypeTag = getTagValue(tags, 'Content-Type');
-    const manifestTypeTag = getTagValue(tags, 'Manifest-Type');
-    const manifestIdTag = getTagValueByNames(tags, ['C2PA-Manifest-Id', 'C2PA-Manifest-ID']);
-    const pHashValue = getTagValue(tags, 'pHash');
-    const softBindingAlgs = getTagValuesByNames(tags, [
-      'C2PA-SoftBinding-Alg',
-      'C2PA-Soft-Binding-Alg',
-    ]);
-    const softBindingValues = getTagValuesByNames(tags, [
-      'C2PA-SoftBinding-Value',
-      'C2PA-Soft-Binding-Value',
-    ]);
-    const softBindingScopes = getTagValuesByNames(tags, [
-      'C2PA-SoftBinding-Scope',
-      'C2PA-Soft-Binding-Scope',
-    ]);
+    const claimGenerator = getTagValue(tags, TAG_CLAIM_GENERATOR);
+    const softBindingAlg = getTagValue(tags, TAG_SOFT_BINDING_ALG);
+    const softBindingValue = getTagValue(tags, TAG_SOFT_BINDING_VALUE);
 
-    if (!contentTypeTag || !manifestTypeTag || !manifestIdTag || !pHashValue) {
-      logger.debug(
-        {
-          txId,
-          contentTypeTag,
-          manifestTypeTag,
-          manifestIdTag,
-          pHashValue,
-        },
-        'Missing required tags, skipping'
-      );
+    // Require Protocol tag
+    if (protocolTag !== PROTOCOL_NAME) {
+      logger.debug({ txId, protocolTag }, 'Not a C2PA-Manifest-Proof transaction, skipping');
+      return { success: true, action: 'skipped', txId, reason: 'Missing Protocol tag' };
+    }
+
+    if (!manifestIdTag) {
+      logger.debug({ txId }, 'Missing C2PA-Manifest-ID tag, skipping');
+      return { success: true, action: 'skipped', txId, reason: 'Missing required tags' };
+    }
+
+    if (!storageModeTag) {
+      logger.debug({ txId }, 'Missing C2PA-Storage-Mode tag, skipping');
+      return { success: true, action: 'skipped', txId, reason: 'Missing required tags' };
+    }
+
+    // Resolve artifact kind from storage mode
+    const mode = storageModeTag.trim().toLowerCase();
+    const artifactKind: 'manifest-store' | 'proof-locator' | null =
+      mode === 'full' || mode === 'manifest'
+        ? 'manifest-store'
+        : mode === 'proof'
+          ? 'proof-locator'
+          : null;
+
+    if (!artifactKind) {
+      logger.debug({ txId, storageModeTag }, 'Unsupported storage mode, skipping');
+      return { success: true, action: 'skipped', txId, reason: 'Unsupported storage mode' };
+    }
+
+    if (artifactKind === 'proof-locator' && !config.ENABLE_PROOF_LOCATOR_ARTIFACTS) {
+      logger.debug({ txId }, 'Proof-locator artifact indexing disabled');
       return {
         success: true,
         action: 'skipped',
         txId,
-        reason: 'Missing required tags',
+        reason: 'Proof-locator artifacts are disabled',
       };
     }
 
-    if (contentTypeTag !== 'application/c2pa' || manifestTypeTag !== 'sidecar') {
-      logger.debug({ txId, contentTypeTag, manifestTypeTag }, 'Non-sidecar manifest, skipping');
+    // Proof-locator requires fetch URL + store hash for digest verification
+    if (artifactKind === 'proof-locator' && (!fetchUrl || !manifestStoreHash)) {
+      logger.debug({ txId, fetchUrl, manifestStoreHash }, 'Missing required proof-locator tags');
       return {
         success: true,
         action: 'skipped',
         txId,
-        reason: 'Non-sidecar manifest',
+        reason: 'Missing required proof-locator tags',
       };
     }
 
-    if (softBindingAlgs.length === 0 || softBindingValues.length === 0) {
+    // Require soft binding
+    if (!softBindingAlg || !softBindingValue) {
       logger.debug({ txId }, 'Missing soft binding tags, skipping');
-      return {
-        success: true,
-        action: 'skipped',
-        txId,
-        reason: 'Missing soft binding tags',
-      };
+      return { success: true, action: 'skipped', txId, reason: 'Missing soft binding tags' };
     }
 
-    if (softBindingAlgs.length !== softBindingValues.length) {
-      logger.warn(
-        { txId, algCount: softBindingAlgs.length, valueCount: softBindingValues.length },
-        'Soft binding tag counts mismatch, skipping'
-      );
-      return {
-        success: true,
-        action: 'skipped',
-        txId,
-        reason: 'Soft binding tag counts mismatch',
-      };
-    }
-
-    if (!softBindingAlgs.some((alg) => alg === SOFT_BINDING_ALG_ID)) {
-      logger.debug({ txId, softBindingAlgs }, 'No supported soft binding algorithm present');
+    if (softBindingAlg !== ALG_PHASH) {
+      logger.debug({ txId, softBindingAlg }, 'Unsupported soft binding algorithm');
       return {
         success: true,
         action: 'skipped',
@@ -202,79 +187,52 @@ export async function processWebhook(payload: WebhookPayload): Promise<WebhookRe
       };
     }
 
-    // Parse pHash to float array
-    let phashFloats: number[];
+    // Derive pHash from soft binding value (base64-encoded 8-byte hash)
+    let phashFloats: number[] | null = null;
     try {
-      const binary = parsePHash(pHashValue);
+      const pHashHex = Buffer.from(softBindingValue, 'base64').toString('hex');
+      const binary = parsePHash(pHashHex);
       phashFloats = binaryStringToFloatArray(binary);
     } catch (error) {
-      logger.warn({ txId, pHashValue, error }, 'Invalid pHash format');
+      logger.warn({ txId, softBindingValue, error }, 'Invalid pHash in soft binding value');
       return {
         success: false,
         action: 'error',
         txId,
-        reason: `Invalid pHash format: ${pHashValue}`,
+        reason: `Invalid pHash in soft binding value`,
       };
     }
 
-    // Extract optional tags
-    const originalContentType = getTagValue(tags, 'Original-Content-Type');
-    const contentType = originalContentType || contentTypeTag;
-    const appName = getTagValue(tags, 'App-Name');
-    const manifestId = manifestIdTag;
+    const contentType = assetContentType || contentTypeTag || 'application/c2pa';
 
-    // Index the manifest and bindings together
-    await insertManifestWithBindings(
+    await upsertManifestArtifactWithBindings(
       {
         manifestTxId: txId,
-        manifestId,
+        manifestId: manifestIdTag,
+        artifactKind,
+        remoteManifestUrl: fetchUrl || null,
+        manifestDigestAlg: manifestStoreHash ? 'SHA-256' : null,
+        manifestDigestB64: manifestStoreHash || null,
+        repoUrl: repoUrl || null,
+        fetchUrl: fetchUrl || null,
         originalHash: null,
         contentType,
         phash: phashFloats,
-        hasPriorManifest: false, // Unknown from webhook
-        claimGenerator: appName || 'External',
+        hasPriorManifest: false,
+        claimGenerator: claimGenerator || 'unknown',
         ownerAddress: owner || 'unknown',
         blockHeight,
         blockTimestamp: blockTimestamp ? new Date(blockTimestamp * 1000) : undefined,
       },
-      softBindingAlgs.map((alg, index) => {
-        const valueB64 = softBindingValues[index];
-        const scopeRaw = softBindingScopes[index];
-        let scopeJson: string | null = null;
-        if (scopeRaw) {
-          try {
-            scopeJson = JSON.stringify(JSON.parse(scopeRaw));
-          } catch {
-            scopeJson = JSON.stringify(scopeRaw);
-          }
-        }
-        return { alg, valueB64, scopeJson };
-      })
+      [{ alg: softBindingAlg, valueB64: softBindingValue, scopeJson: null }]
     );
 
-    logger.info(
-      {
-        txId,
-        pHash: pHashValue,
-        owner,
-        blockHeight,
-      },
-      'Manifest indexed from webhook'
-    );
+    logger.info({ txId, artifactKind, owner, blockHeight }, 'Manifest indexed from webhook');
 
-    return {
-      success: true,
-      action: 'indexed',
-      txId,
-    };
+    return { success: true, action: 'indexed', txId };
   } catch (error) {
     logger.error({ error, txId }, 'Failed to process webhook');
-    return {
-      success: false,
-      action: 'error',
-      txId,
-      reason: (error as Error).message,
-    };
+    return { success: false, action: 'error', txId, reason: (error as Error).message };
   }
 }
 

@@ -16,13 +16,19 @@ export async function initializeSchema(db: Database): Promise<void> {
       -- Arweave identifiers
       manifest_tx_id VARCHAR(43) UNIQUE NOT NULL,
       manifest_id VARCHAR(255),
+      artifact_kind VARCHAR(32) NOT NULL DEFAULT 'manifest-store',
+      remote_manifest_url VARCHAR(2048),
+      manifest_digest_alg VARCHAR(64),
+      manifest_digest_b64 VARCHAR(512),
+      repo_url VARCHAR(2048),
+      fetch_url VARCHAR(2048),
 
       -- Original image info (not stored, just metadata)
       original_hash VARCHAR(64),
       content_type VARCHAR(64) NOT NULL,
 
       -- pHash for similarity search (64 floats for L2 = Hamming)
-      phash FLOAT[64] NOT NULL,
+      phash FLOAT[64],
 
       -- C2PA metadata
       has_prior_manifest BOOLEAN DEFAULT FALSE,
@@ -40,6 +46,15 @@ export async function initializeSchema(db: Database): Promise<void> {
 
   // Backfill-compatible schema evolution
   await db.run(`ALTER TABLE manifests ADD COLUMN IF NOT EXISTS manifest_id VARCHAR(255)`);
+  await db.run(
+    `ALTER TABLE manifests ADD COLUMN IF NOT EXISTS artifact_kind VARCHAR(32) DEFAULT 'manifest-store'`
+  );
+  await db.run(`ALTER TABLE manifests ADD COLUMN IF NOT EXISTS remote_manifest_url VARCHAR(2048)`);
+  await db.run(`ALTER TABLE manifests ADD COLUMN IF NOT EXISTS manifest_digest_alg VARCHAR(64)`);
+  await db.run(`ALTER TABLE manifests ADD COLUMN IF NOT EXISTS manifest_digest_b64 VARCHAR(512)`);
+  await db.run(`ALTER TABLE manifests ADD COLUMN IF NOT EXISTS repo_url VARCHAR(2048)`);
+  await db.run(`ALTER TABLE manifests ADD COLUMN IF NOT EXISTS fetch_url VARCHAR(2048)`);
+  await db.run(`UPDATE manifests SET artifact_kind = 'manifest-store' WHERE artifact_kind IS NULL`);
 
   // Create soft_bindings table for manifest repository lookups
   await db.run(`
@@ -67,6 +82,16 @@ export async function initializeSchema(db: Database): Promise<void> {
   await db.run(`
     CREATE INDEX IF NOT EXISTS idx_manifests_content_type
     ON manifests(content_type)
+  `);
+
+  await db.run(`
+    CREATE INDEX IF NOT EXISTS idx_manifests_artifact_kind
+    ON manifests(artifact_kind)
+  `);
+
+  await db.run(`
+    CREATE INDEX IF NOT EXISTS idx_manifests_remote_manifest_url
+    ON manifests(remote_manifest_url)
   `);
 
   await db.run(`

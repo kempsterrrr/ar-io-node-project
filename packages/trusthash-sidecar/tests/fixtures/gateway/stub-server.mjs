@@ -20,11 +20,9 @@ const graphqlTransactions = [
     tags: [
       { name: 'Protocol', value: protocolTagValue },
       { name: 'C2PA-Manifest-ID', value: manifestId },
-      { name: 'C2PA-Manifest-Id', value: manifestId },
+      { name: 'C2PA-Storage-Mode', value: 'manifest' },
       { name: 'C2PA-Soft-Binding-Alg', value: softBindingAlg },
       { name: 'C2PA-Soft-Binding-Value', value: softBindingValue },
-      { name: 'C2PA-SoftBinding-Alg', value: softBindingAlg },
-      { name: 'C2PA-SoftBinding-Value', value: softBindingValue },
       { name: 'C2PA-Manifest-Repo-URL', value: repoUrl },
       { name: 'C2PA-Manifest-Fetch-URL', value: fetchUrl },
     ],

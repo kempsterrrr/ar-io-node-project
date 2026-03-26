@@ -11,11 +11,18 @@ import search from './routes/search.js';
 import softbinding from './routes/softbinding.js';
 import manifests from './routes/manifests.js';
 import services from './routes/services.js';
+import sign from './routes/sign.js';
 
 const app = new Hono();
 
 // Middleware
-app.use('*', cors());
+app.use(
+  '*',
+  cors({
+    origin: '*',
+    exposeHeaders: ['X-Manifest-Resolution', 'Content-Length', 'Content-Type'],
+  })
+);
 app.use('*', honoLogger());
 
 // Routes
@@ -25,6 +32,7 @@ app.route('/v1/search-similar', search);
 app.route('/v1/matches', softbinding);
 app.route('/v1/manifests', manifests);
 app.route('/v1/services', services);
+app.route('/v1', sign);
 
 // Root endpoint - service info
 app.get('/', (c) => {
@@ -39,6 +47,8 @@ app.get('/', (c) => {
       matches: 'GET/POST /v1/matches/*',
       manifests: 'GET /v1/manifests/:manifestId',
       services: 'GET /v1/services/supportedAlgorithms',
+      sign: 'POST /v1/sign',
+      cert: 'GET /v1/cert',
       webhook: 'POST /webhook',
     },
   });

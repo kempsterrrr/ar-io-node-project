@@ -29,14 +29,28 @@ async function runInTransaction<T>(database: Database, fn: () => Promise<T>): Pr
   }
 }
 
-function parsePhashValue(value: unknown): number[] {
+function parsePhashValue(value: unknown): number[] | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
   if (typeof value === 'string') {
-    return JSON.parse(value) as number[];
+    try {
+      return JSON.parse(value) as number[];
+    } catch {
+      return null;
+    }
   }
   if (Array.isArray(value)) {
     return value as number[];
   }
-  return [];
+  return null;
+}
+
+function phashSqlLiteral(phash: number[] | null | undefined): string {
+  if (!phash || phash.length === 0) {
+    return 'NULL';
+  }
+  return `[${phash.join(', ')}]::FLOAT[64]`;
 }
 
 export async function initDatabase(): Promise<Database> {
@@ -47,10 +61,7 @@ export async function initDatabase(): Promise<Database> {
   try {
     logger.info(`Initializing DuckDB at ${config.DUCKDB_PATH}`);
 
-    // Create database connection
     db = await Database.create(config.DUCKDB_PATH);
-
-    // Run schema migrations
     await runMigrations(db);
 
     logger.info('DuckDB initialized successfully');
@@ -73,15 +84,20 @@ export async function closeDatabase(): Promise<void> {
   }
 }
 
-/**
- * Manifest record for database operations
- */
-export interface ManifestRecord {
+export type ManifestArtifactKind = 'manifest-store' | 'proof-locator';
+
+export interface ManifestArtifactRecord {
   manifestTxId: string;
   manifestId?: string | null;
+  artifactKind?: ManifestArtifactKind;
+  remoteManifestUrl?: string | null;
+  manifestDigestAlg?: string | null;
+  manifestDigestB64?: string | null;
+  repoUrl?: string | null;
+  fetchUrl?: string | null;
   originalHash: string | null;
   contentType: string;
-  phash: number[];
+  phash?: number[] | null;
   hasPriorManifest: boolean;
   claimGenerator: string;
   ownerAddress: string;
@@ -89,10 +105,40 @@ export interface ManifestRecord {
   blockTimestamp?: Date;
 }
 
+export type ManifestRecord = ManifestArtifactRecord;
+
 export interface SoftBindingRecord {
   alg: string;
   valueB64: string;
   scopeJson?: string | null;
+}
+
+function normalizeArtifactKind(value: string | null | undefined): ManifestArtifactKind {
+  if (value === 'proof-locator') {
+    return 'proof-locator';
+  }
+  return 'manifest-store';
+}
+
+function mapManifestRow(row: Record<string, unknown>): ManifestArtifactRecord {
+  return {
+    manifestTxId: row.manifest_tx_id as string,
+    manifestId: (row.manifest_id as string) || null,
+    artifactKind: normalizeArtifactKind(row.artifact_kind as string | null | undefined),
+    remoteManifestUrl: (row.remote_manifest_url as string) || null,
+    manifestDigestAlg: (row.manifest_digest_alg as string) || null,
+    manifestDigestB64: (row.manifest_digest_b64 as string) || null,
+    repoUrl: (row.repo_url as string) || null,
+    fetchUrl: (row.fetch_url as string) || null,
+    originalHash: (row.original_hash as string) ?? null,
+    contentType: row.content_type as string,
+    phash: parsePhashValue(row.phash),
+    hasPriorManifest: row.has_prior_manifest as boolean,
+    claimGenerator: row.claim_generator as string,
+    ownerAddress: row.owner_address as string,
+    blockHeight: row.block_height as number | undefined,
+    blockTimestamp: row.block_timestamp as Date | undefined,
+  };
 }
 
 /**
@@ -103,13 +149,19 @@ export async function insertManifest(
   options: { database?: Database } = {}
 ): Promise<void> {
   const database = requireDatabase(options.database);
-
-  const phashArray = `[${record.phash.join(', ')}]`;
+  const artifactKind = record.artifactKind ?? 'manifest-store';
+  const phashLiteral = phashSqlLiteral(record.phash);
 
   await database.run(
     `INSERT INTO manifests (
       manifest_tx_id,
       manifest_id,
+      artifact_kind,
+      remote_manifest_url,
+      manifest_digest_alg,
+      manifest_digest_b64,
+      repo_url,
+      fetch_url,
       original_hash,
       content_type,
       phash,
@@ -118,9 +170,15 @@ export async function insertManifest(
       owner_address,
       block_height,
       block_timestamp
-    ) VALUES (?, ?, ?, ?, ${phashArray}::FLOAT[64], ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${phashLiteral}, ?, ?, ?, ?, ?)`,
     record.manifestTxId,
     record.manifestId ?? null,
+    artifactKind,
+    record.remoteManifestUrl ?? null,
+    record.manifestDigestAlg ?? null,
+    record.manifestDigestB64 ?? null,
+    record.repoUrl ?? null,
+    record.fetchUrl ?? null,
     record.originalHash,
     record.contentType,
     record.hasPriorManifest,
@@ -130,7 +188,37 @@ export async function insertManifest(
     record.blockTimestamp || null
   );
 
-  logger.debug({ manifestTxId: record.manifestTxId }, 'Manifest inserted into database');
+  logger.debug(
+    { manifestTxId: record.manifestTxId, artifactKind, manifestId: record.manifestId ?? null },
+    'Manifest artifact inserted into database'
+  );
+}
+
+export async function upsertManifestArtifact(
+  record: ManifestArtifactRecord,
+  options: { database?: Database; useTransaction?: boolean } = {}
+): Promise<void> {
+  if (!record.manifestId) {
+    throw new Error('manifestId is required for upsert');
+  }
+
+  const database = requireDatabase(options.database);
+  const useTransaction = options.useTransaction ?? true;
+
+  const run = async () => {
+    await database.run(
+      `DELETE FROM manifests WHERE manifest_id = ? OR manifest_tx_id = ?`,
+      record.manifestId,
+      record.manifestTxId
+    );
+    await insertManifest(record, { database });
+  };
+
+  if (useTransaction) {
+    await runInTransaction(database, run);
+  } else {
+    await run();
+  }
 }
 
 /**
@@ -178,28 +266,19 @@ export async function getManifestByTxId(txId: string): Promise<ManifestRecord | 
   }
 
   const row = result[0] as Record<string, unknown>;
-
-  // DuckDB returns FLOAT[] as a string like "[0.0, 1.0, ...]", need to parse it
-  const phash = parsePhashValue(row.phash);
-
-  return {
-    manifestTxId: row.manifest_tx_id as string,
-    manifestId: (row.manifest_id as string) || null,
-    originalHash: (row.original_hash as string) ?? null,
-    contentType: row.content_type as string,
-    phash,
-    hasPriorManifest: row.has_prior_manifest as boolean,
-    claimGenerator: row.claim_generator as string,
-    ownerAddress: row.owner_address as string,
-    blockHeight: row.block_height as number | undefined,
-    blockTimestamp: row.block_timestamp as Date | undefined,
-  };
+  return mapManifestRow(row);
 }
 
 /**
  * Get a manifest by C2PA manifest ID (URN).
  */
 export async function getManifestById(manifestId: string): Promise<ManifestRecord | null> {
+  return getManifestArtifactById(manifestId);
+}
+
+export async function getManifestArtifactById(
+  manifestId: string
+): Promise<ManifestArtifactRecord | null> {
   const database = requireDatabase();
 
   const result = await database.all(`SELECT * FROM manifests WHERE manifest_id = ?`, manifestId);
@@ -209,21 +288,7 @@ export async function getManifestById(manifestId: string): Promise<ManifestRecor
   }
 
   const row = result[0] as Record<string, unknown>;
-
-  const phash = parsePhashValue(row.phash);
-
-  return {
-    manifestTxId: row.manifest_tx_id as string,
-    manifestId: (row.manifest_id as string) || null,
-    originalHash: (row.original_hash as string) ?? null,
-    contentType: row.content_type as string,
-    phash,
-    hasPriorManifest: row.has_prior_manifest as boolean,
-    claimGenerator: row.claim_generator as string,
-    ownerAddress: row.owner_address as string,
-    blockHeight: row.block_height as number | undefined,
-    blockTimestamp: row.block_timestamp as Date | undefined,
-  };
+  return mapManifestRow(row);
 }
 
 /**
@@ -238,13 +303,12 @@ export async function searchSimilarByPHash(
 
   const phashArray = `[${phash.join(', ')}]`;
 
-  // L2 distance squared equals Hamming distance for binary vectors.
   const result = await database.all(
     `WITH candidates AS (
       SELECT *,
         array_distance(phash, ${phashArray}::FLOAT[64]) AS l2_distance
       FROM manifests
-      WHERE manifest_id IS NOT NULL
+      WHERE manifest_id IS NOT NULL AND phash IS NOT NULL
     )
     SELECT *,
       (l2_distance * l2_distance) AS distance
@@ -257,33 +321,59 @@ export async function searchSimilarByPHash(
   );
 
   return result.map((row: Record<string, unknown>) => ({
-    manifestTxId: row.manifest_tx_id as string,
-    manifestId: (row.manifest_id as string) || null,
-    originalHash: (row.original_hash as string) ?? null,
-    contentType: row.content_type as string,
-    phash: parsePhashValue(row.phash),
-    hasPriorManifest: row.has_prior_manifest as boolean,
-    claimGenerator: row.claim_generator as string,
-    ownerAddress: row.owner_address as string,
-    blockHeight: row.block_height as number | undefined,
-    blockTimestamp: row.block_timestamp as Date | undefined,
+    ...mapManifestRow(row),
     distance: Number(row.distance),
   }));
 }
 
 /**
- * Get total count of manifests in database.
+ * Look up soft bindings by exact algorithm + value match.
+ * Returns manifest IDs that have matching soft binding records.
+ */
+export async function lookupSoftBindingsByExactValue(
+  alg: string,
+  valueB64: string,
+  limit: number = 10
+): Promise<Array<{ manifestId: string }>> {
+  const database = requireDatabase();
+
+  const result = await database.all(
+    `SELECT DISTINCT sb.manifest_id
+     FROM soft_bindings sb
+     WHERE sb.alg = ? AND sb.value_b64 = ?
+     ORDER BY sb.created_at DESC
+     LIMIT ?`,
+    alg,
+    valueB64,
+    limit
+  );
+
+  return result
+    .map((row: Record<string, unknown>) => ({
+      manifestId: row.manifest_id as string,
+    }))
+    .filter((r) => !!r.manifestId);
+}
+
+/**
+ * Get total count of manifests.
  */
 export async function getManifestCount(): Promise<number> {
   const database = requireDatabase();
 
   const result = await database.all('SELECT COUNT(*) as count FROM manifests');
-  // DuckDB returns BigInt for COUNT(*), convert to Number for JSON serialization
   return Number((result[0] as { count: bigint }).count);
 }
 
 export async function insertManifestWithBindings(
   record: ManifestRecord,
+  bindings: SoftBindingRecord[]
+): Promise<void> {
+  await upsertManifestArtifactWithBindings(record, bindings);
+}
+
+export async function upsertManifestArtifactWithBindings(
+  record: ManifestArtifactRecord,
   bindings: SoftBindingRecord[]
 ): Promise<void> {
   if (!record.manifestId) {
@@ -293,7 +383,7 @@ export async function insertManifestWithBindings(
   const database = requireDatabase();
 
   await runInTransaction(database, async () => {
-    await insertManifest(record, { database });
+    await upsertManifestArtifact(record, { database, useTransaction: false });
     await replaceSoftBindings(record.manifestId as string, bindings, {
       database,
       useTransaction: false,

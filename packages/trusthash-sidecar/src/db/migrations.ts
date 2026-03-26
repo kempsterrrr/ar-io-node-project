@@ -180,6 +180,132 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 4,
+    name: 'manifest_artifact_columns_and_nullable_phash',
+    up: async (db) => {
+      const hasManifests = await tableExists(db, 'manifests');
+      if (!hasManifests) {
+        return;
+      }
+
+      const hasArtifactKind = await hasColumn(db, 'manifests', 'artifact_kind');
+      const hasRemoteManifestUrl = await hasColumn(db, 'manifests', 'remote_manifest_url');
+      const hasManifestDigestAlg = await hasColumn(db, 'manifests', 'manifest_digest_alg');
+      const hasManifestDigestB64 = await hasColumn(db, 'manifests', 'manifest_digest_b64');
+      const hasRepoUrl = await hasColumn(db, 'manifests', 'repo_url');
+      const hasFetchUrl = await hasColumn(db, 'manifests', 'fetch_url');
+      const hasPHash = await hasColumn(db, 'manifests', 'phash');
+      const phashNotNull = await isColumnNotNull(db, 'manifests', 'phash');
+
+      if (
+        hasArtifactKind &&
+        hasRemoteManifestUrl &&
+        hasManifestDigestAlg &&
+        hasManifestDigestB64 &&
+        hasRepoUrl &&
+        hasFetchUrl &&
+        hasPHash &&
+        !phashNotNull
+      ) {
+        logger.info('Manifest artifact columns already applied; skipping migration');
+        return;
+      }
+
+      logger.info('Applying manifest artifact columns and nullable phash (table rewrite)');
+
+      const artifactKindExpr = hasArtifactKind
+        ? "COALESCE(artifact_kind, 'manifest-store')"
+        : "'manifest-store'";
+      const remoteManifestUrlExpr = hasRemoteManifestUrl ? 'remote_manifest_url' : 'NULL';
+      const digestAlgExpr = hasManifestDigestAlg ? 'manifest_digest_alg' : 'NULL';
+      const digestB64Expr = hasManifestDigestB64 ? 'manifest_digest_b64' : 'NULL';
+      const repoUrlExpr = hasRepoUrl ? 'repo_url' : 'NULL';
+      const fetchUrlExpr = hasFetchUrl ? 'fetch_url' : 'NULL';
+      const phashExpr = hasPHash ? 'phash' : 'NULL';
+
+      await db.run('BEGIN TRANSACTION');
+      try {
+        await db.run('DROP TABLE IF EXISTS manifests_new');
+        await db.run(`
+          CREATE TABLE manifests_new (
+            id INTEGER PRIMARY KEY DEFAULT nextval('manifests_id_seq'),
+            manifest_tx_id VARCHAR(43) UNIQUE NOT NULL,
+            manifest_id VARCHAR(255),
+            artifact_kind VARCHAR(32) NOT NULL DEFAULT 'manifest-store',
+            remote_manifest_url VARCHAR(2048),
+            manifest_digest_alg VARCHAR(64),
+            manifest_digest_b64 VARCHAR(512),
+            repo_url VARCHAR(2048),
+            fetch_url VARCHAR(2048),
+            original_hash VARCHAR(64),
+            content_type VARCHAR(64) NOT NULL,
+            phash FLOAT[64],
+            has_prior_manifest BOOLEAN DEFAULT FALSE,
+            claim_generator VARCHAR(255),
+            owner_address VARCHAR(43) NOT NULL,
+            block_height BIGINT,
+            block_timestamp TIMESTAMP,
+            indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+
+        await db.run(`
+          INSERT INTO manifests_new (
+            id,
+            manifest_tx_id,
+            manifest_id,
+            artifact_kind,
+            remote_manifest_url,
+            manifest_digest_alg,
+            manifest_digest_b64,
+            repo_url,
+            fetch_url,
+            original_hash,
+            content_type,
+            phash,
+            has_prior_manifest,
+            claim_generator,
+            owner_address,
+            block_height,
+            block_timestamp,
+            indexed_at
+          )
+          SELECT
+            id,
+            manifest_tx_id,
+            manifest_id,
+            ${artifactKindExpr},
+            ${remoteManifestUrlExpr},
+            ${digestAlgExpr},
+            ${digestB64Expr},
+            ${repoUrlExpr},
+            ${fetchUrlExpr},
+            original_hash,
+            content_type,
+            ${phashExpr},
+            has_prior_manifest,
+            claim_generator,
+            owner_address,
+            block_height,
+            block_timestamp,
+            indexed_at
+          FROM manifests
+        `);
+
+        await db.run('DROP TABLE manifests');
+        await db.run('ALTER TABLE manifests_new RENAME TO manifests');
+
+        await recreateManifestsIndexes(db);
+        await bumpSequence(db, 'manifests_id_seq', 'manifests', 'id');
+
+        await db.run('COMMIT');
+      } catch (error) {
+        await db.run('ROLLBACK');
+        throw error;
+      }
+    },
+  },
 ];
 
 export async function runMigrations(db: Database): Promise<void> {
@@ -257,6 +383,16 @@ async function recreateManifestsIndexes(db: Database): Promise<void> {
   await db.run(`
     CREATE INDEX IF NOT EXISTS idx_manifests_content_type
     ON manifests(content_type)
+  `);
+
+  await db.run(`
+    CREATE INDEX IF NOT EXISTS idx_manifests_artifact_kind
+    ON manifests(artifact_kind)
+  `);
+
+  await db.run(`
+    CREATE INDEX IF NOT EXISTS idx_manifests_remote_manifest_url
+    ON manifests(remote_manifest_url)
   `);
 }
 

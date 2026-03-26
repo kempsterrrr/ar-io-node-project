@@ -5,7 +5,7 @@
  */
 
 import { Hono } from 'hono';
-import { SOFT_BINDING_ALG_ID } from '../services/softbinding.service.js';
+import { SOFT_BINDING_ALG_PHASH, SOFT_BINDING_ALG_ISCC } from '../services/softbinding.service.js';
 
 const services = new Hono();
 
@@ -14,7 +14,10 @@ services.get('/supportedAlgorithms', (c) => {
     watermarks: [],
     fingerprints: [
       {
-        alg: SOFT_BINDING_ALG_ID,
+        alg: SOFT_BINDING_ALG_PHASH,
+      },
+      {
+        alg: SOFT_BINDING_ALG_ISCC,
       },
     ],
   });

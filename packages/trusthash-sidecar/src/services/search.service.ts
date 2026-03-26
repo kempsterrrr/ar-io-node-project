@@ -6,13 +6,22 @@
  */
 
 import { logger } from '../utils/logger.js';
-import { searchSimilarByPHash, getManifestByTxId, getManifestCount } from '../db/index.js';
+import {
+  searchSimilarByPHash,
+  getManifestByTxId,
+  getManifestCount,
+  lookupSoftBindingsByExactValue,
+} from '../db/index.js';
 import {
   parsePHash,
   binaryStringToFloatArray,
   floatArrayToBinaryString,
 } from '../utils/bit-vector.js';
-import { SOFT_BINDING_ALG_ID, softBindingValueToPHashHex } from './softbinding.service.js';
+import {
+  SOFT_BINDING_ALG_PHASH,
+  SOFT_BINDING_ALG_ISCC,
+  softBindingValueToPHashHex,
+} from './softbinding.service.js';
 
 /**
  * Search result item
@@ -92,6 +101,9 @@ export async function searchSimilar(options: SearchOptions): Promise<SearchResul
     if (!manifest) {
       throw new Error(`Manifest not found: ${txId}`);
     }
+    if (!manifest.phash || manifest.phash.length === 0) {
+      throw new Error(`Manifest does not contain pHash data: ${txId}`);
+    }
     phashFloats = manifest.phash;
     queryPhash = floatArrayToBinaryString(phashFloats);
   } else {
@@ -152,15 +164,25 @@ export async function searchBySoftBinding(options: {
 }): Promise<SoftBindingQueryResult[]> {
   const { alg, valueB64, maxResults = 10 } = options;
 
-  if (alg !== SOFT_BINDING_ALG_ID) {
-    throw new Error(`Unsupported soft binding algorithm: ${alg}`);
+  if (alg === SOFT_BINDING_ALG_PHASH) {
+    return searchByPHash(valueB64, maxResults);
   }
 
+  if (alg === SOFT_BINDING_ALG_ISCC) {
+    return searchByExactBinding(alg, valueB64, maxResults);
+  }
+
+  throw new Error(`Unsupported soft binding algorithm: ${alg}`);
+}
+
+async function searchByPHash(
+  valueB64: string,
+  maxResults: number
+): Promise<SoftBindingQueryResult[]> {
   const pHashHex = softBindingValueToPHashHex(valueB64);
   const binary = parsePHash(pHashHex);
   const phashFloats = binaryStringToFloatArray(binary);
 
-  // Use a reasonable default threshold for perceptual hash
   const threshold = 10;
   const matches = await searchSimilarByPHash(phashFloats, threshold, maxResults);
 
@@ -174,6 +196,18 @@ export async function searchBySoftBinding(options: {
         similarityScore: Math.round(similarity * 100),
       };
     });
+}
+
+async function searchByExactBinding(
+  alg: string,
+  valueB64: string,
+  maxResults: number
+): Promise<SoftBindingQueryResult[]> {
+  const results = await lookupSoftBindingsByExactValue(alg, valueB64, maxResults);
+  return results.map((r) => ({
+    manifestId: r.manifestId,
+    similarityScore: 100,
+  }));
 }
 
 /**

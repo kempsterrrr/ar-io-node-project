@@ -1,6 +1,15 @@
 import { config } from '../config.js';
 import { fetchWithTimeout } from '../utils/http.js';
-import { SOFT_BINDING_ALG_ID } from './softbinding.service.js';
+import type { ManifestArtifactKind } from '../db/index.js';
+import {
+  TAG_STORAGE_MODE,
+  TAG_MANIFEST_ID,
+  TAG_MANIFEST_STORE_HASH,
+  TAG_MANIFEST_REPO_URL,
+  TAG_MANIFEST_FETCH_URL,
+  TAG_SOFT_BINDING_ALG,
+  TAG_SOFT_BINDING_VALUE,
+} from '@ar-io/c2pa-protocol';
 
 type GatewayTag = {
   name: string;
@@ -43,6 +52,11 @@ export interface SoftBindingManifestResult {
   manifestId: string;
   repoUrl?: string;
   fetchUrl?: string;
+  artifactKind?: ManifestArtifactKind;
+  remoteManifestUrl?: string;
+  manifestDigestAlg?: string;
+  manifestDigestB64?: string;
+  resolution?: 'redirect' | 'local' | 'proof-fetch';
   endpoint?: string;
 }
 
@@ -51,6 +65,10 @@ export interface ManifestLocatorResult {
   manifestTxId: string;
   repoUrl?: string;
   fetchUrl?: string;
+  artifactKind?: ManifestArtifactKind;
+  remoteManifestUrl?: string;
+  manifestDigestAlg?: string;
+  manifestDigestB64?: string;
 }
 
 function normalizeTagName(value: string): string {
@@ -142,10 +160,7 @@ query TransactionsByTags($first: Int!, $tags: [TagFilter!]!) {
 }
 `;
 
-async function queryTransactionsByTags(
-  tags: TagFilter[],
-  first: number
-): Promise<GatewayTxNode[]> {
+async function queryTransactionsByTags(tags: TagFilter[], first: number): Promise<GatewayTxNode[]> {
   const data = await postGraphqlQuery<{
     transactions?: {
       edges?: Array<{ node?: GatewayTxNode | null }>;
@@ -185,7 +200,15 @@ function normalizeResultList(results: SoftBindingManifestResult[]): SoftBindingM
   const seen = new Set<string>();
   const output: SoftBindingManifestResult[] = [];
   for (const result of results) {
-    const key = `${result.manifestId}|${result.repoUrl || ''}|${result.fetchUrl || ''}`;
+    const key = [
+      result.manifestId,
+      result.repoUrl || '',
+      result.fetchUrl || '',
+      result.artifactKind || '',
+      result.remoteManifestUrl || '',
+      result.manifestDigestAlg || '',
+      result.manifestDigestB64 || '',
+    ].join('|');
     if (seen.has(key)) {
       continue;
     }
@@ -193,6 +216,39 @@ function normalizeResultList(results: SoftBindingManifestResult[]): SoftBindingM
     output.push(result);
   }
   return output;
+}
+
+function resolveArtifactKind(storageMode: string | undefined): ManifestArtifactKind | undefined {
+  if (!storageMode) {
+    return undefined;
+  }
+  const mode = storageMode.trim().toLowerCase();
+  if (mode === 'full' || mode === 'manifest') {
+    return 'manifest-store';
+  }
+  if (mode === 'proof') {
+    return 'proof-locator';
+  }
+  return undefined;
+}
+
+function extractArtifactMetadata(tags: GatewayTag[] | undefined): {
+  artifactKind?: ManifestArtifactKind;
+  remoteManifestUrl?: string;
+  manifestDigestAlg?: string;
+  manifestDigestB64?: string;
+} {
+  const storageMode = getTagValueByNames(tags, [TAG_STORAGE_MODE]);
+  const artifactKind = resolveArtifactKind(storageMode);
+  const fetchUrl = getTagValueByNames(tags, [TAG_MANIFEST_FETCH_URL]);
+  const manifestStoreHash = getTagValueByNames(tags, [TAG_MANIFEST_STORE_HASH]);
+
+  return {
+    artifactKind,
+    remoteManifestUrl: fetchUrl,
+    manifestDigestAlg: manifestStoreHash ? 'SHA-256' : undefined,
+    manifestDigestB64: manifestStoreHash,
+  };
 }
 
 export async function lookupBySoftBinding(options: {
@@ -207,41 +263,31 @@ export async function lookupBySoftBinding(options: {
   if (!alg || !valueB64) {
     throw new Error('alg and value are required');
   }
-  if (alg !== SOFT_BINDING_ALG_ID) {
-    throw new Error(`Unsupported soft binding algorithm: ${alg}`);
-  }
 
-  const tagFamilies: Array<[string, string]> = [
-    ['C2PA-Soft-Binding-Alg', 'C2PA-Soft-Binding-Value'],
-    ['C2PA-SoftBinding-Alg', 'C2PA-SoftBinding-Value'],
-  ];
+  const nodes = await queryTransactionsByTags(
+    [
+      { name: TAG_SOFT_BINDING_ALG, values: [alg] },
+      { name: TAG_SOFT_BINDING_VALUE, values: [valueB64] },
+    ],
+    maxResults
+  );
 
-  const allNodes: GatewayTxNode[] = [];
-  for (const [algTag, valueTag] of tagFamilies) {
-    const nodes = await queryTransactionsByTags(
-      [
-        { name: algTag, values: [alg] },
-        { name: valueTag, values: [valueB64] },
-      ],
-      maxResults
-    );
-    allNodes.push(...nodes);
-  }
-
-  const sortedNodes = dedupeAndSort(allNodes);
+  const sortedNodes = dedupeAndSort(nodes);
   const results: SoftBindingManifestResult[] = [];
   for (const node of sortedNodes) {
     const tags = node.tags || [];
-    const manifestId = getTagValueByNames(tags, ['C2PA-Manifest-ID', 'C2PA-Manifest-Id']);
+    const manifestId = getTagValueByNames(tags, [TAG_MANIFEST_ID]);
     if (!manifestId) {
       continue;
     }
-    const repoUrl = getTagValueByNames(tags, ['C2PA-Manifest-Repo-URL']);
-    const fetchUrl = getTagValueByNames(tags, ['C2PA-Manifest-Fetch-URL']);
+    const repoUrl = getTagValueByNames(tags, [TAG_MANIFEST_REPO_URL]);
+    const fetchUrl = getTagValueByNames(tags, [TAG_MANIFEST_FETCH_URL]);
+    const artifactMetadata = extractArtifactMetadata(tags);
     results.push({
       manifestId,
       repoUrl,
       fetchUrl,
+      ...artifactMetadata,
       endpoint: repoUrl,
     });
     if (results.length >= maxResults) {
@@ -260,31 +306,27 @@ export async function lookupManifestLocatorById(
     throw new Error('manifestId is required');
   }
 
-  const manifestTagNames = ['C2PA-Manifest-ID', 'C2PA-Manifest-Id'];
-  const allNodes: GatewayTxNode[] = [];
-  for (const tagName of manifestTagNames) {
-    const nodes = await queryTransactionsByTags(
-      [{ name: tagName, values: [normalizedManifestId] }],
-      5
-    );
-    allNodes.push(...nodes);
-  }
+  const nodes = await queryTransactionsByTags(
+    [{ name: TAG_MANIFEST_ID, values: [normalizedManifestId] }],
+    5
+  );
 
-  const [latest] = dedupeAndSort(allNodes);
+  const [latest] = dedupeAndSort(nodes);
   if (!latest) {
     return null;
   }
 
   const tags = latest.tags || [];
-  const resolvedManifestId =
-    getTagValueByNames(tags, ['C2PA-Manifest-ID', 'C2PA-Manifest-Id']) || normalizedManifestId;
-  const repoUrl = getTagValueByNames(tags, ['C2PA-Manifest-Repo-URL']);
-  const fetchUrl = getTagValueByNames(tags, ['C2PA-Manifest-Fetch-URL']);
+  const resolvedManifestId = getTagValueByNames(tags, [TAG_MANIFEST_ID]) || normalizedManifestId;
+  const repoUrl = getTagValueByNames(tags, [TAG_MANIFEST_REPO_URL]);
+  const fetchUrl = getTagValueByNames(tags, [TAG_MANIFEST_FETCH_URL]);
+  const artifactMetadata = extractArtifactMetadata(tags);
 
   return {
     manifestId: resolvedManifestId,
     manifestTxId: latest.id,
     repoUrl,
     fetchUrl,
+    ...artifactMetadata,
   };
 }

@@ -15,7 +15,10 @@
     "docker:logs": "docker compose logs -f"
   },
   "dependencies": {
+    "@ar-io/c2pa-protocol": "workspace:*",
     "@hono/node-server": "^1.16.0",
+    "ethers": "^6.13.0",
+    "@iscc/lib": "^0.3.1",
     "blockhash-core": "^0.1.0",
     "duckdb-async": "^1.1.0",
     "hono": "^4.6.0",

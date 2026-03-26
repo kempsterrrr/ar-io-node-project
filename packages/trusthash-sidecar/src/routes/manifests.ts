@@ -7,14 +7,26 @@
 import { Hono } from 'hono';
 import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
-import { getManifestById } from '../db/index.js';
+import { getManifestArtifactById } from '../db/index.js';
 import { fetchWithTimeout } from '../utils/http.js';
+import { readStreamWithLimit, SizeLimitError } from '../utils/stream.js';
 import {
   GatewayGraphQLError,
   lookupManifestLocatorById,
 } from '../services/gateway-graphql.service.js';
+import {
+  fetchRemoteManifestWithCache,
+  RemoteManifestResolutionError,
+} from '../services/remote-manifest.service.js';
 
 const manifests = new Hono();
+
+type ManifestResolutionPath =
+  | 'fetch-url'
+  | 'repo-url'
+  | 'fallback-manifest-store'
+  | 'proof-remote-fetch'
+  | 'proof-remote-cache';
 
 function parseBooleanQueryParam(value: string | undefined): boolean | null {
   if (value === undefined) {
@@ -35,7 +47,7 @@ function buildRepoManifestUrl(repoUrl: string, manifestId: string): string {
   return `${trimmedRepo}/manifests/${encodeURIComponent(manifestId)}`;
 }
 
-function redirectResponse(location: string, resolutionPath: string): Response {
+function redirectResponse(location: string, resolutionPath: ManifestResolutionPath): Response {
   return new Response(null, {
     status: 302,
     headers: {
@@ -43,6 +55,47 @@ function redirectResponse(location: string, resolutionPath: string): Response {
       'X-Manifest-Resolution': resolutionPath,
     },
   });
+}
+
+function binaryResponse(manifestBuffer: Buffer, resolutionPath: ManifestResolutionPath): Response {
+  return new Response(manifestBuffer, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/c2pa',
+      'Content-Length': manifestBuffer.length.toString(),
+      'X-Manifest-Resolution': resolutionPath,
+    },
+  });
+}
+
+async function fetchManifestByTxId(manifestTxId: string): Promise<Buffer> {
+  const gatewayUrl = config.GATEWAY_URL.replace(/\/$/, '');
+  const manifestUrl = `${gatewayUrl}/${manifestTxId}`;
+
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(manifestUrl, config.REFERENCE_FETCH_TIMEOUT_MS, {
+      redirect: 'error',
+    });
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') {
+      throw new Error('Manifest fetch timed out');
+    }
+    throw new Error(`Manifest fetch failed: ${(error as Error).message}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Manifest not available on gateway: ${manifestTxId}`);
+  }
+
+  try {
+    return await readStreamWithLimit(response.body, config.REMOTE_MANIFEST_MAX_BYTES);
+  } catch (error) {
+    if (error instanceof SizeLimitError) {
+      throw new Error('Manifest exceeds configured size limit');
+    }
+    throw error;
+  }
 }
 
 manifests.get('/:manifestId', async (c) => {
@@ -74,36 +127,153 @@ manifests.get('/:manifestId', async (c) => {
       return c.json(
         {
           success: false,
-          error: 'returnActiveManifest not implemented yet',
+          error:
+            'returnActiveManifest is not supported. Active manifest extraction requires JUMBF parsing which is not implemented.',
         },
         501
       );
     }
 
+    let locator: {
+      manifestId: string;
+      manifestTxId: string;
+      repoUrl?: string;
+      fetchUrl?: string;
+      artifactKind?: 'manifest-store' | 'proof-locator';
+      remoteManifestUrl?: string;
+      manifestDigestAlg?: string;
+      manifestDigestB64?: string;
+    } | null = null;
+
     try {
-      const locator = await lookupManifestLocatorById(manifestId);
-      if (locator?.fetchUrl) {
-        logger.info({ manifestId, fetchUrl: locator.fetchUrl }, 'Redirecting to manifest fetch URL');
+      locator = await lookupManifestLocatorById(manifestId);
+      // For proof-locator artifacts, skip redirect — use fetch-through with digest verification
+      if (locator?.fetchUrl && locator?.artifactKind !== 'proof-locator') {
+        logger.info(
+          { manifestId, fetchUrl: locator.fetchUrl, resolution_path: 'fetch-url' },
+          'Redirecting to manifest fetch URL'
+        );
         return redirectResponse(locator.fetchUrl, 'fetch-url');
       }
       if (locator?.repoUrl) {
         const repoManifestUrl = buildRepoManifestUrl(locator.repoUrl, manifestId);
         logger.info(
-          { manifestId, repoUrl: locator.repoUrl, redirectUrl: repoManifestUrl },
+          {
+            manifestId,
+            repoUrl: locator.repoUrl,
+            redirectUrl: repoManifestUrl,
+            resolution_path: 'repo-url',
+          },
           'Redirecting to manifest repository URL'
         );
         return redirectResponse(repoManifestUrl, 'repo-url');
       }
     } catch (error) {
       if (error instanceof GatewayGraphQLError) {
-        logger.warn({ error, manifestId }, 'GraphQL locator lookup failed; falling back to local store');
+        logger.warn(
+          { error, manifestId },
+          'GraphQL locator lookup failed; falling back to local store'
+        );
       } else {
         throw error;
       }
     }
 
-    const record = await getManifestById(manifestId);
-    if (!record) {
+    let localRecord: {
+      manifestTxId: string;
+      artifactKind?: 'manifest-store' | 'proof-locator';
+      repoUrl?: string | null;
+      fetchUrl?: string | null;
+      remoteManifestUrl?: string | null;
+      manifestDigestAlg?: string | null;
+      manifestDigestB64?: string | null;
+    } | null = null;
+    try {
+      localRecord = await getManifestArtifactById(manifestId);
+    } catch (error) {
+      logger.warn(
+        { error, manifestId },
+        'Local manifest lookup unavailable; continuing with locator data'
+      );
+    }
+
+    if (localRecord?.fetchUrl && localRecord?.artifactKind !== 'proof-locator') {
+      logger.info(
+        { manifestId, fetchUrl: localRecord.fetchUrl, resolution_path: 'fetch-url' },
+        'Redirecting to local manifest fetch URL'
+      );
+      return redirectResponse(localRecord.fetchUrl, 'fetch-url');
+    }
+    if (localRecord?.repoUrl) {
+      const repoManifestUrl = buildRepoManifestUrl(localRecord.repoUrl, manifestId);
+      logger.info(
+        {
+          manifestId,
+          repoUrl: localRecord.repoUrl,
+          redirectUrl: repoManifestUrl,
+          resolution_path: 'repo-url',
+        },
+        'Redirecting to local manifest repository URL'
+      );
+      return redirectResponse(repoManifestUrl, 'repo-url');
+    }
+
+    const artifactKind =
+      localRecord?.artifactKind || locator?.artifactKind || ('manifest-store' as const);
+    const resolutionManifestTxId = localRecord?.manifestTxId || locator?.manifestTxId;
+
+    if (artifactKind === 'proof-locator') {
+      const remoteManifestUrl = localRecord?.remoteManifestUrl || locator?.remoteManifestUrl;
+      const manifestDigestAlg = localRecord?.manifestDigestAlg || locator?.manifestDigestAlg;
+      const manifestDigestB64 = localRecord?.manifestDigestB64 || locator?.manifestDigestB64;
+
+      if (!remoteManifestUrl || !manifestDigestAlg || !manifestDigestB64) {
+        return c.json(
+          {
+            success: false,
+            error: `Proof-locator metadata incomplete for manifest: ${manifestId}`,
+          },
+          404
+        );
+      }
+
+      try {
+        const remoteResult = await fetchRemoteManifestWithCache({
+          manifestId,
+          remoteManifestUrl,
+          manifestDigestAlg,
+          manifestDigestB64,
+        });
+
+        logger.info(
+          {
+            manifestId,
+            artifact_kind: artifactKind,
+            resolution_path: remoteResult.resolutionPath,
+            cache_hit: remoteResult.cacheHit,
+            digest_verified: true,
+            remote_fetch_status: 'ok',
+          },
+          'Resolved manifest bytes from proof-locator metadata'
+        );
+
+        return binaryResponse(remoteResult.buffer, remoteResult.resolutionPath);
+      } catch (error) {
+        if (error instanceof RemoteManifestResolutionError) {
+          const statusCode = error.statusCode === 504 ? 504 : 502;
+          return c.json(
+            {
+              success: false,
+              error: error.message,
+            },
+            statusCode
+          );
+        }
+        throw error;
+      }
+    }
+
+    if (!resolutionManifestTxId) {
       return c.json(
         {
           success: false,
@@ -113,16 +283,12 @@ manifests.get('/:manifestId', async (c) => {
       );
     }
 
-    const gatewayUrl = config.GATEWAY_URL.replace(/\/$/, '');
-    const manifestUrl = `${gatewayUrl}/${record.manifestTxId}`;
-
-    let response: Response;
+    let manifestBuffer: Buffer;
     try {
-      response = await fetchWithTimeout(manifestUrl, config.REFERENCE_FETCH_TIMEOUT_MS, {
-        redirect: 'error',
-      });
+      manifestBuffer = await fetchManifestByTxId(resolutionManifestTxId);
     } catch (error) {
-      if ((error as Error).name === 'AbortError') {
+      const message = (error as Error).message;
+      if (message.includes('timed out')) {
         return c.json(
           {
             success: false,
@@ -131,28 +297,37 @@ manifests.get('/:manifestId', async (c) => {
           504
         );
       }
-      throw error;
-    }
-    if (!response.ok) {
+
+      if (message.includes('not available')) {
+        return c.json(
+          {
+            success: false,
+            error: message,
+          },
+          404
+        );
+      }
+
       return c.json(
         {
           success: false,
-          error: `Manifest not available on gateway: ${record.manifestTxId}`,
+          error: message,
         },
-        404
+        502
       );
     }
 
-    const manifestBuffer = Buffer.from(await response.arrayBuffer());
-
-    return new Response(manifestBuffer, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/c2pa',
-        'Content-Length': manifestBuffer.length.toString(),
-        'X-Manifest-Resolution': 'fallback-manifest-store',
+    logger.info(
+      {
+        manifestId,
+        artifact_kind: artifactKind,
+        resolution_path: 'fallback-manifest-store',
+        cache_hit: false,
       },
-    });
+      'Resolved manifest bytes from local manifest-store fallback'
+    );
+
+    return binaryResponse(manifestBuffer, 'fallback-manifest-store');
   } catch (error) {
     logger.error({ error }, 'Manifest retrieval failed');
     return c.json(

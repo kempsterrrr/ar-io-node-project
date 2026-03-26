@@ -1,0 +1,22 @@
+{
+  "name": "@ar-io/c2pa-protocol",
+  "version": "0.1.0",
+  "description": "Shared C2PA tag schema constants and types for AR.IO",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "keywords": [
+    "c2pa",
+    "ar-io",
+    "arweave",
+    "tags"
+  ],
+  "license": "MIT"
+}

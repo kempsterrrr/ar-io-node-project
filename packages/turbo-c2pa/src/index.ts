@@ -1,0 +1,12 @@
+export { RemoteSigner } from './signer.js';
+export { buildTags } from './tags.js';
+export { detectContentType, SUPPORTED_CONTENT_TYPES } from './detect.js';
+export { computePHash } from './phash.js';
+export { signManifest } from './manifest.js';
+export { signAndPrepare } from './mode-full.js';
+export { uploadToArweave } from './upload.js';
+export type { TurboC2PAConfig, SignResult, TagBuildResult, TagBuildOptions } from './types.js';
+export type { PHashResult } from './phash.js';
+export type { ManifestSignOptions, ManifestSignResult } from './manifest.js';
+export type { SignAndPrepareOptions, SignAndPrepareResult } from './mode-full.js';
+export type { UploadOptions, UploadResult } from './upload.js';

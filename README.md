@@ -72,8 +72,10 @@ ar-io-node-project/
 │       ├── docker-compose.dev.yaml
 │       ├── .env.example
 │       └── wallets/
-├── packages/                  # Sidecar extensions (add your own!)
-│   ├── trusthash-sidecar/
+├── packages/                  # Sidecar extensions and shared packages
+│   ├── trusthash-sidecar/    # C2PA manifest repo + signing oracle + SBR API
+│   ├── turbo-c2pa/           # C2PA signing client SDK (sign + upload to Arweave)
+│   ├── c2pa-protocol/        # Shared C2PA tag constants and types
 │   └── openclaw-ario-plugin/ # Claude AI agent with gateway access
 │       ├── docker-compose.yaml
 │       ├── .env.example
@@ -217,21 +219,31 @@ To enforce public visibility, add:
 If `GHCR_VISIBILITY_TOKEN` is not set, the workflow will only succeed if the package
 is already public.
 
-### Trusthash C2PA Conformance (Current)
+### C2PA Content Credentials
 
-The Trusthash Sidecar currently targets **C2PA 2.3 partial conformance**.
+The project provides a complete C2PA signing and discovery pipeline:
 
-| Area                                                                          | Status          | Notes                                                                                         |
-| ----------------------------------------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------- |
-| Soft binding lookup (`/v1/matches/byBinding`)                                 | Implemented     | Exact GraphQL tag resolution (`C2PA-Soft-Binding-*` and `C2PA-SoftBinding-*`).              |
-| Content lookup (`/v1/matches/byContent`)                                      | Partial         | Image-first `org.ar-io.phash` extraction with near-match behavior and `hintAlg`/`hintValue`. |
-| Reference lookup (`/v1/matches/byReference`)                                  | Not implemented | Reserved for follow-up milestone; currently returns `501`.                                    |
-| Manifest retrieval (`/v1/manifests/:manifestId`)                              | Partial         | Redirect-first using repo/fetch tags, with compatibility fallback to manifest bytes.         |
-| OAuth2 SBR auth and SBAL/decentralized lookup contract                        | Not implemented | Planned follow-up work.                                                                       |
+| Component          | Package             | What it does                                                                        |
+| ------------------ | ------------------- | ----------------------------------------------------------------------------------- |
+| **Signing Oracle** | `trusthash-sidecar` | COSE signing (`POST /v1/sign`), X.509 cert chain (`GET /v1/cert`)                   |
+| **SBR API**        | `trusthash-sidecar` | C2PA Soft Binding Resolution — discover manifests by binding, content, or reference |
+| **Client SDK**     | `turbo-c2pa`        | Sign images with c2pa-node, build ANS-104 tags, upload to Arweave via Turbo         |
+| **Tag Constants**  | `c2pa-protocol`     | Shared tag schema constants used by sidecar and SDK                                 |
 
-Intentional divergence from gist Phase 2a: `byContent` remains implemented in this milestone for `org.ar-io.phash`; `byReference` is deferred.
+**Demo**: Sign a real image → upload to Arweave → verify at [contentcredentials.org/verify](https://contentcredentials.org/verify):
 
-See `packages/trusthash-sidecar/README.md` for endpoint-level details.
+```bash
+# Terminal 1: start sidecar
+cd packages/trusthash-sidecar && bun run dev
+
+# Terminal 2: sign + upload
+cd packages/turbo-c2pa
+bun run scripts/demo-upload.ts /path/to/image.jpg
+```
+
+**Known limitation**: CAWG identity assertion (`cawg.identity`) is built but disabled by default. The c2pa-rs library does not yet support validating identity assertions — both c2pa-node and contentcredentials.org crash when reading them. The code is ready and will activate when upstream support ships.
+
+See `packages/trusthash-sidecar/docs/c2pa-support-matrix.md` for detailed conformance status.
 
 ## OpenClaw Integration
 

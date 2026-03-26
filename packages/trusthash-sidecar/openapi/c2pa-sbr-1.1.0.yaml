@@ -1,21 +1,31 @@
 openapi: 3.0.3
 info:
   title: Trusthash Sidecar C2PA Soft Binding Resolution API
-  version: 1.1.0-partial
+  version: 1.2.0
   description: |
-    Partial C2PA 2.3 Soft Binding Resolution API implementation.
+    C2PA 2.3 Soft Binding Resolution API implementation backed by Arweave.
 
-    Current scope:
-    - byBinding: implemented via exact GraphQL tag translation
-    - byContent: implemented for org.ar-io.phash (image-only, near-match behavior)
-    - byReference: declared but not implemented (501)
-    - manifests: redirect-first with compatibility fallback to manifest bytes
+    **Spec-defined endpoints (SBR API v2.2):**
+    - byBinding: algorithm-agnostic exact tag lookup via GraphQL + local DB
+    - byContent: image fingerprinting via org.ar-io.phash (image-only)
+    - manifests: redirect-first with fallback and proof-locator fetch-through
+    - services/supportedAlgorithms: lists supported binding algorithms
+
+    **Non-standard extensions:**
+    - byReference: fetch remote image by URL, compute fingerprint, and search (not in SBR spec)
+
+    **Supported algorithms:**
+    - org.ar-io.phash: byBinding + byContent (computable)
+    - io.iscc.v0: byBinding only (lookup)
 servers:
   - url: https://c2pa.ar-io.dev/v1
 paths:
   /matches/byBinding:
     get:
       summary: Resolve by soft binding value
+      description: |
+        Algorithm-agnostic exact-match lookup. Searches both gateway GraphQL
+        tags and the local soft_bindings table, then merges and deduplicates.
       operationId: getByBinding
       parameters:
         - in: query
@@ -23,11 +33,13 @@ paths:
           required: true
           schema:
             type: string
+          description: Algorithm identifier per C2PA SBAL (e.g. org.ar-io.phash, io.iscc.v0)
         - in: query
           name: value
           required: true
           schema:
             type: string
+          description: Base64-encoded soft binding value
         - in: query
           name: maxResults
           required: false
@@ -35,13 +47,14 @@ paths:
             type: integer
             minimum: 1
             maximum: 100
+            default: 10
       responses:
         '200':
           description: Matching manifests
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ByBindingResponse'
+                $ref: '#/components/schemas/SoftBindingQueryResult'
         '400':
           description: Invalid request
           content:
@@ -56,26 +69,23 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
     post:
       summary: Resolve by soft binding value (body form)
+      description: |
+        Same as GET but accepts alg, value, and maxResults in the JSON body
+        for cases where the binding value exceeds URL length limits.
       operationId: postByBinding
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [alg, value]
-              properties:
-                alg:
-                  type: string
-                value:
-                  type: string
+              $ref: '#/components/schemas/SoftBindingQuery'
       responses:
         '200':
           description: Matching manifests
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ByBindingResponse'
+                $ref: '#/components/schemas/SoftBindingQueryResult'
         '400':
           description: Invalid request
           content:
@@ -92,6 +102,10 @@ paths:
   /matches/byContent:
     post:
       summary: Resolve by uploaded content
+      description: |
+        Computes a fingerprint from the uploaded asset and searches the local
+        database for similar manifests. Currently supports image/* only using
+        org.ar-io.phash.
       operationId: postByContent
       parameters:
         - in: query
@@ -117,6 +131,7 @@ paths:
             type: integer
             minimum: 1
             maximum: 100
+            default: 10
       requestBody:
         required: true
         content:
@@ -138,7 +153,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ByContentResponse'
+                $ref: '#/components/schemas/SoftBindingQueryResult'
         '400':
           description: Invalid request
           content:
@@ -160,16 +175,20 @@ paths:
 
   /matches/byReference:
     post:
-      summary: Resolve by reference URL
-      operationId: postByReference
+      summary: Resolve by reference URL (non-standard extension)
       description: |
-        Endpoint contract is reserved for Phase 2b. Current behavior is explicit 501.
+        **This endpoint is a non-standard extension not defined in the C2PA
+        SBR API specification.** It fetches a remote asset by URL, computes
+        a fingerprint, and searches the local database. Image-only.
+      operationId: postByReference
+      x-c2pa-extension: true
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required: [referenceUrl]
               properties:
                 referenceUrl:
                   type: string
@@ -183,8 +202,32 @@ paths:
                 hintValue:
                   type: string
       responses:
+        '200':
+          description: Matching manifests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftBindingQueryResult'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: Payload too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '415':
+          description: Unsupported media type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '501':
-          description: Not implemented in current milestone
+          description: Endpoint disabled by configuration
           content:
             application/json:
               schema:
@@ -205,14 +248,17 @@ paths:
           required: false
           schema:
             type: boolean
+          description: |
+            When true, returns only the active manifest. Currently returns 501
+            as JUMBF parsing is not implemented.
       responses:
         '200':
-          description: Manifest bytes (fallback path)
+          description: Manifest bytes
           headers:
             X-Manifest-Resolution:
               schema:
                 type: string
-                enum: [fallback-manifest-store]
+                enum: [fallback-manifest-store, proof-remote-fetch, proof-remote-cache]
           content:
             application/c2pa:
               schema:
@@ -242,55 +288,94 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '501':
-          description: returnActiveManifest=true is not yet implemented
+          description: returnActiveManifest is not supported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream proof fetch or digest verification failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: Upstream timeout while retrieving remote proof manifest
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /services/supportedAlgorithms:
+    get:
+      summary: List supported soft binding algorithms
+      operationId: getSupportedAlgorithms
+      responses:
+        '200':
+          description: Supported algorithms
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftBindingAlgList'
+
 components:
   schemas:
-    ManifestResult:
+    MatchResult:
       type: object
       required: [manifestId]
       properties:
         manifestId:
           type: string
-        repoUrl:
-          type: string
-          format: uri
-        fetchUrl:
-          type: string
-          format: uri
         endpoint:
           type: string
           format: uri
+          description: Alternate SBR API endpoint where this manifest can be found
         similarityScore:
           type: integer
           minimum: 0
           maximum: 100
+          description: Similarity score (0-100), present for content/reference searches
 
-    ByBindingResponse:
+    SoftBindingQuery:
       type: object
-      required: [manifestResults, matches]
+      required: [alg, value]
       properties:
-        manifestResults:
-          type: array
-          items:
-            $ref: '#/components/schemas/ManifestResult'
-        matches:
-          type: array
-          items:
-            $ref: '#/components/schemas/ManifestResult'
+        alg:
+          type: string
+        value:
+          type: string
+        maxResults:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
 
-    ByContentResponse:
+    SoftBindingQueryResult:
       type: object
       required: [matches]
       properties:
         matches:
           type: array
           items:
-            $ref: '#/components/schemas/ManifestResult'
+            $ref: '#/components/schemas/MatchResult'
+
+    SoftBindingAlgList:
+      type: object
+      properties:
+        watermarks:
+          type: array
+          items:
+            type: object
+            properties:
+              alg:
+                type: string
+        fingerprints:
+          type: array
+          items:
+            type: object
+            properties:
+              alg:
+                type: string
 
     ErrorResponse:
       type: object
