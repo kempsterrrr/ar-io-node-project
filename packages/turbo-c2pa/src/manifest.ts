@@ -37,6 +37,14 @@ export interface ManifestSignOptions {
   trustAnchorPem?: string;
   /** Ethereum private key — if provided, includes cawg.identity assertion. */
   ethPrivateKey?: string;
+  /**
+   * IPTC digital source type for the c2pa.created action.
+   * Required by C2PA spec. Common values:
+   * - 'http://cv.iptc.org/newscodes/digitalsourcetype/digitalCapture'
+   * - 'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia'
+   * - 'http://cv.iptc.org/newscodes/digitalsourcetype/compositeSynthetic'
+   */
+  digitalSourceType?: string;
 }
 
 export interface ManifestSignResult {
@@ -62,6 +70,7 @@ export async function signManifest(options: ManifestSignOptions): Promise<Manife
     claimGenerator = 'turbo-c2pa/0.1.0',
     trustAnchorPem,
     ethPrivateKey,
+    digitalSourceType,
   } = options;
 
   // Fetch cert chain from the sidecar
@@ -95,7 +104,12 @@ export async function signManifest(options: ManifestSignOptions): Promise<Manife
       {
         label: 'c2pa.actions',
         data: {
-          actions: [{ action: 'c2pa.created' }],
+          actions: [
+            {
+              action: 'c2pa.created',
+              ...(digitalSourceType && { digitalSourceType }),
+            },
+          ],
         },
       },
     ],

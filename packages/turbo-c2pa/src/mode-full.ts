@@ -33,6 +33,14 @@ export interface SignAndPrepareOptions {
   ethPrivateKey?: string;
   /** Include cawg.identity assertion linking wallet address. EXPERIMENTAL: c2pa-rs validation not yet implemented. Default: false. */
   includeIdentity?: boolean;
+  /**
+   * IPTC digital source type for the c2pa.created action.
+   * Required by C2PA spec. Common values:
+   * - 'http://cv.iptc.org/newscodes/digitalsourcetype/digitalCapture'
+   * - 'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia'
+   * - 'http://cv.iptc.org/newscodes/digitalsourcetype/compositeSynthetic'
+   */
+  digitalSourceType?: string;
 }
 
 export interface SignAndPrepareResult {
@@ -66,6 +74,7 @@ export async function signAndPrepare(
     trustAnchorPem,
     ethPrivateKey,
     includeIdentity = false,
+    digitalSourceType,
   } = options;
 
   // 1. Detect content type
@@ -93,6 +102,7 @@ export async function signAndPrepare(
     claimGenerator,
     trustAnchorPem,
     ethPrivateKey: includeIdentity ? ethPrivateKey : undefined,
+    digitalSourceType,
   });
 
   // 5. Generate manifest ID

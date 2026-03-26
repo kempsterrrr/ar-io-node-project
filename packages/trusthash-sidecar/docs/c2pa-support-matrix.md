@@ -1,35 +1,63 @@
 # C2PA Support Matrix
 
-This document describes what the Trusthash Sidecar supports today for C2PA-related repository and soft-binding workflows.
+This document describes what the Trusthash Sidecar and turbo-c2pa SDK support today for C2PA-related repository, signing, and soft-binding workflows.
 
-Scope note:
+## System Overview
 
-- This is a repository/SBR implementation with a COSE signing oracle.
-- Manifest creation is handled by the client SDK (`@ardrive/turbo-c2pa`, separate repo).
-- This is not a cryptographic validator.
+The C2PA system has two distinct roles:
+
+1. **Repository role** — Customers bring content with existing C2PA manifests; we store it durably on Arweave and make it discoverable via SBR. No re-signing needed.
+2. **Signing role** — Customers bring raw images with no C2PA; we sign, upload, and index.
+
+These roles are split across three packages:
+
+| Package                | Role              | Key Functions                                                  |
+| ---------------------- | ----------------- | -------------------------------------------------------------- |
+| `@ar-io/c2pa-protocol` | Shared tag schema | Tag constants, types, storage mode definitions                 |
+| `@ar-io/turbo-c2pa`    | Client SDK        | `storeAndPrepare()`, `signAndPrepare()`, `uploadToArweave()`   |
+| `trusthash-sidecar`    | Server            | Signing oracle, manifest repository, SBR API, webhook indexing |
 
 ## Summary
 
 The current implementation provides:
 
+**Repository (store mode):**
+
+- Extract and validate existing C2PA manifests from images via c2pa-node Reader
+- Preserve original image bytes unchanged (no re-signing)
+- Compute soft binding (pHash) and build ANS-104 tags
+- Upload to Arweave for permanent storage and SBR discovery
+- Report validation status (informational by default)
+
+**Signing (sign mode):**
+
 - COSE signing oracle (`POST /v1/sign`, `GET /v1/cert`) — feature-gated
-- manifest lookup and retrieval by `manifestId`
-- soft-binding lookup by exact binding value (algorithm-agnostic)
-- image-based lookup by uploaded content (`org.ar-io.phash`)
-- image-reference lookup by remote URL (non-standard extension)
-- support for `manifest-store` artifacts and `proof-locator` artifacts
-- support for `org.ar-io.phash` and `io.iscc.v0` binding algorithms
-- `Protocol: C2PA-Manifest-Proof` tag schema with `C2PA-Storage-Mode` discrimination
+- C2PA manifest creation via c2pa-node Builder + CallbackSigner
+- `c2pa.created` action with `digitalSourceType` (IPTC vocabulary)
+- Hard binding computed by c2pa-node
+- `claim_generator_info` with name + version
+
+**Repository/SBR:**
+
+- Manifest lookup and retrieval by `manifestId`
+- Soft-binding lookup by exact binding value (algorithm-agnostic)
+- Image-based lookup by uploaded content (`org.ar-io.phash`)
+- Image-reference lookup by remote URL (non-standard extension)
+- Support for `manifest-store` and `proof-locator` artifacts
+- Support for `org.ar-io.phash` and `io.iscc.v0` binding algorithms
 
 The current implementation does not provide:
 
-- manifest creation (client SDK responsibility)
-- signature validation
-- certificate chain validation
-- revocation / OCSP / CRL checking
+- Signature validation on webhook ingestion (tags trusted at face value)
+- Certificate chain validation
+- Revocation / OCSP / CRL checking
 - TSA trust validation
-- full JUMBF parsing (active manifest extraction)
+- Full JUMBF parsing (active manifest extraction from served images)
 - OAuth2 authentication
+- `c2pa.opened` action support (always `c2pa.created`)
+- Thumbnail generation (`c2pa.thumbnail.claim`)
+- Ingredient assertions (provenance chain)
+- Redaction workflows
 
 ### Known Limitation: CAWG Identity Assertion
 
@@ -46,39 +74,60 @@ The identity code is opt-in via `includeIdentity: true` in the SDK or `--identit
 | org.ar-io.phash | Yes       | Yes       | Custom perceptual hash fingerprint (not yet registered in SBAL)  |
 | io.iscc.v0      | Yes       | No        | Registered in C2PA SBAL; lookup-only, no server-side computation |
 
+## Client SDK Modes
+
+| Mode  | Function            | Input                    | Output                | Sidecar Required     |
+| ----- | ------------------- | ------------------------ | --------------------- | -------------------- |
+| Sign  | `signAndPrepare()`  | Unsigned image           | Signed image + tags   | Yes (signing oracle) |
+| Store | `storeAndPrepare()` | Image with existing C2PA | Original bytes + tags | No                   |
+
+Both modes produce identical ANS-104 tag structures and converge at `uploadToArweave()`.
+
 ## Support Matrix
 
-| Capability                              | Status          | Current behavior                                                                                                         |
-| --------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Repository lookup by `manifestId`       | Implemented     | `GET /v1/manifests/{manifestId}` resolves redirect metadata first, then serves bytes locally or via proof fetch-through. |
-| `manifest-store` artifact support       | Implemented     | Stores a primary manifest artifact and can serve `application/c2pa` bytes from the gateway/Arweave path.                 |
-| `proof-locator` artifact support        | Implemented     | Stores remote manifest URL plus digest metadata and can fetch-through with digest verification.                          |
-| Fetch-through cache for proof artifacts | Implemented     | In-memory TTL/LRU cache only; no durable persistence.                                                                    |
-| Soft-binding lookup by value            | Implemented     | `GET/POST /v1/matches/byBinding` performs algorithm-agnostic exact-match lookup via GraphQL + local DB.                  |
-| Content lookup by uploaded asset        | Partial         | `POST /v1/matches/byContent` is image-only and supports `org.ar-io.phash`.                                               |
-| Reference lookup by remote asset URL    | Partial         | `POST /v1/matches/byReference` is image-only. **Non-standard extension** (not in SBR spec).                              |
-| Supported algorithm discovery           | Implemented     | `GET /v1/services/supportedAlgorithms` returns `org.ar-io.phash` and `io.iscc.v0`.                                       |
-| `returnActiveManifest=true`             | Not supported   | Returns 501. Requires JUMBF parsing which is not implemented.                                                            |
-| OAuth2 client credentials               | Not implemented | Endpoints are public in the current release.                                                                             |
-| SBAL / decentralized lookup contract    | Not implemented | No `describe`/smart-contract-backed lookup implementation.                                                               |
-| COSE signing oracle                     | Implemented     | `POST /v1/sign` signs raw COSE payloads. `GET /v1/cert` serves X.509 chain. Feature-gated via `ENABLE_SIGNING`.          |
-| Tag schema                              | Implemented     | Webhook processor requires `Protocol: C2PA-Manifest-Proof` and `C2PA-Storage-Mode` tags.                                 |
-| Manifest creation                       | Not in scope    | Handled by client SDK (`@ardrive/turbo-c2pa`) using `c2pa-node`.                                                         |
-| C2PA validation / trust decisions       | Not implemented | No signature, trust chain, revocation, or timestamp validation.                                                          |
+| Capability                              | Status          | Current behavior                                                                                                        |
+| --------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Repository / Store Mode**             |                 |                                                                                                                         |
+| Extract existing C2PA manifests         | Implemented     | c2pa-node Reader extracts manifest store, active manifest ID, claim generator info                                      |
+| Validate existing manifest signatures   | Implemented     | Reader validates JUMBF structure + signature. Reports status; doesn't reject by default                                 |
+| Preserve original bytes                 | Implemented     | `storeAndPrepare()` returns input buffer unchanged                                                                      |
+| **Signing / Sign Mode**                 |                 |                                                                                                                         |
+| COSE signing oracle                     | Implemented     | `POST /v1/sign` signs raw COSE payloads. `GET /v1/cert` serves X.509 chain. Feature-gated via `ENABLE_SIGNING`          |
+| `digitalSourceType` on `c2pa.created`   | Implemented     | Passed through to c2pa-node Builder manifest definition. IPTC vocabulary values                                         |
+| `c2pa.opened` action support            | Not implemented | Always creates with `c2pa.created`. No ingredient/parent support                                                        |
+| Thumbnail generation                    | Not implemented | No `c2pa.thumbnail.claim` assertion                                                                                     |
+| OCSP stapling                           | Not implemented | Required for production. See `docs/C2PA-PRODUCTION-READINESS.md`                                                        |
+| RFC 3161 TSA timestamp                  | Not implemented | Required for production. See `docs/C2PA-PRODUCTION-READINESS.md`                                                        |
+| **SBR API**                             |                 |                                                                                                                         |
+| Repository lookup by `manifestId`       | Implemented     | `GET /v1/manifests/{manifestId}` resolves redirect metadata first, then serves bytes locally or via proof fetch-through |
+| `manifest-store` artifact support       | Implemented     | Stores a primary manifest artifact and can serve `application/c2pa` bytes from the gateway/Arweave path                 |
+| `proof-locator` artifact support        | Implemented     | Stores remote manifest URL plus digest metadata and can fetch-through with digest verification                          |
+| Fetch-through cache for proof artifacts | Implemented     | In-memory TTL/LRU cache only; no durable persistence                                                                    |
+| Soft-binding lookup by value            | Implemented     | `GET/POST /v1/matches/byBinding` performs algorithm-agnostic exact-match lookup via GraphQL + local DB                  |
+| Content lookup by uploaded asset        | Partial         | `POST /v1/matches/byContent` is image-only and supports `org.ar-io.phash`                                               |
+| Reference lookup by remote asset URL    | Partial         | `POST /v1/matches/byReference` is image-only. **Non-standard extension** (not in SBR spec)                              |
+| Supported algorithm discovery           | Implemented     | `GET /v1/services/supportedAlgorithms` returns `org.ar-io.phash` and `io.iscc.v0`                                       |
+| `returnActiveManifest=true`             | Not supported   | Returns 501. Requires JUMBF parsing which is not implemented                                                            |
+| OAuth2 client credentials               | Not implemented | Endpoints are public in the current release                                                                             |
+| SBAL / decentralized lookup contract    | Not implemented | No `describe`/smart-contract-backed lookup implementation                                                               |
+| **Indexing**                            |                 |                                                                                                                         |
+| Tag schema                              | Implemented     | Webhook processor requires `Protocol: C2PA-Manifest-Proof` and `C2PA-Storage-Mode` tags                                 |
+| Manifest validation on ingestion        | Not implemented | Tags are trusted at face value. No JUMBF/signature validation on webhook                                                |
+| Manifest creation                       | Not in scope    | Handled by client SDK (`@ar-io/turbo-c2pa`) using c2pa-node                                                             |
 
 ## Spec Compliance (SBR API v2.2)
 
-| Endpoint                               | Spec Status | Notes                                                                                               |
-| -------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------- |
-| `GET /v1/matches/byBinding`            | Compliant   | Response follows `c2pa.softBindingQueryResult` schema. Algorithm-agnostic.                          |
-| `POST /v1/matches/byBinding`           | Compliant   | Same lookup behavior. Accepts `maxResults` in body.                                                 |
-| `POST /v1/matches/byContent`           | Compliant   | Image-only; 415 for unsupported types.                                                              |
-| `POST /v1/matches/byReference`         | Extension   | **Not in SBR spec.** Documented as non-standard.                                                    |
-| `GET /v1/manifests/{manifestId}`       | Compliant   | Correct `application/c2pa` content type. `returnActiveManifest` returns 501.                        |
-| `GET /v1/services/supportedAlgorithms` | Compliant   | Returns `c2pa.softBindingAlgList` schema.                                                           |
-| `POST /v1/sign`                        | Custom      | COSE signing oracle. Supports `?format=der`. Used by client SDK.                                    |
-| `GET /v1/cert`                         | Custom      | X.509 certificate chain. Used by client SDK.                                                        |
-| `POST /v1/identity/sign`               | Custom      | CAWG identity assertion signing. Verifies ETH wallet. **Disabled by default — blocked by c2pa-rs.** |
+| Endpoint                               | Spec Status | Notes                                                                                              |
+| -------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------- |
+| `GET /v1/matches/byBinding`            | Compliant   | Response follows `c2pa.softBindingQueryResult` schema. Algorithm-agnostic                          |
+| `POST /v1/matches/byBinding`           | Compliant   | Same lookup behavior. Accepts `maxResults` in body                                                 |
+| `POST /v1/matches/byContent`           | Compliant   | Image-only; 415 for unsupported types                                                              |
+| `POST /v1/matches/byReference`         | Extension   | **Not in SBR spec.** Documented as non-standard                                                    |
+| `GET /v1/manifests/{manifestId}`       | Compliant   | Correct `application/c2pa` content type. `returnActiveManifest` returns 501                        |
+| `GET /v1/services/supportedAlgorithms` | Compliant   | Returns `c2pa.softBindingAlgList` schema                                                           |
+| `POST /v1/sign`                        | Custom      | COSE signing oracle. Supports `?format=der`. Used by client SDK                                    |
+| `GET /v1/cert`                         | Custom      | X.509 certificate chain. Used by client SDK                                                        |
+| `POST /v1/identity/sign`               | Custom      | CAWG identity assertion signing. Verifies ETH wallet. **Disabled by default — blocked by c2pa-rs** |
 
 ## Operational Constraints
 
@@ -90,14 +139,6 @@ Remote fetch behavior is hardened but still operationally constrained:
 - localhost and private-network targets are blocked by default.
 - remote fetches are bounded by timeout and maximum byte limits.
 - proof fetch cache is memory-backed and non-durable.
-
-## Recommended External Positioning
-
-Use the following wording externally:
-
-"The Trusthash Sidecar provides C2PA 2.3 Soft Binding Resolution support with algorithm-agnostic binding lookup (including `org.ar-io.phash` and `io.iscc.v0`), manifest retrieval with proof-locator fetch-through, image-based similarity search, and a COSE signing oracle for use with C2PA client SDKs. Manifest creation is handled by the client SDK; the sidecar does not cryptographically validate manifests."
-
-## Tag Schema
 
 ## Tag Schema
 

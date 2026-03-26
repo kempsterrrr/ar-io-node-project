@@ -103,6 +103,20 @@ cd ../../
 docker compose -f docker-compose.local.yaml down
 ```
 
+### Turbo C2PA SDK
+
+```bash
+# Run SDK tests (sign mode, store mode, tags, detection, signer)
+cd packages/turbo-c2pa
+bun test    # 37 tests
+
+# Demo: sign mode (requires sidecar running)
+bun run scripts/demo-upload.ts /path/to/image.jpg --source-type digitalCapture
+
+# Demo: store mode (preserves existing C2PA manifest, no sidecar needed)
+bun run scripts/demo-upload.ts /path/to/image-with-c2pa.jpg --store
+```
+
 ### Trusthash Sidecar (Docker Overlay)
 
 Simplest local run (gateway + sidecar together):
