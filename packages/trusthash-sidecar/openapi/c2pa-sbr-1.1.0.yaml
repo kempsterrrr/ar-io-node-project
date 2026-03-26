@@ -1,0 +1,388 @@
+openapi: 3.0.3
+info:
+  title: Trusthash Sidecar C2PA Soft Binding Resolution API
+  version: 1.2.0
+  description: |
+    C2PA 2.3 Soft Binding Resolution API implementation backed by Arweave.
+
+    **Spec-defined endpoints (SBR API v2.2):**
+    - byBinding: algorithm-agnostic exact tag lookup via GraphQL + local DB
+    - byContent: image fingerprinting via org.ar-io.phash (image-only)
+    - manifests: redirect-first with fallback and proof-locator fetch-through
+    - services/supportedAlgorithms: lists supported binding algorithms
+
+    **Non-standard extensions:**
+    - byReference: fetch remote image by URL, compute fingerprint, and search (not in SBR spec)
+
+    **Supported algorithms:**
+    - org.ar-io.phash: byBinding + byContent (computable)
+    - io.iscc.v0: byBinding only (lookup)
+servers:
+  - url: https://c2pa.ar-io.dev/v1
+paths:
+  /matches/byBinding:
+    get:
+      summary: Resolve by soft binding value
+      description: |
+        Algorithm-agnostic exact-match lookup. Searches both gateway GraphQL
+        tags and the local soft_bindings table, then merges and deduplicates.
+      operationId: getByBinding
+      parameters:
+        - in: query
+          name: alg
+          required: true
+          schema:
+            type: string
+          description: Algorithm identifier per C2PA SBAL (e.g. org.ar-io.phash, io.iscc.v0)
+        - in: query
+          name: value
+          required: true
+          schema:
+            type: string
+          description: Base64-encoded soft binding value
+        - in: query
+          name: maxResults
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        '200':
+          description: Matching manifests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftBindingQueryResult'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream GraphQL resolution failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Resolve by soft binding value (body form)
+      description: |
+        Same as GET but accepts alg, value, and maxResults in the JSON body
+        for cases where the binding value exceeds URL length limits.
+      operationId: postByBinding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SoftBindingQuery'
+      responses:
+        '200':
+          description: Matching manifests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftBindingQueryResult'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream GraphQL resolution failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /matches/byContent:
+    post:
+      summary: Resolve by uploaded content
+      description: |
+        Computes a fingerprint from the uploaded asset and searches the local
+        database for similar manifests. Currently supports image/* only using
+        org.ar-io.phash.
+      operationId: postByContent
+      parameters:
+        - in: query
+          name: alg
+          required: false
+          schema:
+            type: string
+            default: org.ar-io.phash
+        - in: query
+          name: hintAlg
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: hintValue
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: maxResults
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '200':
+          description: Matching manifests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftBindingQueryResult'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: Payload too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '415':
+          description: Unsupported media type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /matches/byReference:
+    post:
+      summary: Resolve by reference URL (non-standard extension)
+      description: |
+        **This endpoint is a non-standard extension not defined in the C2PA
+        SBR API specification.** It fetches a remote asset by URL, computes
+        a fingerprint, and searches the local database. Image-only.
+      operationId: postByReference
+      x-c2pa-extension: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [referenceUrl]
+              properties:
+                referenceUrl:
+                  type: string
+                  format: uri
+                assetLength:
+                  type: number
+                assetType:
+                  type: string
+                hintAlg:
+                  type: string
+                hintValue:
+                  type: string
+      responses:
+        '200':
+          description: Matching manifests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftBindingQueryResult'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: Payload too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '415':
+          description: Unsupported media type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '501':
+          description: Endpoint disabled by configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /manifests/{manifestId}:
+    get:
+      summary: Retrieve manifest by manifest ID
+      operationId: getManifestById
+      parameters:
+        - in: path
+          name: manifestId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: returnActiveManifest
+          required: false
+          schema:
+            type: boolean
+          description: |
+            When true, returns only the active manifest. Currently returns 501
+            as JUMBF parsing is not implemented.
+      responses:
+        '200':
+          description: Manifest bytes
+          headers:
+            X-Manifest-Resolution:
+              schema:
+                type: string
+                enum: [fallback-manifest-store, proof-remote-fetch, proof-remote-cache]
+          content:
+            application/c2pa:
+              schema:
+                type: string
+                format: binary
+        '302':
+          description: Redirect to repository or fetch URL
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+            X-Manifest-Resolution:
+              schema:
+                type: string
+                enum: [fetch-url, repo-url]
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Manifest not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '501':
+          description: returnActiveManifest is not supported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Upstream proof fetch or digest verification failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '504':
+          description: Upstream timeout while retrieving remote proof manifest
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /services/supportedAlgorithms:
+    get:
+      summary: List supported soft binding algorithms
+      operationId: getSupportedAlgorithms
+      responses:
+        '200':
+          description: Supported algorithms
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SoftBindingAlgList'
+
+components:
+  schemas:
+    MatchResult:
+      type: object
+      required: [manifestId]
+      properties:
+        manifestId:
+          type: string
+        endpoint:
+          type: string
+          format: uri
+          description: Alternate SBR API endpoint where this manifest can be found
+        similarityScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Similarity score (0-100), present for content/reference searches
+
+    SoftBindingQuery:
+      type: object
+      required: [alg, value]
+      properties:
+        alg:
+          type: string
+        value:
+          type: string
+        maxResults:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
+
+    SoftBindingQueryResult:
+      type: object
+      required: [matches]
+      properties:
+        matches:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchResult'
+
+    SoftBindingAlgList:
+      type: object
+      properties:
+        watermarks:
+          type: array
+          items:
+            type: object
+            properties:
+              alg:
+                type: string
+        fingerprints:
+          type: array
+          items:
+            type: object
+            properties:
+              alg:
+                type: string
+
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string

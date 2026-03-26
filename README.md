@@ -20,11 +20,10 @@ cd ar-io-node-project
 bun install
 
 # Set up the gateway
-cd apps/gateway
-cp .env.example .env
+cp apps/gateway/.env.example apps/gateway/.env
 
-# Start the gateway
-docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up
+# Start gateway + sidecar locally (builds sidecar from source)
+docker compose -f docker-compose.local.yaml up -d
 ```
 
 Test the gateway:
@@ -33,6 +32,35 @@ Test the gateway:
 curl -L http://localhost:3000/4jBV3ofWh41KhuTs2pFvj-KBZWUkbrbCYlJH0vLA6LM
 # Expected output: test
 ```
+
+### Run Trusthash Sidecar (Optional)
+
+If you only want the gateway:
+
+```bash
+cd apps/gateway
+docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d
+```
+
+Or run both services together from the repo root:
+
+```bash
+docker compose -f docker-compose.local.yaml up -d
+```
+
+You can also use the helper script:
+
+```bash
+./scripts/up-gateway-sidecar.sh -d
+```
+
+Use the prebuilt sidecar image instead:
+
+```bash
+./scripts/up-gateway-sidecar.sh --prod -d
+```
+
+Note: `--prod` requires access to `ghcr.io` (or set `TRUSTHASH_SIDECAR_IMAGE`).
 
 ## Project Structure
 
@@ -44,9 +72,19 @@ ar-io-node-project/
 │       ├── docker-compose.dev.yaml
 │       ├── .env.example
 │       └── wallets/
+├── packages/                  # Sidecar extensions and shared packages
+│   ├── trusthash-sidecar/    # C2PA manifest repo + signing oracle + SBR API
+│   ├── turbo-c2pa/           # C2PA signing client SDK (sign + upload to Arweave)
+│   ├── c2pa-protocol/        # Shared C2PA tag constants and types
+│   └── openclaw-ario-plugin/ # Claude AI agent with gateway access
+│       ├── docker-compose.yaml
+│       ├── .env.example
+│       └── ...
+├── docker-compose.local.yaml  # Local gateway + sidecar compose
 ├── .github/
 │   └── workflows/
 │       ├── deploy-gateway.yml
+│       ├── openclaw-plugin.yaml
 │       └── ci.yml
 ├── turbo.json
 ├── package.json
@@ -64,6 +102,7 @@ bun run build            # Build all packages
 bun run lint             # Lint all packages
 bun run format           # Format all files with Prettier
 bun run format:check     # Check formatting
+./scripts/run-trusthash-integration.sh  # Run isolated trusthash integration tests
 
 # Gateway-specific (from apps/gateway/)
 bun run --filter @ar-io/gateway dev     # Start gateway in dev mode
@@ -94,14 +133,17 @@ bun run --filter @ar-io/gateway logs    # View gateway logs
 
 Add the following **secrets** to your repository (Settings → Secrets and variables → Actions):
 
-| Secret                | Description                            |
-| --------------------- | -------------------------------------- |
-| `HETZNER_HOST`        | Server IP address                      |
-| `HETZNER_USER`        | SSH username (usually `root`)          |
-| `HETZNER_SSH_KEY`     | Private SSH key for authentication     |
-| `AR_IO_WALLET`        | Your Arweave wallet address            |
-| `OBSERVER_WALLET`     | Observer hot wallet address            |
-| `OBSERVER_WALLET_KEY` | Observer wallet keyfile (JSON content) |
+| Secret                  | Description                                           |
+| ----------------------- | ----------------------------------------------------- |
+| `HETZNER_HOST`          | Server IP address                                     |
+| `HETZNER_USER`          | SSH username (usually `root`)                         |
+| `HETZNER_SSH_KEY`       | Private SSH key for authentication                    |
+| `AR_IO_WALLET`          | Your Arweave wallet address                           |
+| `OBSERVER_WALLET`       | Observer hot wallet address                           |
+| `OBSERVER_WALLET_KEY`   | Observer wallet keyfile (JSON content)                |
+| `GHCR_USERNAME`         | (Sidecar) GHCR username (if private)                  |
+| `GHCR_TOKEN`            | (Sidecar) GHCR token (read:packages)                  |
+| `GHCR_VISIBILITY_TOKEN` | (Sidecar) GHCR token (write:packages) to force public |
 
 Add the following **variables** (Settings → Secrets and variables → Actions → Variables):
 
@@ -112,6 +154,9 @@ Add the following **variables** (Settings → Secrets and variables → Actions 
 | `ARNS_ROOT_HOST` | Your domain name            | (empty)       |
 | `RUN_OBSERVER`   | Enable observer             | `true`        |
 | `LOG_LEVEL`      | Logging level               | `info`        |
+
+> `GHCR_USERNAME` and `GHCR_TOKEN` are only required if the sidecar image is private.
+> `GHCR_VISIBILITY_TOKEN` is only required if you want the workflow to enforce public visibility.
 
 ### Automatic Deployment
 
@@ -125,6 +170,126 @@ git push origin main
 ```
 
 You can also trigger a manual deployment from the Actions tab.
+
+### Deploying Trusthash Sidecar Alongside Gateway
+
+The gateway deploy workflow now deploys the sidecar alongside the gateway using the
+`latest` image tag. This keeps production aligned with the most recent published sidecar image.
+
+Manual production deployment (same Docker network):
+
+```bash
+docker compose \
+  -f apps/gateway/docker-compose.yaml \
+  -f packages/trusthash-sidecar/docker-compose.sidecar.yaml \
+  up -d
+```
+
+The sidecar uses `.env.docker` for container settings, which defaults
+`GATEWAY_URL` to `http://core:4000`. If you run the overlay from a different
+working directory, set:
+
+```bash
+TRUSTHASH_SIDECAR_ENV_FILE=packages/trusthash-sidecar/.env.docker
+TRUSTHASH_SIDECAR_DATA_DIR=packages/trusthash-sidecar/data
+TRUSTHASH_SIDECAR_NGINX_CONF=packages/trusthash-sidecar/nginx.conf
+```
+
+Note: The sidecar overlay defaults its data directory to `./sidecar-data` to
+avoid colliding with the gateway `./data` volume. Keep the data paths separate.
+
+### Automated Sidecar Releases
+
+Publishing is automatic. When changes land in `main` under `packages/trusthash-sidecar/**`,
+the `Publish Trusthash Sidecar` workflow:
+
+- Auto-increments the version tag (starting from `v0.1.0`, bumping patch each publish)
+- Pushes both the versioned tag and `latest`
+- Deploys the sidecar using `latest`
+
+If the sidecar image is private, add these secrets in GitHub Actions:
+
+- `GHCR_USERNAME`
+- `GHCR_TOKEN` (a PAT with `read:packages` for pulls on the server)
+
+To enforce public visibility, add:
+
+- `GHCR_VISIBILITY_TOKEN` (a PAT with `write:packages`)
+
+If `GHCR_VISIBILITY_TOKEN` is not set, the workflow will only succeed if the package
+is already public.
+
+### C2PA Content Credentials
+
+The project provides a complete C2PA signing and discovery pipeline:
+
+| Component          | Package             | What it does                                                                        |
+| ------------------ | ------------------- | ----------------------------------------------------------------------------------- |
+| **Signing Oracle** | `trusthash-sidecar` | COSE signing (`POST /v1/sign`), X.509 cert chain (`GET /v1/cert`)                   |
+| **SBR API**        | `trusthash-sidecar` | C2PA Soft Binding Resolution — discover manifests by binding, content, or reference |
+| **Client SDK**     | `turbo-c2pa`        | Sign images with c2pa-node, build ANS-104 tags, upload to Arweave via Turbo         |
+| **Tag Constants**  | `c2pa-protocol`     | Shared tag schema constants used by sidecar and SDK                                 |
+
+**Demo**: Sign a real image → upload to Arweave → verify at [contentcredentials.org/verify](https://contentcredentials.org/verify):
+
+```bash
+# Terminal 1: start sidecar
+cd packages/trusthash-sidecar && bun run dev
+
+# Terminal 2: sign + upload
+cd packages/turbo-c2pa
+bun run scripts/demo-upload.ts /path/to/image.jpg
+```
+
+**Known limitation**: CAWG identity assertion (`cawg.identity`) is built but disabled by default. The c2pa-rs library does not yet support validating identity assertions — both c2pa-node and contentcredentials.org crash when reading them. The code is ready and will activate when upstream support ships.
+
+See `packages/trusthash-sidecar/docs/c2pa-support-matrix.md` for detailed conformance status.
+
+## OpenClaw Integration
+
+OpenClaw provides a Claude AI agent with direct access to your AR.IO gateway. Use natural language to query Arweave data, resolve ArNS names, and search transactions.
+
+### Prerequisites
+
+- Running AR.IO gateway (see [Local Development](#local-development))
+- [Anthropic API key](https://console.anthropic.com/) for Claude AI
+
+### Quick Start
+
+```bash
+# 1. Start the gateway first (creates ar-io-network)
+cd apps/gateway
+docker compose up -d
+
+# 2. Configure OpenClaw
+cd packages/openclaw-ario-plugin
+cp .env.example .env
+# Edit .env and add your ANTHROPIC_API_KEY
+
+# 3. Start OpenClaw sidecar
+docker compose up -d
+
+# 4. Access OpenClaw UI
+open http://localhost:18789
+```
+
+### Available Tools
+
+| Tool              | Description                           |
+| ----------------- | ------------------------------------- |
+| `gateway_info`    | Get gateway status and information    |
+| `gateway_fetch`   | Fetch transaction data by ID          |
+| `gateway_resolve` | Resolve ArNS names to transaction IDs |
+| `gateway_search`  | Search transactions by tags or owners |
+
+### Example Prompts
+
+- "Get gateway info"
+- "What is stored at transaction abc123...?"
+- "Resolve the ArNS name 'ardrive'"
+- "Search for transactions with App-Name ArDrive"
+
+For detailed documentation, see [packages/openclaw-ario-plugin/README.md](packages/openclaw-ario-plugin/README.md).
 
 ## Adding Sidecars
 
@@ -167,7 +332,9 @@ Sidecars are additional services that extend the gateway. To add a new sidecar:
        external: true
    ```
 
-5. **Add a GHCR publishing workflow** (optional, for public distribution)
+5. **Provide an overlay compose file** so operators can add the sidecar alongside the gateway
+
+6. **Add a GHCR publishing workflow** (optional, for public distribution)
 
 ## Architecture
 

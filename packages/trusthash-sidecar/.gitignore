@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+
+# Data (DuckDB database)
+data/*.duckdb
+data/*.duckdb.wal
+
+# Wallets (sensitive)
+wallets/*.json
+
+# Dev certificates (sensitive)
+.dev-certs/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
