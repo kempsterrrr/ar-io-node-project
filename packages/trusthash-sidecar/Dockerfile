@@ -3,17 +3,22 @@ FROM oven/bun:1.2 AS builder
 
 WORKDIR /app
 
-# Copy package files
+# Copy root workspace files
 COPY package.json bun.lock* ./
+
+# Copy workspace packages needed for dependency resolution
+COPY packages/c2pa-protocol/package.json packages/c2pa-protocol/
+COPY packages/c2pa-protocol/src/ packages/c2pa-protocol/src/
+COPY packages/trusthash-sidecar/package.json packages/trusthash-sidecar/
 
 # Install dependencies
 RUN bun install --frozen-lockfile
 
-# Copy source code
-COPY . .
+# Copy sidecar source code
+COPY packages/trusthash-sidecar/ packages/trusthash-sidecar/
 
 # Build the application for Node.js runtime
-RUN bun build src/index.ts src/migrate.ts --outdir dist --target node
+RUN cd packages/trusthash-sidecar && bun build src/index.ts src/migrate.ts --outdir dist --target node
 
 # Production stage
 FROM node:20-bookworm-slim
@@ -24,9 +29,9 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 # Copy built application and dependencies
-COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/packages/trusthash-sidecar/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./
+COPY --from=builder /app/packages/trusthash-sidecar/package.json ./
 
 # Create directory for data
 RUN mkdir -p /app/data

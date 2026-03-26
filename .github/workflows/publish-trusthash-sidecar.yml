@@ -100,9 +100,9 @@ jobs:
 
             docker network create ar-io-network >/dev/null 2>&1 || true
 
-            # Build sidecar image from source
-            SIDECAR_SRC="${HOME}/ar-io-node-project/packages/trusthash-sidecar"
-            docker build -t trusthash-sidecar:latest "${SIDECAR_SRC}"
+            # Build sidecar image from repo root (workspace dependencies require root context)
+            REPO_DIR="${HOME}/ar-io-node-project"
+            docker build -t trusthash-sidecar:latest -f "${REPO_DIR}/packages/trusthash-sidecar/Dockerfile" "${REPO_DIR}"
 
             # Deploy with the locally-built image
             TRUSTHASH_SIDECAR_IMAGE=trusthash-sidecar:latest \
