@@ -117,10 +117,10 @@ jobs:
           RUN_OBSERVER=${{ vars.RUN_OBSERVER || 'true' }}
 
           # Trusthash Sidecar (compose overlay)
-          TRUSTHASH_SIDECAR_TAG=latest
-          TRUSTHASH_SIDECAR_ENV_FILE=sidecar/.env.docker
-          TRUSTHASH_SIDECAR_DATA_DIR=sidecar/data
-          TRUSTHASH_SIDECAR_NGINX_CONF=sidecar/nginx.conf
+          TRUSTHASH_SIDECAR_IMAGE=trusthash-sidecar:latest
+          TRUSTHASH_SIDECAR_ENV_FILE=./sidecar/.env.docker
+          TRUSTHASH_SIDECAR_DATA_DIR=./sidecar/data
+          TRUSTHASH_SIDECAR_NGINX_CONF=./sidecar/nginx.conf
 
           # Production Settings
           LOG_LEVEL=${{ vars.LOG_LEVEL || 'info' }}

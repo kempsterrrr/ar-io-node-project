@@ -13,6 +13,10 @@ services:
       - DUCKDB_PATH=/app/data/provenance.duckdb
       - MAX_IMAGE_SIZE_MB=${MAX_IMAGE_SIZE_MB:-50}
       - REFERENCE_FETCH_TIMEOUT_MS=${REFERENCE_FETCH_TIMEOUT_MS:-10000}
+      - ENABLE_SIGNING=${ENABLE_SIGNING:-false}
+      - SIGNING_ALGORITHM=${SIGNING_ALGORITHM:-ES256}
+      - SIGNING_CERT_PEM=${SIGNING_CERT_PEM:-}
+      - SIGNING_PRIVATE_KEY_PEM=${SIGNING_PRIVATE_KEY_PEM:-}
     volumes:
       - ${TRUSTHASH_SIDECAR_DATA_DIR:-./sidecar-data}:/app/data
     networks:
