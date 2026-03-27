@@ -192,7 +192,8 @@ jobs:
             ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} "chmod 600 ${{ env.DEPLOY_PATH }}/sidecar/.signing-cert-pem ${{ env.DEPLOY_PATH }}/sidecar/.signing-key-pem"
             echo "Signing secrets written to server"
           else
-            echo "No signing secrets configured — sidecar will run without signing"
+            ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} "rm -f ${{ env.DEPLOY_PATH }}/sidecar/.signing-cert-pem ${{ env.DEPLOY_PATH }}/sidecar/.signing-key-pem"
+            echo "No signing secrets configured — removed stale files if any"
           fi
 
       - name: Deploy containers
