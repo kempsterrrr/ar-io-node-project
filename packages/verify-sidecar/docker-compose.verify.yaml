@@ -1,0 +1,23 @@
+# Production overlay for gateway operators
+# Usage: docker compose -f apps/gateway/docker-compose.yaml -f packages/verify-sidecar/docker-compose.verify.yaml up -d
+services:
+  verify-sidecar:
+    image: ${VERIFY_SIDECAR_IMAGE:-ghcr.io/ar-io/verify-sidecar}:${VERIFY_SIDECAR_TAG:-latest}
+    ports:
+      - '${VERIFY_PORT:-4001}:4001'
+    environment:
+      - GATEWAY_URL=http://core:4000
+      - NODE_ENV=production
+      - SQLITE_PATH=/app/data/verify.db
+    volumes:
+      - ${VERIFY_SIDECAR_DATA_DIR:-./verify-data}:/app/data
+    networks:
+      - ar-io-network
+    depends_on:
+      core:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  ar-io-network:
+    external: true

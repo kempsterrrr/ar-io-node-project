@@ -1,0 +1,17 @@
+{
+  "nonce": "nonce123",
+  "previous_block": "prev123",
+  "timestamp": 1710423432,
+  "last_retarget": 1710423000,
+  "diff": "100",
+  "height": 1438221,
+  "hash": "hash123",
+  "indep_hash": "xyz789...",
+  "txs": ["4jBV3ofWh41KhuTs2pFvj-KBZWUkbrbCYlJH0vLA6LM"],
+  "tx_root": "txroot123",
+  "wallet_list": "wl123",
+  "reward_addr": "reward123",
+  "reward_pool": "0",
+  "weave_size": "1000000",
+  "block_size": "1000"
+}
