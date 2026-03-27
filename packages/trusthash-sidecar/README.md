@@ -17,7 +17,7 @@ Used together with the `@ar-io/turbo-c2pa` client SDK to sign images with C2PA C
 
 ### Prerequisites
 
-- Bun 1.2+
+- Node.js 20+ and pnpm
 - AR.IO Gateway running (creates `ar-io-network` if using Docker)
 
 ### Setup
@@ -38,7 +38,7 @@ Used together with the `@ar-io/turbo-c2pa` client SDK to sign images with C2PA C
 
    ```bash
    # Development
-   bun run dev
+   pnpm run dev
 
    # Or with Docker
    docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d
@@ -257,8 +257,8 @@ curl "http://localhost:3003/v1/search-similar?phash=ffffffffffffffff&threshold=1
 ## Development
 
 ```bash
-bun install
-bun run dev
+pnpm install
+pnpm run dev
 ```
 
 ## Migrations
@@ -266,13 +266,13 @@ bun run dev
 Run migrations after building the dist bundle:
 
 ```bash
-bun run build && bun run migrate
+pnpm run build && pnpm run migrate
 ```
 
 ## Testing
 
 ```bash
-bun test
+pnpm test
 ```
 
 Run integration tests locally (isolated test DB + gateway stub) from the repo root:

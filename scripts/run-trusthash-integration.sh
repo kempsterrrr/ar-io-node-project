@@ -120,5 +120,5 @@ curl -sf -X POST "${BASE_URL}/webhook" \
   INTEGRATION_DB_PATH="${DB_PATH}" \
   REFERENCE_TEST_URL="${REFERENCE_URL}" \
   REFERENCE_TEST_FILE="${REFERENCE_FILE}" \
-  bun test
+  pnpm test
 )

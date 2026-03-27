@@ -83,7 +83,7 @@ docker compose -f docker-compose.local.yaml up -d
 
 # Run unit tests
 cd packages/trusthash-sidecar
-bun test
+pnpm test
 
 # Run integration tests (isolated test DB + gateway stub)
 cd ../../
@@ -108,13 +108,13 @@ docker compose -f docker-compose.local.yaml down
 ```bash
 # Run SDK tests (sign mode, store mode, tags, detection, signer)
 cd packages/turbo-c2pa
-bun test    # 37 tests
+pnpm test    # 37 tests
 
 # Demo: sign mode (requires sidecar running)
-bun run scripts/demo-upload.ts /path/to/image.jpg --source-type digitalCapture
+pnpm run scripts/demo-upload.ts /path/to/image.jpg --source-type digitalCapture
 
 # Demo: store mode (preserves existing C2PA manifest, no sidecar needed)
-bun run scripts/demo-upload.ts /path/to/image-with-c2pa.jpg --store
+pnpm run scripts/demo-upload.ts /path/to/image-with-c2pa.jpg --store
 ```
 
 ### Trusthash Sidecar (Docker Overlay)
@@ -153,8 +153,8 @@ To run CI checks locally:
 
 ```bash
 # From project root
-bun run format:check
-bun run build
+pnpm run format:check
+pnpm run build
 
 # Validate docker-compose
 cd apps/gateway

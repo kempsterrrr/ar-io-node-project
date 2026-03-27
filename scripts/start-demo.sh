@@ -34,4 +34,4 @@ else
 fi
 
 cd "${SIDECAR_DIR}"
-exec bun run dev
+exec pnpm run dev

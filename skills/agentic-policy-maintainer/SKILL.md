@@ -25,7 +25,7 @@ Keep agent governance clear, enforceable, and low-overhead across supported tool
 
 ## Workflow
 
-1. Validate current policy with `bun run agentic:validate`.
+1. Validate current policy with `pnpm run agentic:validate`.
 2. Confirm canonical policy remains in `AGENTS.md`.
 3. Ensure shims remain compatibility-only and reference canonical policy.
 4. Update validator rules only when policy intent changes.

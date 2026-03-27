@@ -14,7 +14,7 @@ Optimize for reliability per unit complexity.
 
 - Monorepo with `apps/*` and `packages/*` workspaces.
 - Packages: `trusthash-sidecar` (C2PA), `turbo-c2pa` (SDK), `c2pa-protocol` (tags), `x402-bundler-sidecar`.
-- Primary quality gates: `bun run format:check` and `bun run build`.
+- Primary quality gates: `pnpm run format:check` and `pnpm run build`.
 - Core references:
   - `docs/PROJECT.md` (full project docs, patterns, conventions)
   - `docs/TESTING.md`
@@ -33,7 +33,7 @@ Optimize for reliability per unit complexity.
 
 1. Read this file and relevant project docs before editing.
 2. Implement minimal scoped changes.
-3. Validate locally (`bun run format:check`, `bun run build`, plus task-specific tests).
+3. Validate locally (`pnpm run format:check`, `pnpm run build`, plus task-specific tests).
 4. Open a PR with clear change summary and risks.
 5. Address CI and review feedback before merge.
 
@@ -43,7 +43,7 @@ Optimize for reliability per unit complexity.
 - Run targeted tests for touched areas.
 - For infra/config updates, include a concrete verification checklist in the PR.
 - Do not merge while validation is failing.
-- Optional local hook: run `bun run agentic:validate` before push.
+- Optional local hook: run `pnpm run agentic:validate` before push.
 
 ## Review Standard
 

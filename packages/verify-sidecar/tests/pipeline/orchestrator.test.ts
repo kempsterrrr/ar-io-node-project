@@ -1,6 +1,6 @@
-import { describe, it, expect, mock } from 'bun:test';
+import { describe, it, expect, vi } from 'vitest';
 
-mock.module('../../src/config.js', () => ({
+vi.mock('../../src/config.js', () => ({
   config: {
     PORT: 4001,
     NODE_ENV: 'test',
@@ -11,7 +11,7 @@ mock.module('../../src/config.js', () => ({
   },
 }));
 
-mock.module('../../src/utils/logger.js', () => ({
+vi.mock('../../src/utils/logger.js', () => ({
   logger: {
     info: () => {},
     warn: () => {},
@@ -50,7 +50,7 @@ describe('Pipeline: Orchestrator', () => {
     const { runVerification } = await import('../../src/pipeline/orchestrator.js');
     const result = await runVerification({ txId: '4jBV3ofWh41KhuTs2pFvj-KBZWUkbrbCYlJH0vLA6LM' });
 
-    expect(result.verificationId).toStartWith('vrf_');
+    expect(result.verificationId).toMatch(/^vrf_/);
     expect(result.tier).toBe('full');
     expect(result.existence.status).toBe('confirmed');
     expect(result.existence.blockHeight).toBe(1438221);

@@ -1,35 +1,43 @@
 # =============================================================================
 # Verify Sidecar — Docker image
 # =============================================================================
-# Uses bun as both build and runtime to avoid native module bundling issues
-# (better-sqlite3 has a .node binary that can't be bundled).
+# Node.js runtime with pnpm for dependency management.
+# Native modules (better-sqlite3) compile correctly via pnpm lifecycle scripts.
 # Frontend is built with vite during the image build.
 # =============================================================================
 
-FROM oven/bun:1.2
+FROM node:20-bookworm-slim
+
+# Enable pnpm via corepack
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 WORKDIR /app
 
+# Install build tools for native modules (better-sqlite3 node-gyp) and curl for healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy root workspace files
-COPY package.json bun.lock* ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 # Copy verify sidecar package
 COPY packages/verify-sidecar/package.json packages/verify-sidecar/
 
-# Install dependencies
-RUN bun install
+# Install dependencies (pnpm runs lifecycle scripts by default)
+RUN pnpm install --frozen-lockfile
 
 # Copy sidecar source code
 COPY packages/verify-sidecar/ packages/verify-sidecar/
 
+# Build the backend
+RUN pnpm --filter @ar-io/verify-sidecar run build
+
 # Build the frontend (vite)
-RUN cd packages/verify-sidecar/web && bun install && bun run build
+RUN cd packages/verify-sidecar/web && pnpm install && pnpm run build
 
 # Create directory for data
 RUN mkdir -p /app/data
-
-# Install curl for healthcheck
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
 # Set environment
 ENV NODE_ENV=production
@@ -40,4 +48,4 @@ EXPOSE 4001
 
 WORKDIR /app/packages/verify-sidecar
 
-CMD ["bun", "run", "src/index.ts"]
+CMD ["node", "dist/index.js"]
