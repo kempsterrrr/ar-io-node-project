@@ -1,9 +1,9 @@
 # =============================================================================
 # Verify Sidecar — Docker image
 # =============================================================================
-# Uses bun as both build and runtime to avoid native module bundling issues
-# (better-sqlite3 has a .node binary that can't be bundled).
-# Build tools (python3, make, g++) are needed for better-sqlite3's node-gyp.
+# Uses bun as both build and runtime.
+# Native modules (better-sqlite3) require explicit postinstall via npm
+# because bun does not reliably run lifecycle scripts for native addons.
 # Frontend is built with vite during the image build.
 # =============================================================================
 
@@ -11,9 +11,9 @@ FROM oven/bun:1.2
 
 WORKDIR /app
 
-# Install build tools for native modules (better-sqlite3 node-gyp) and curl for healthcheck
+# Install build tools for native modules and curl for healthcheck
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ curl \
+    python3 make g++ curl npm \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy root workspace files
@@ -22,8 +22,11 @@ COPY package.json bun.lock* ./
 # Copy verify sidecar package
 COPY packages/verify-sidecar/package.json packages/verify-sidecar/
 
-# Install dependencies with lifecycle scripts enabled for native modules
-RUN bun install --trust
+# Install dependencies with bun
+RUN bun install
+
+# Explicitly build native modules that bun skips
+RUN cd node_modules/better-sqlite3 && npx --yes node-gyp rebuild --release
 
 # Copy sidecar source code
 COPY packages/verify-sidecar/ packages/verify-sidecar/

@@ -23,6 +23,8 @@
   },
   "packageManager": "bun@1.2.23",
   "trustedDependencies": [
-    "@contentauth/c2pa-node"
+    "@contentauth/c2pa-node",
+    "better-sqlite3",
+    "duckdb"
   ]
 }
