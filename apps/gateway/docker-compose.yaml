@@ -80,12 +80,6 @@ services:
       - ar-io-network
     depends_on:
       - redis
-    healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:4000/ar-io/info']
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
 
   redis:
     image: redis:${REDIS_IMAGE_TAG:-7}
