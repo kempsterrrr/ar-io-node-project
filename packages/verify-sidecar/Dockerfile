@@ -1,5 +1,12 @@
-# Build stage
-FROM oven/bun:1.2 AS builder
+# =============================================================================
+# Verify Sidecar — Docker image
+# =============================================================================
+# Uses bun as both build and runtime to avoid native module bundling issues
+# (better-sqlite3 has a .node binary that can't be bundled).
+# Frontend is built with vite during the image build.
+# =============================================================================
+
+FROM oven/bun:1.2
 
 WORKDIR /app
 
@@ -15,38 +22,22 @@ RUN bun install
 # Copy sidecar source code
 COPY packages/verify-sidecar/ packages/verify-sidecar/
 
-# Build the backend for Node.js runtime
-RUN cd packages/verify-sidecar && bun build src/index.ts --outdir dist --target node
-
-# Build the frontend
+# Build the frontend (vite)
 RUN cd packages/verify-sidecar/web && bun install && bun run build
-
-# Production stage
-FROM node:20-bookworm-slim
-
-WORKDIR /app
-
-# Install curl for healthcheck
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-
-# Copy built backend and dependencies
-COPY --from=builder /app/packages/verify-sidecar/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages/verify-sidecar/package.json ./
-
-# Copy built frontend
-COPY --from=builder /app/packages/verify-sidecar/web/dist ./web/dist
 
 # Create directory for data
 RUN mkdir -p /app/data
 
+# Install curl for healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 # Set environment
 ENV NODE_ENV=production
 ENV PORT=4001
+ENV SQLITE_PATH=/app/data/verify.db
 
 EXPOSE 4001
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:4001/health || exit 1
+WORKDIR /app/packages/verify-sidecar
 
-CMD ["node", "dist/index.js"]
+CMD ["bun", "run", "src/index.ts"]

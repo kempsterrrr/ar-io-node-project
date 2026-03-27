@@ -99,15 +99,22 @@ jobs:
             REPO_DIR="${HOME}/ar-io-node-project"
             docker build -t verify-sidecar:latest -f "${REPO_DIR}/packages/verify-sidecar/Dockerfile" "${REPO_DIR}"
 
+            # Compose with all overlays so other sidecars are not disrupted
+            COMPOSE_FILES="-f docker-compose.yaml"
+            if [ -f sidecar/docker-compose.sidecar.yaml ]; then
+              COMPOSE_FILES="${COMPOSE_FILES} -f sidecar/docker-compose.sidecar.yaml"
+            fi
+            COMPOSE_FILES="${COMPOSE_FILES} -f ${{ env.SIDECAR_DIR }}/docker-compose.verify.yaml"
+
             VERIFY_SIDECAR_IMAGE=verify-sidecar:latest \
             VERIFY_SIDECAR_DATA_DIR=./${{ env.SIDECAR_DIR }}/data \
-            docker compose -f docker-compose.yaml -f ${{ env.SIDECAR_DIR }}/docker-compose.verify.yaml up -d
+            docker compose ${COMPOSE_FILES} up -d
 
             echo "Waiting for sidecar to start..."
             sleep 5
 
             echo "Container status:"
-            docker compose -f docker-compose.yaml -f ${{ env.SIDECAR_DIR }}/docker-compose.verify.yaml ps
+            docker compose ${COMPOSE_FILES} ps
 
             echo ""
             echo "Health check:"
