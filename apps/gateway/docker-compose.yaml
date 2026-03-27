@@ -1,7 +1,7 @@
 # =============================================================================
 # AR.IO Gateway - Production Configuration
 # =============================================================================
-# Based on the official ar-io-node docker-compose.yaml
+# Synced with upstream ar-io-node (2026-03-27).
 # For local development, use: docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up
 # For production, use: docker compose up -d
 # =============================================================================
@@ -11,23 +11,33 @@ services:
     image: ghcr.io/ar-io/ar-io-envoy:${ENVOY_IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
-      - "${GATEWAY_PORT:-3000}:3000"
+      - '${GATEWAY_PORT:-3000}:3000'
     environment:
       - LOG_LEVEL=${ENVOY_LOG_LEVEL:-info}
       - TVAL_AR_IO_HOST=core
-      - TVAL_AR_IO_PORT=4000
+      - TVAL_AR_IO_PORT=${CORE_PORT:-4000}
       - TVAL_OBSERVER_HOST=core
-      - TVAL_OBSERVER_PORT=5050
+      - TVAL_OBSERVER_PORT=${OBSERVER_PORT:-5050}
       - TVAL_TRUSTED_NODE_HOST=${TRUSTED_NODE_HOST:-arweave.net}
       - TVAL_TRUSTED_NODE_PORT=${TRUSTED_NODE_PORT:-443}
-      - TVAL_FALLBACK_NODE_HOST=${FALLBACK_NODE_HOST:-}
+      - TVAL_FALLBACK_NODE_HOST=${FALLBACK_NODE_HOST:-peers.arweave.xyz}
       - TVAL_FALLBACK_NODE_PORT=${FALLBACK_NODE_PORT:-1984}
-      - TVAL_GRAPHQL_HOST=core
-      - TVAL_GRAPHQL_PORT=4000
-      - TVAL_DATASETS_HOST=core
-      - TVAL_DATASETS_PORT=4000
+      - TVAL_GRAPHQL_HOST=${GRAPHQL_HOST:-core}
+      - TVAL_GRAPHQL_PORT=${GRAPHQL_PORT:-4000}
+      - TVAL_GRAPHQL_HOST_HEADER=${GRAPHQL_HOST_HEADER:-}
+      - TVAL_DATASETS_HOST=${DATASETS_PROXY_HOST:-core}
+      - TVAL_DATASETS_PORT=${DATASETS_PROXY_PORT:-4000}
       - TVAL_ARNS_ROOT_HOST=${ARNS_ROOT_HOST:-}
       - TVAL_ARWEAVE_POST_DRY_RUN=${ARWEAVE_POST_DRY_RUN:-false}
+      - TVAL_ENABLE_ARWEAVE_PEER_EDS=${ENABLE_ARWEAVE_PEER_EDS:-true}
+      - TVAL_ARWEAVE_PEER_DNS_RECORDS=${ARWEAVE_PEER_DNS_RECORDS:-peers.arweave.xyz}
+      - TVAL_ARWEAVE_PEER_DNS_PORT=${ARWEAVE_PEER_DNS_PORT:-1984}
+    volumes:
+      - envoy-eds-data:/data/envoy-eds
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     depends_on:
       - core
     networks:
@@ -49,17 +59,47 @@ services:
       - TRUSTED_NODE_URL=${TRUSTED_NODE_URL:-https://arweave.net}
       - RUN_OBSERVER=${RUN_OBSERVER:-false}
       - OBSERVER_WALLET=${OBSERVER_WALLET:-}
+      - CHAIN_CACHE_TYPE=${CHAIN_CACHE_TYPE:-redis}
+      - REDIS_CACHE_URL=${REDIS_CACHE_URL:-redis://redis:6379}
+      - WEBHOOK_TARGET_SERVERS=${WEBHOOK_TARGET_SERVERS:-}
+      - WEBHOOK_INDEX_FILTER=${WEBHOOK_INDEX_FILTER:-}
+      - ANS104_UNBUNDLE_FILTER=${ANS104_UNBUNDLE_FILTER:-}
+      - ANS104_INDEX_FILTER=${ANS104_INDEX_FILTER:-}
+      - ARWEAVE_POST_DRY_RUN=${ARWEAVE_POST_DRY_RUN:-false}
+      - ARWEAVE_PEER_DNS_RECORDS=${ARWEAVE_PEER_DNS_RECORDS:-}
+      - AR_IO_NODE_RELEASE=${AR_IO_NODE_RELEASE:-73}
     volumes:
       - ${DATA_PATH:-./data}:/app/data
       - ./wallets:/app/wallets:ro
+      - envoy-eds-data:/app/data/envoy-eds
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     networks:
       - ar-io-network
+    depends_on:
+      - redis
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/ar-io/info"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:4000/ar-io/info']
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  redis:
+    image: redis:${REDIS_IMAGE_TAG:-7}
+    command: redis-server --maxmemory ${REDIS_MAX_MEMORY:-256mb} --maxmemory-policy allkeys-lru --save "" --appendonly no
+    restart: unless-stopped
+    ports:
+      - '6379'
+    volumes:
+      - ${REDIS_DATA_PATH:-./data/redis}:/data
+    networks:
+      - ar-io-network
+
+volumes:
+  envoy-eds-data:
 
 networks:
   ar-io-network:
