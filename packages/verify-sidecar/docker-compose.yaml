@@ -1,0 +1,21 @@
+services:
+  verify-sidecar:
+    build:
+      context: ../../
+      dockerfile: packages/verify-sidecar/Dockerfile
+    ports:
+      - '${PORT:-4001}:4001'
+    env_file:
+      - .env.docker
+    volumes:
+      - verify-data:/app/data
+    networks:
+      - ar-io-network
+    restart: unless-stopped
+
+volumes:
+  verify-data:
+
+networks:
+  ar-io-network:
+    external: true
