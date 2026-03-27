@@ -31,6 +31,8 @@ on:
       - 'packages/trusthash-sidecar/docker-compose.sidecar.yaml'
       - 'packages/trusthash-sidecar/.env.docker'
       - 'packages/trusthash-sidecar/nginx.conf'
+      - 'packages/verify-sidecar/docker-compose.verify.yaml'
+      - 'packages/verify-sidecar/.env.docker'
       - '.github/workflows/deploy-gateway.yml'
   workflow_dispatch:
     inputs:
@@ -72,6 +74,7 @@ jobs:
             mkdir -p ${{ env.DEPLOY_PATH }}
             mkdir -p ${{ env.DEPLOY_PATH }}/wallets
             mkdir -p ${{ env.DEPLOY_PATH }}/sidecar/data
+            mkdir -p ${{ env.DEPLOY_PATH }}/verify-sidecar/data
           EOF
 
       - name: Copy gateway files
@@ -82,12 +85,19 @@ jobs:
               apps/gateway/nginx \
               ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:${{ env.DEPLOY_PATH }}/
 
-      - name: Copy sidecar files
+      - name: Copy trusthash sidecar files
         run: |
           scp packages/trusthash-sidecar/docker-compose.sidecar.yaml \
               packages/trusthash-sidecar/.env.docker \
               packages/trusthash-sidecar/nginx.conf \
               ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:${{ env.DEPLOY_PATH }}/sidecar/
+
+      - name: Copy verify sidecar files
+        run: |
+          scp packages/verify-sidecar/docker-compose.verify.yaml \
+              packages/verify-sidecar/.env.docker \
+              ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:${{ env.DEPLOY_PATH }}/verify-sidecar/
+
       - name: Deploy nginx config
         run: |
           ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
@@ -121,6 +131,10 @@ jobs:
           TRUSTHASH_SIDECAR_ENV_FILE=./sidecar/.env.docker
           TRUSTHASH_SIDECAR_DATA_DIR=./sidecar/data
           TRUSTHASH_SIDECAR_NGINX_CONF=./sidecar/nginx.conf
+
+          # Verify Sidecar (compose overlay)
+          VERIFY_SIDECAR_IMAGE=verify-sidecar:latest
+          VERIFY_SIDECAR_DATA_DIR=./verify-sidecar/data
 
           # Envoy Peer EDS
           ENABLE_ARWEAVE_PEER_EDS=${{ vars.ENABLE_ARWEAVE_PEER_EDS || 'true' }}
@@ -168,7 +182,7 @@ jobs:
             docker compose -f docker-compose.yaml pull
           EOF
 
-      - name: Build sidecar image
+      - name: Build sidecar images
         run: |
           ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << EOF
             set -euo pipefail
@@ -182,7 +196,10 @@ jobs:
             git reset --hard
             git clean -fd
             git checkout ${{ github.sha }}
+            echo "Building trusthash sidecar..."
             docker build -t trusthash-sidecar:latest -f packages/trusthash-sidecar/Dockerfile .
+            echo "Building verify sidecar..."
+            docker build -t verify-sidecar:latest -f packages/verify-sidecar/Dockerfile .
           EOF
 
       - name: Write signing secrets to server
@@ -224,7 +241,12 @@ jobs:
             ENABLE_SIGNING="${ENABLE_SIGNING}" \
             SIGNING_CERT_PEM="${SIGNING_CERT_PEM}" \
             SIGNING_PRIVATE_KEY_PEM="${SIGNING_PRIVATE_KEY_PEM}" \
-            docker compose -f docker-compose.yaml -f sidecar/docker-compose.sidecar.yaml up -d
+            VERIFY_SIDECAR_IMAGE=verify-sidecar:latest \
+            VERIFY_SIDECAR_DATA_DIR=./verify-sidecar/data \
+            docker compose -f docker-compose.yaml \
+              -f sidecar/docker-compose.sidecar.yaml \
+              -f verify-sidecar/docker-compose.verify.yaml \
+              up -d
           EOF
 
       - name: Verify deployment
@@ -236,11 +258,18 @@ jobs:
             sleep 10
             
             echo "Container status:"
-            docker compose -f docker-compose.yaml -f sidecar/docker-compose.sidecar.yaml ps
-            
+            docker compose -f docker-compose.yaml \
+              -f sidecar/docker-compose.sidecar.yaml \
+              -f verify-sidecar/docker-compose.verify.yaml \
+              ps
+
             echo ""
-            echo "Health check:"
+            echo "Gateway health check:"
             curl -s http://localhost:4000/ar-io/info || echo "Gateway not responding yet (may still be starting)"
+
+            echo ""
+            echo "Verify sidecar health check:"
+            curl -s http://localhost:4001/health || echo "Verify sidecar not responding yet (may still be starting)"
           EOF
 
       - name: Deployment summary
