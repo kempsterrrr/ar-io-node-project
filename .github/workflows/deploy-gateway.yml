@@ -176,6 +176,8 @@ jobs:
             fi
             cd "\${REPO_DIR}"
             git fetch origin
+            git reset --hard
+            git clean -fd
             git checkout ${{ github.sha }}
             docker build -t trusthash-sidecar:latest -f packages/trusthash-sidecar/Dockerfile .
           EOF
