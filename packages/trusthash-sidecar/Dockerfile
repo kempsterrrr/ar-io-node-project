@@ -26,11 +26,12 @@ COPY packages/trusthash-sidecar/ packages/trusthash-sidecar/
 RUN mkdir -p /app/data
 
 # Install curl for healthcheck
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
 # Set environment
 ENV NODE_ENV=production
 ENV PORT=3003
+ENV DUCKDB_PATH=/app/data/provenance.duckdb
 
 EXPOSE 3003
 
