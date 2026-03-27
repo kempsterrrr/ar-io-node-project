@@ -61,6 +61,11 @@ jobs:
         run: |
           docker compose -f docker-compose.local.yaml config --quiet
 
+      - name: Validate verify sidecar compose overlay
+        run: |
+          cd apps/gateway
+          docker compose -f docker-compose.yaml -f ../../packages/verify-sidecar/docker-compose.verify.yaml config --quiet
+
   build:
     name: Build Check
     runs-on: ubuntu-latest

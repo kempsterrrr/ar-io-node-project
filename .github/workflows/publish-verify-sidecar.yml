@@ -1,0 +1,125 @@
+# =============================================================================
+# Deploy Verify Sidecar to Hetzner
+# =============================================================================
+# Builds the sidecar image from source on the server and deploys it
+# alongside the gateway. No GHCR publish — builds directly from git.
+#
+# Required Secrets:
+#   - HETZNER_HOST: Server IP or hostname
+#   - HETZNER_USER: SSH username
+#   - HETZNER_SSH_KEY: Private SSH key
+# =============================================================================
+
+name: Deploy Verify Sidecar
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/verify-sidecar/**'
+      - '.github/workflows/publish-verify-sidecar.yml'
+  workflow_dispatch:
+
+env:
+  DEPLOY_PATH: ~/ar-io-gateway
+  SIDECAR_DIR: verify-sidecar
+  REPO_PATH: ~/ar-io-node-project
+
+concurrency:
+  group: verify-sidecar-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build + Deploy Verify Sidecar
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.HETZNER_SSH_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          if [ -z "${{ secrets.HETZNER_HOST }}" ]; then
+            echo "HETZNER_HOST secret is not set. Skipping deployment." >&2
+            exit 1
+          fi
+          ssh-keyscan -H ${{ secrets.HETZNER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Clone or update repo on server
+        run: |
+          ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << EOF
+            set -euo pipefail
+            REPO_DIR="\${HOME}/ar-io-node-project"
+            if [ ! -d "\${REPO_DIR}/.git" ]; then
+              git clone https://github.com/${{ github.repository }}.git "\${REPO_DIR}"
+            fi
+            cd "\${REPO_DIR}"
+            git fetch origin
+            git reset --hard
+            git clean -fd
+            git checkout ${{ github.sha }}
+            echo "Repo at \$(git rev-parse --short HEAD)"
+          EOF
+
+      - name: Create sidecar directory
+        run: |
+          ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
+            mkdir -p ${{ env.DEPLOY_PATH }}/${{ env.SIDECAR_DIR }}/data
+          EOF
+
+      - name: Copy sidecar config files
+        run: |
+          scp packages/verify-sidecar/docker-compose.verify.yaml \
+              packages/verify-sidecar/.env.docker \
+              ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:${{ env.DEPLOY_PATH }}/${{ env.SIDECAR_DIR }}/
+
+      - name: Build and deploy sidecar
+        run: |
+          ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
+            set -euo pipefail
+
+            cd ${{ env.DEPLOY_PATH }}
+
+            if [ ! -f docker-compose.yaml ]; then
+              echo "Missing gateway docker-compose.yaml in ${{ env.DEPLOY_PATH }}. Deploy the gateway first." >&2
+              exit 1
+            fi
+
+            docker network create ar-io-network >/dev/null 2>&1 || true
+
+            # Build sidecar image from repo root
+            REPO_DIR="${HOME}/ar-io-node-project"
+            docker build -t verify-sidecar:latest -f "${REPO_DIR}/packages/verify-sidecar/Dockerfile" "${REPO_DIR}"
+
+            VERIFY_SIDECAR_IMAGE=verify-sidecar:latest \
+            VERIFY_SIDECAR_DATA_DIR=./${{ env.SIDECAR_DIR }}/data \
+            docker compose -f docker-compose.yaml -f ${{ env.SIDECAR_DIR }}/docker-compose.verify.yaml up -d
+
+            echo "Waiting for sidecar to start..."
+            sleep 5
+
+            echo "Container status:"
+            docker compose -f docker-compose.yaml -f ${{ env.SIDECAR_DIR }}/docker-compose.verify.yaml ps
+
+            echo ""
+            echo "Health check:"
+            curl -s http://localhost:4001/health || echo "Verify sidecar not responding yet (may still be starting)"
+          EOF
+
+      - name: Deployment summary
+        run: |
+          {
+            echo "## Verify Sidecar Deployment Complete"
+            echo ""
+            echo "**Commit:** ${{ github.sha }}"
+            echo "**Build:** from source (no GHCR)"
+            echo "**Time (UTC):** $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          } >> "$GITHUB_STEP_SUMMARY"

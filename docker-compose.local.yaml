@@ -110,6 +110,33 @@ services:
       timeout: 10s
       retries: 3
 
+  verify-sidecar:
+    image: ${VERIFY_SIDECAR_IMAGE_LOCAL:-verify-sidecar-local}
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: packages/verify-sidecar/Dockerfile
+    restart: 'no'
+    ports:
+      - '${VERIFY_PORT:-4001}:4001'
+    env_file:
+      - ./packages/verify-sidecar/.env.docker
+    environment:
+      - NODE_ENV=development
+      - PORT=4001
+      - LOG_LEVEL=debug
+      - SQLITE_PATH=/app/data/verify.db
+    volumes:
+      - ./packages/verify-sidecar/data:/app/data
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:4001/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
 networks:
   ar-io-network:
     external: true
