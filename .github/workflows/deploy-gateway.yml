@@ -122,6 +122,9 @@ jobs:
           TRUSTHASH_SIDECAR_DATA_DIR=./sidecar/data
           TRUSTHASH_SIDECAR_NGINX_CONF=./sidecar/nginx.conf
 
+          # Envoy Peer EDS
+          ENABLE_ARWEAVE_PEER_EDS=${{ vars.ENABLE_ARWEAVE_PEER_EDS || 'true' }}
+
           # Production Settings
           LOG_LEVEL=${{ vars.LOG_LEVEL || 'info' }}
           TRUSTED_NODE_URL=${{ vars.TRUSTED_NODE_URL || 'https://arweave.net' }}
