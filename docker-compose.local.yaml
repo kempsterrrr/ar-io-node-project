@@ -57,19 +57,13 @@ services:
       - ./apps/gateway/wallets:/app/wallets:ro
     networks:
       - ar-io-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/ar-io/info"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
 
   trusthash-sidecar:
     image: ${TRUSTHASH_SIDECAR_IMAGE_LOCAL:-trusthash-sidecar-local}
     pull_policy: never
     build:
-      context: ./packages/trusthash-sidecar
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: packages/trusthash-sidecar/Dockerfile
     restart: "no"
     expose:
       - '3003'
