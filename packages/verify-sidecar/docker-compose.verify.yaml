@@ -2,12 +2,18 @@
 # Usage: docker compose -f apps/gateway/docker-compose.yaml -f packages/verify-sidecar/docker-compose.verify.yaml up -d
 services:
   verify-sidecar:
-    image: ${VERIFY_SIDECAR_IMAGE:-ghcr.io/ar-io/verify-sidecar}:${VERIFY_SIDECAR_TAG:-latest}
-    ports:
-      - '${VERIFY_PORT:-4001}:4001'
+    image: ${VERIFY_SIDECAR_IMAGE:-ghcr.io/ar-io/verify-sidecar:${VERIFY_SIDECAR_TAG:-latest}}
+    restart: unless-stopped
+    expose:
+      - '4001'
+    env_file:
+      - path: ${VERIFY_SIDECAR_ENV_FILE:-.env.docker}
+        required: false
     environment:
       - GATEWAY_URL=http://core:4000
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=4001
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - SQLITE_PATH=/app/data/verify.db
     volumes:
       - ${VERIFY_SIDECAR_DATA_DIR:-./verify-data}:/app/data
@@ -16,7 +22,6 @@ services:
     depends_on:
       core:
         condition: service_healthy
-    restart: unless-stopped
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:4001/health']
       interval: 30s
@@ -24,6 +29,23 @@ services:
       retries: 3
       start_period: 10s
 
+  verify-proxy:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - '${VERIFY_PORT:-4001}:80'
+    volumes:
+      - ${VERIFY_SIDECAR_NGINX_CONF:-./nginx.conf}:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - verify-sidecar
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:80/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 networks:
   ar-io-network:
-    external: true
+    name: ar-io-network

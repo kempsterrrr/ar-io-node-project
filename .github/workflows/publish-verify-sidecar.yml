@@ -79,6 +79,7 @@ jobs:
         run: |
           scp packages/verify-sidecar/docker-compose.verify.yaml \
               packages/verify-sidecar/.env.docker \
+              packages/verify-sidecar/nginx.conf \
               ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:${{ env.DEPLOY_PATH }}/${{ env.SIDECAR_DIR }}/
 
       - name: Build and deploy sidecar
@@ -108,16 +109,17 @@ jobs:
 
             VERIFY_SIDECAR_IMAGE=verify-sidecar:latest \
             VERIFY_SIDECAR_DATA_DIR=./${{ env.SIDECAR_DIR }}/data \
+            VERIFY_SIDECAR_NGINX_CONF=./${{ env.SIDECAR_DIR }}/nginx.conf \
             docker compose ${COMPOSE_FILES} up -d
 
             echo "Waiting for sidecar to start..."
-            sleep 5
+            sleep 10
 
             echo "Container status:"
             docker compose ${COMPOSE_FILES} ps
 
             echo ""
-            echo "Health check:"
+            echo "Health check (via proxy):"
             curl -s http://localhost:4001/health || echo "Verify sidecar not responding yet (may still be starting)"
           EOF
 
