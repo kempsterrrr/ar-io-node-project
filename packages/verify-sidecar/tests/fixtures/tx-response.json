@@ -1,0 +1,13 @@
+{
+  "format": 2,
+  "id": "4jBV3ofWh41KhuTs2pFvj-KBZWUkbrbCYlJH0vLA6LM",
+  "last_tx": "abc123",
+  "owner": "pEbU_SLfRzEsAW25Pf2sNbSl2KsNMCJ1Ark3sHHKGII",
+  "tags": [{ "name": "Q29udGVudC1UeXBl", "value": "dGV4dC9wbGFpbg" }],
+  "target": "",
+  "quantity": "0",
+  "data_root": "GKot-BLMoqmif8KA4MZ4TKrzvi_PBJCgSbceY5kELUg",
+  "data_size": "4",
+  "reward": "5312184",
+  "signature": "sig123..."
+}
