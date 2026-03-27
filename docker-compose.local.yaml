@@ -117,8 +117,8 @@ services:
       context: .
       dockerfile: packages/verify-sidecar/Dockerfile
     restart: 'no'
-    ports:
-      - '${VERIFY_PORT:-4001}:4001'
+    expose:
+      - '4001'
     env_file:
       - ./packages/verify-sidecar/.env.docker
     environment:
@@ -136,6 +136,23 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  verify-proxy:
+    image: nginx:alpine
+    restart: 'no'
+    ports:
+      - '${VERIFY_PORT:-4001}:80'
+    volumes:
+      - ./packages/verify-sidecar/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - verify-sidecar
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:80/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   ar-io-network:
