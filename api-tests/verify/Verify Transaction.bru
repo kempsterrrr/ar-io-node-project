@@ -1,0 +1,27 @@
+meta {
+  name: Verify Transaction
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{verifyUrl}}/api/v1/verify
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "txId": "{{sampleTxId}}",
+    "deepVerification": false,
+    "multiGateway": false
+  }
+}
+
+docs {
+  Verify an Arweave transaction.
+  txId: 43-character base64url transaction ID (required).
+  deepVerification: Enable deep integrity verification (optional, default false).
+  multiGateway: Query multiple gateways for consensus (optional, default false).
+  Returns a verification result with existence, integrity, metadata, and receipt details.
+}

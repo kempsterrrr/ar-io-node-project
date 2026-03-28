@@ -1,0 +1,28 @@
+meta {
+  name: Webhook Receive
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{trusthashUrl}}/webhook
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "tx_id": "abc123def456ghi789jkl012mno345pqr678stu90vw",
+    "tags": [
+      { "name": "pHash", "value": "AAAAAAAAAAAAAAAA" }
+    ],
+    "owner": "owner-address-here",
+    "block_height": 1500000
+  }
+}
+
+docs {
+  Receive a single transaction webhook notification from the gateway.
+  This is how the gateway notifies the sidecar about new pHash-tagged transactions.
+  Fields: tx_id (or id), tags, owner (or owner_address), block_height (or height).
+}

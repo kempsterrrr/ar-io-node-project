@@ -53,6 +53,9 @@ coverage/
 # OS
 Thumbs.db
 
+# Bruno local cache
+api-tests/.bruno/
+
 # Docker data directories (keep .gitkeep for structure)
 **/data/*
 !**/data/.gitkeep

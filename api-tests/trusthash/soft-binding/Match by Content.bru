@@ -1,0 +1,27 @@
+meta {
+  name: Match by Content
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{trusthashUrl}}/v1/matches/byContent?alg=org.ar-io.phash&maxResults=10
+  body: none
+  auth: none
+}
+
+headers {
+  Content-Type: image/jpeg
+}
+
+params:query {
+  alg: org.ar-io.phash
+  maxResults: 10
+}
+
+docs {
+  Upload an image to find matching manifests by perceptual hash.
+  Set the request body to a JPEG/PNG file in Bruno (Body > Binary > Select File).
+  Supported Content-Types: image/jpeg, image/png, image/webp, image/gif, image/tiff, image/avif, image/heif
+  Max image size is configured by MAX_IMAGE_SIZE_MB (default 50MB).
+}

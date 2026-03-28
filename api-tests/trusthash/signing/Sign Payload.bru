@@ -1,0 +1,20 @@
+meta {
+  name: Sign Payload
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{trusthashUrl}}/v1/sign
+  body: none
+  auth: none
+}
+
+docs {
+  Sign a COSE Sig_structure payload.
+  Requires ENABLE_SIGNING=true on the sidecar.
+  Set the request body to binary COSE bytes in Bruno (Body > Binary > Select File).
+  Returns 64-byte ECDSA signature in IEEE P1363 format.
+  Query param ?format=der returns DER-encoded signature instead.
+  Returns 501 if signing is not enabled.
+}

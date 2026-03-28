@@ -97,6 +97,32 @@ jobs:
       - name: Run build
         run: pnpm run build
 
+  api-test-sync:
+    name: API Test Sync Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check API test sync
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          ROUTE_CHANGES=$(git diff --name-only "$BASE"...HEAD -- \
+            'packages/*/src/routes/**' \
+            'packages/*/src/index.ts' | head -20)
+          API_TEST_CHANGES=$(git diff --name-only "$BASE"...HEAD -- 'api-tests/' | head -20)
+          if [ -n "$ROUTE_CHANGES" ] && [ -z "$API_TEST_CHANGES" ]; then
+            echo "::warning::API route files changed but api-tests/ was not updated. Please update Bruno API tests to match."
+            echo "Changed route files:"
+            echo "$ROUTE_CHANGES"
+          else
+            echo "API test sync check passed."
+          fi
+
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest

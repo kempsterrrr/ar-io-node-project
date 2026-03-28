@@ -1,0 +1,22 @@
+meta {
+  name: Search Similar by TxId
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{trusthashUrl}}/v1/search-similar?txId={{sampleTxId}}&threshold=10&limit=10
+  body: none
+  auth: none
+}
+
+params:query {
+  txId: {{sampleTxId}}
+  threshold: 10
+  limit: 10
+}
+
+docs {
+  Search for images similar to a known manifest transaction.
+  Uses the pHash stored for the given txId.
+}

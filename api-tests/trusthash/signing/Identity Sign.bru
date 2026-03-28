@@ -1,0 +1,29 @@
+meta {
+  name: Identity Sign
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{trusthashUrl}}/v1/identity/sign
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "payload": "base64EncodedPayloadHere",
+    "walletAddress": "0xYourWalletAddress",
+    "walletSignature": "0xYourSignature",
+    "walletMessage": "Message that was signed"
+  }
+}
+
+docs {
+  Sign a payload using identity-verified signing.
+  Requires ENABLE_SIGNING=true on the sidecar.
+  The wallet signature must be verifiable against the wallet address.
+  payload: base64-encoded binary data (max 10 MB).
+  Returns binary DER signature (application/octet-stream).
+  Returns 501 if signing is not enabled.
+}

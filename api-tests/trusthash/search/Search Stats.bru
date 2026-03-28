@@ -1,0 +1,15 @@
+meta {
+  name: Search Stats
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{trusthashUrl}}/v1/search-similar/stats
+  body: none
+  auth: none
+}
+
+docs {
+  Returns statistics about the search index (indexed manifest count, etc.).
+}

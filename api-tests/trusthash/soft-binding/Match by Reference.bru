@@ -1,0 +1,25 @@
+meta {
+  name: Match by Reference
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{trusthashUrl}}/v1/matches/byReference
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "referenceUrl": "https://arweave.net/4jBV3ofWh41KhuTs2pFvj-KBZWUkbrbCYlJH0vLA6LM",
+    "alg": "org.ar-io.phash",
+    "maxResults": 10
+  }
+}
+
+docs {
+  Find matching manifests by fetching an image from a URL.
+  Requires ENABLE_BY_REFERENCE=true on the sidecar (enabled by default).
+  Optional fields: assetLength, assetType, hintAlg, hintValue.
+}

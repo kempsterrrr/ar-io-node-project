@@ -1,0 +1,23 @@
+meta {
+  name: Lookup by Binding (GET)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{trusthashUrl}}/v1/matches/byBinding?alg=org.ar-io.phash&value=AAAAAAAAAAAAAAAA&maxResults=10
+  body: none
+  auth: none
+}
+
+params:query {
+  alg: org.ar-io.phash
+  value: AAAAAAAAAAAAAAAA
+  maxResults: 10
+}
+
+docs {
+  Look up manifests by soft binding value.
+  Supported algorithms: org.ar-io.phash, io.iscc.v0
+  The value parameter should be base64-encoded.
+}

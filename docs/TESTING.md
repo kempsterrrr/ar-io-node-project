@@ -2,6 +2,38 @@
 
 This document describes how to test the AR.IO gateway and sidecars locally.
 
+## Bruno API Testing (Manual)
+
+The `api-tests/` directory contains a [Bruno](https://www.usebruno.com/) collection with pre-configured requests for all API endpoints across the gateway, trusthash sidecar, and verify sidecar.
+
+### Setup
+
+1. Download Bruno from https://www.usebruno.com/downloads
+2. Open Bruno and select **Open Collection**
+3. Navigate to the `api-tests/` folder in the project root
+4. Select the **Local** environment (top-right dropdown)
+
+### Usage
+
+1. Start the services: `docker compose -f docker-compose.local.yaml up -d`
+2. Browse the collection folders (gateway, trusthash, verify)
+3. Click any request and hit **Send** to execute it
+4. Environment variables (`gatewayUrl`, `trusthashUrl`, `verifyUrl`) are pre-configured
+
+### Collection Structure
+
+```
+api-tests/
+  gateway/           # Gateway endpoints (info, health, fetch transaction)
+  trusthash/         # Trusthash sidecar (manifests, soft-binding, search, signing, webhook)
+  verify/            # Verify sidecar (verify transaction, PDF attestation)
+  environments/      # Local and Production environment configs
+```
+
+### Keeping Tests in Sync
+
+When adding, removing, or modifying any API endpoint, **you must update the corresponding `.bru` file** in `api-tests/`. The CI pipeline includes an API Test Sync Check that warns when route files change without corresponding updates to `api-tests/`.
+
 ## Gateway Testing
 
 ### Quick Test

@@ -1,0 +1,21 @@
+meta {
+  name: Download PDF Attestation
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{verifyUrl}}/api/v1/verify/:id/pdf
+  body: none
+  auth: none
+}
+
+params:path {
+  id: replace-with-verification-id
+}
+
+docs {
+  Download a PDF attestation report for a completed verification.
+  The id is returned from POST /api/v1/verify as verificationId.
+  Response Content-Type: application/pdf
+}

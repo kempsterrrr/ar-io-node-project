@@ -1,0 +1,20 @@
+meta {
+  name: Get Verification Result
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{verifyUrl}}/api/v1/verify/:id
+  body: none
+  auth: none
+}
+
+params:path {
+  id: replace-with-verification-id
+}
+
+docs {
+  Retrieve a previously completed verification result by its ID.
+  The id is returned from POST /api/v1/verify as verificationId (e.g. "vrf_xxxxx").
+}

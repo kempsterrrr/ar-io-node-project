@@ -1,0 +1,18 @@
+meta {
+  name: Get Certificate
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{trusthashUrl}}/v1/cert
+  body: none
+  auth: none
+}
+
+docs {
+  Returns the PEM-encoded X.509 certificate chain used for signing.
+  Requires ENABLE_SIGNING=true on the sidecar.
+  Response Content-Type: application/x-pem-file
+  Returns 501 if signing is not enabled.
+}

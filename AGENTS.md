@@ -34,13 +34,15 @@ Optimize for reliability per unit complexity.
 1. Read this file and relevant project docs before editing.
 2. Implement minimal scoped changes.
 3. Validate locally (`pnpm run format:check`, `pnpm run build`, plus task-specific tests).
-4. Open a PR with clear change summary and risks.
-5. Address CI and review feedback before merge.
+4. If the change adds, removes, or modifies any API endpoint (routes, request/response schemas, query params, headers), update the corresponding Bruno test in `api-tests/`.
+5. Open a PR with clear change summary and risks.
+6. Address CI and review feedback before merge.
 
 ## Testing & Verification
 
 - Run formatting and build checks for all code changes.
 - Run targeted tests for touched areas.
+- When API routes change, verify the corresponding `api-tests/*.bru` files are updated to match.
 - For infra/config updates, include a concrete verification checklist in the PR.
 - Do not merge while validation is failing.
 - Optional local hook: run `pnpm run agentic:validate` before push.

@@ -1,0 +1,24 @@
+meta {
+  name: Lookup by Binding (POST)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{trusthashUrl}}/v1/matches/byBinding
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "alg": "org.ar-io.phash",
+    "value": "AAAAAAAAAAAAAAAA",
+    "maxResults": 10
+  }
+}
+
+docs {
+  Look up manifests by soft binding value (POST variant).
+  Supported algorithms: org.ar-io.phash, io.iscc.v0
+}

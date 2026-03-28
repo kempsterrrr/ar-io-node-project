@@ -1,0 +1,38 @@
+meta {
+  name: Webhook Receive Batch
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{trusthashUrl}}/webhook
+  body: json
+  auth: none
+}
+
+body:json {
+  [
+    {
+      "tx_id": "abc123def456ghi789jkl012mno345pqr678stu90vw",
+      "tags": [
+        { "name": "pHash", "value": "AAAAAAAAAAAAAAAA" }
+      ],
+      "owner": "owner-address-here",
+      "block_height": 1500000
+    },
+    {
+      "tx_id": "xyz789abc012def345ghi678jkl901mno234pqr567st",
+      "tags": [
+        { "name": "pHash", "value": "BBBBBBBBBBBBBBBB" }
+      ],
+      "owner": "another-owner-address",
+      "block_height": 1500001
+    }
+  ]
+}
+
+docs {
+  Receive a batch of transaction webhook notifications.
+  The endpoint accepts an array of transactions and processes them individually.
+  Returns aggregated results: total, indexed, skipped, errors.
+}

@@ -1,0 +1,16 @@
+meta {
+  name: Supported Algorithms
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{trusthashUrl}}/v1/services/supportedAlgorithms
+  body: none
+  auth: none
+}
+
+docs {
+  Returns the list of supported watermark and fingerprint algorithms.
+  Expected: fingerprints include org.ar-io.phash and io.iscc.v0.
+}

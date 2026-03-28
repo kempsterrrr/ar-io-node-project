@@ -1,0 +1,24 @@
+meta {
+  name: Search Similar
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{trusthashUrl}}/v1/search-similar?phash=AAAAAAAAAAAAAAAA&threshold=10&limit=10
+  body: none
+  auth: none
+}
+
+params:query {
+  phash: AAAAAAAAAAAAAAAA
+  threshold: 10
+  limit: 10
+}
+
+docs {
+  Search for similar images by perceptual hash.
+  phash: 64-char binary or 16-char hex pHash value.
+  threshold: Max Hamming distance (0-64, default 10).
+  limit: Max results (1-100, default 10).
+}

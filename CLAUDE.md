@@ -36,6 +36,8 @@ pnpm run format:check       # Check formatting
 - `**/wallets/` - Wallet files (sensitive)
 - `.env` files - Local config only (use .env.example)
 
+**API Testing**: `api-tests/` contains Bruno collections for all endpoints. When modifying API routes, update the corresponding `.bru` files.
+
 ## CI Checks
 
 1. Lint & Format
@@ -43,6 +45,7 @@ pnpm run format:check       # Check formatting
 3. Build Check
 4. Security Scan
 5. Agentic Policy Validation
+6. API Test Sync Check
 
 ## Detailed Documentation
 

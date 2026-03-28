@@ -1,0 +1,17 @@
+meta {
+  name: Get Manifest
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{trusthashUrl}}/v1/manifests/{{sampleManifestId}}
+  body: none
+  auth: none
+}
+
+docs {
+  Returns binary C2PA manifest bytes.
+  Response Content-Type: application/c2pa
+  The X-Manifest-Resolution header indicates how the manifest was resolved.
+}
