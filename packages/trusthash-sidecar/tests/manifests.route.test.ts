@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { Hono } from 'hono';
 import manifests from '../src/routes/manifests.js';
@@ -20,7 +20,7 @@ function graphqlResponse(body: unknown, status: number = 200): Response {
 afterEach(() => {
   (globalThis as { fetch: typeof fetch }).fetch = originalFetch;
   clearRemoteManifestCache();
-  mock.restore();
+  vi.restoreAllMocks();
 });
 
 const originalFetch = globalThis.fetch;

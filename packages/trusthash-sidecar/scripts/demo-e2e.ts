@@ -12,10 +12,10 @@
  *   ./scripts/generate-dev-cert.sh
  *
  *   # Then run (sidecar must be running):
- *   pnpm run scripts/demo-e2e.ts
+ *   pnpm exec tsx scripts/demo-e2e.ts
  *
  *   # Or with custom base URL:
- *   BASE_URL=http://localhost:3003 pnpm run scripts/demo-e2e.ts
+ *   BASE_URL=http://localhost:3003 pnpm exec tsx scripts/demo-e2e.ts
  */
 
 import {

@@ -111,10 +111,10 @@ cd packages/turbo-c2pa
 pnpm test    # 37 tests
 
 # Demo: sign mode (requires sidecar running)
-pnpm run scripts/demo-upload.ts /path/to/image.jpg --source-type digitalCapture
+pnpm exec tsx scripts/demo-upload.ts /path/to/image.jpg --source-type digitalCapture
 
 # Demo: store mode (preserves existing C2PA manifest, no sidecar needed)
-pnpm run scripts/demo-upload.ts /path/to/image-with-c2pa.jpg --store
+pnpm exec tsx scripts/demo-upload.ts /path/to/image-with-c2pa.jpg --store
 ```
 
 ### Trusthash Sidecar (Docker Overlay)

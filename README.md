@@ -238,7 +238,7 @@ cd packages/trusthash-sidecar && pnpm run dev
 
 # Terminal 2: sign + upload
 cd packages/turbo-c2pa
-pnpm run scripts/demo-upload.ts /path/to/image.jpg
+pnpm exec tsx scripts/demo-upload.ts /path/to/image.jpg
 ```
 
 **Known limitation**: CAWG identity assertion (`cawg.identity`) is built but disabled by default. The c2pa-rs library does not yet support validating identity assertions — both c2pa-node and contentcredentials.org crash when reading them. The code is ready and will activate when upstream support ships.

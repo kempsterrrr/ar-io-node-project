@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it } from 'vitest';
 import { Database } from 'duckdb-async';
 import { runMigrations } from '../src/db/migrations.js';
 import { replaceSoftBindings, upsertManifestArtifact } from '../src/db/index.js';

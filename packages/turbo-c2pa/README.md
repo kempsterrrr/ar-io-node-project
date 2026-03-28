@@ -49,10 +49,10 @@ pnpm run dev
 
 # Terminal 2: Sign + upload (new manifest)
 cd packages/turbo-c2pa
-pnpm run scripts/demo-upload.ts /path/to/image.jpg --source-type digitalCapture
+pnpm exec tsx scripts/demo-upload.ts /path/to/image.jpg --source-type digitalCapture
 
 # OR: Store + upload (preserve existing manifest)
-pnpm run scripts/demo-upload.ts /path/to/image-with-c2pa.jpg --store
+pnpm exec tsx scripts/demo-upload.ts /path/to/image-with-c2pa.jpg --store
 ```
 
 ## API
