@@ -247,6 +247,7 @@ jobs:
             export SIGNING_CERT_PEM="${SIGNING_CERT_PEM}"
             export SIGNING_PRIVATE_KEY_PEM="${SIGNING_PRIVATE_KEY_PEM}"
             export VERIFY_SIDECAR_IMAGE=verify-sidecar:latest
+            export VERIFY_SIDECAR_ENV_FILE=./verify-sidecar/.env.docker
             export VERIFY_SIDECAR_DATA_DIR=./verify-sidecar/data
             export VERIFY_SIDECAR_NGINX_CONF=./verify-sidecar/nginx.conf
 
