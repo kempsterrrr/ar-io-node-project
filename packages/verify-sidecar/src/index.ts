@@ -40,7 +40,15 @@ const __dirname = dirname(__filename);
 const webDistPath = join(__dirname, '..', 'web', 'dist');
 
 if (existsSync(webDistPath)) {
+  // Serve static assets under /verify/ (domain access) and / (direct IP access)
+  app.use('/verify', express.static(webDistPath));
   app.use(express.static(webDistPath));
+
+  // Redirect root to /verify/ for direct access
+  app.get('/', (_req, res) => {
+    res.redirect('/verify/');
+  });
+
   // SPA fallback: serve index.html for non-API routes
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/') || req.path.startsWith('/health')) {
