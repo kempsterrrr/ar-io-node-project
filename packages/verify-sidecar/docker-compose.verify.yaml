@@ -10,7 +10,7 @@ services:
       - path: ${VERIFY_SIDECAR_ENV_FILE:-.env.docker}
         required: false
     environment:
-      - GATEWAY_URL=http://core:4000
+      - GATEWAY_URL=http://envoy:3000
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=4001
       - LOG_LEVEL=${LOG_LEVEL:-info}
