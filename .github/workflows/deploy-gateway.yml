@@ -103,6 +103,8 @@ jobs:
       - name: Deploy nginx config
         run: |
           ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
+            # Remove stale config that conflicts with ario-agenticway
+            rm -f /etc/nginx/sites-enabled/ario /etc/nginx/sites-available/ario
             cp ${{ env.DEPLOY_PATH }}/nginx/ario-agenticway /etc/nginx/sites-available/ario-agenticway
             ln -sf /etc/nginx/sites-available/ario-agenticway /etc/nginx/sites-enabled/
             nginx -t && systemctl reload nginx
@@ -237,20 +239,30 @@ jobs:
               SIGNING_PRIVATE_KEY_PEM="$(cat sidecar/.signing-key-pem)"
             fi
 
-            TRUSTHASH_SIDECAR_IMAGE=trusthash-sidecar:latest \
-            TRUSTHASH_SIDECAR_ENV_FILE=./sidecar/.env.docker \
-            TRUSTHASH_SIDECAR_DATA_DIR=./sidecar/data \
-            TRUSTHASH_SIDECAR_NGINX_CONF=./sidecar/nginx.conf \
-            ENABLE_SIGNING="${ENABLE_SIGNING}" \
-            SIGNING_CERT_PEM="${SIGNING_CERT_PEM}" \
-            SIGNING_PRIVATE_KEY_PEM="${SIGNING_PRIVATE_KEY_PEM}" \
-            VERIFY_SIDECAR_IMAGE=verify-sidecar:latest \
-            VERIFY_SIDECAR_DATA_DIR=./verify-sidecar/data \
-            VERIFY_SIDECAR_NGINX_CONF=./verify-sidecar/nginx.conf \
+            export TRUSTHASH_SIDECAR_IMAGE=trusthash-sidecar:latest
+            export TRUSTHASH_SIDECAR_ENV_FILE=./sidecar/.env.docker
+            export TRUSTHASH_SIDECAR_DATA_DIR=./sidecar/data
+            export TRUSTHASH_SIDECAR_NGINX_CONF=./sidecar/nginx.conf
+            export ENABLE_SIGNING="${ENABLE_SIGNING}"
+            export SIGNING_CERT_PEM="${SIGNING_CERT_PEM}"
+            export SIGNING_PRIVATE_KEY_PEM="${SIGNING_PRIVATE_KEY_PEM}"
+            export VERIFY_SIDECAR_IMAGE=verify-sidecar:latest
+            export VERIFY_SIDECAR_ENV_FILE=./verify-sidecar/.env.docker
+            export VERIFY_SIDECAR_DATA_DIR=./verify-sidecar/data
+            export VERIFY_SIDECAR_NGINX_CONF=./verify-sidecar/nginx.conf
+
             docker compose -f docker-compose.yaml \
               -f sidecar/docker-compose.sidecar.yaml \
               -f verify-sidecar/docker-compose.verify.yaml \
               up -d
+
+            # Force-recreate verify proxy so nginx resolves the new sidecar IP
+            # (docker compose up -d only recreates containers with config changes,
+            # but the proxy's config doesn't change when the sidecar is rebuilt)
+            docker compose -f docker-compose.yaml \
+              -f sidecar/docker-compose.sidecar.yaml \
+              -f verify-sidecar/docker-compose.verify.yaml \
+              up -d --force-recreate verify-proxy
           EOF
 
       - name: Verify deployment
