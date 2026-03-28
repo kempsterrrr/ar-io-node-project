@@ -40,7 +40,16 @@ const __dirname = dirname(__filename);
 const webDistPath = join(__dirname, '..', 'web', 'dist');
 
 if (existsSync(webDistPath)) {
+  // Serve static assets (Vite builds with base: '/verify/' so assets are at /verify/assets/)
+  app.use('/verify', express.static(webDistPath));
+  // Also serve at root for direct access (IP:4001)
   app.use(express.static(webDistPath));
+
+  // Redirect root to /verify/ for direct access
+  app.get('/', (_req, res) => {
+    res.redirect('/verify/');
+  });
+
   // SPA fallback: serve index.html for non-API routes
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/') || req.path.startsWith('/health')) {

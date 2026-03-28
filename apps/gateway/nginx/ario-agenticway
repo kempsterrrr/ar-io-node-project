@@ -14,6 +14,19 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/ario.agenticway.io/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
 
+    # Verify sidecar — all /verify/ traffic proxied to sidecar on port 4001
+    # Trailing slash on proxy_pass strips the /verify prefix
+    location /verify/ {
+        proxy_pass http://localhost:4001/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 50M;
+    }
+
+    # Gateway (default — must be last)
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
