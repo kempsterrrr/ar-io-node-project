@@ -20,7 +20,7 @@ ar-io-node-project/
 
 **Production**: https://ario.agenticway.io (ArNS: `*.ario.agenticway.io`)
 
-**Stack**: Bun + Turborepo, Docker Compose, GitHub Actions, Hetzner
+**Stack**: pnpm + Turborepo, Docker Compose, GitHub Actions, Hetzner
 
 ### Docker Network
 
@@ -89,10 +89,10 @@ packages/my-sidecar/
 ### Development
 
 ```bash
-bun install                 # Install dependencies
-bun run build              # Build all packages
-bun run format             # Format code (ALWAYS before commit)
-bun run format:check       # Check formatting
+pnpm install                 # Install dependencies
+pnpm run build              # Build all packages
+pnpm run format             # Format code (ALWAYS before commit)
+pnpm run format:check       # Check formatting
 ```
 
 ### Gateway Operations
@@ -117,7 +117,7 @@ curl -sL http://localhost:3000/4jBV3ofWh41KhuTs2pFvj-KBZWUkbrbCYlJH0vLA6LM
 
 ```bash
 git checkout -b feat/my-feature     # Create feature branch
-bun run format                       # Before committing
+pnpm run format                       # Before committing
 git commit -m "feat: description"    # Conventional commit
 gh pr create --title "feat: ..."     # Create PR
 gh pr checks <NUMBER>                # Monitor CI
@@ -150,7 +150,7 @@ Use conventional commits: `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test
 
 1. **Branch protection ON** - Cannot push to `main`, use PRs
 2. **Gateway on port 3000** - Not 4000, Envoy proxy handles routing
-3. **Format before commit** - Run `bun run format` or CI fails
+3. **Format before commit** - Run `pnpm run format` or CI fails
 4. **Gateway before sidecars** - Gateway creates `ar-io-network`
 5. **CodeRabbit reviews PRs** - Check comments before merge
 6. **Shared Hetzner server** - Use `docker image prune`, not `docker system prune`

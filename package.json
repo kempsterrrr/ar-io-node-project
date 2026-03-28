@@ -6,14 +6,14 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "node_modules/turbo/bin/turbo run build",
-    "dev": "node_modules/turbo/bin/turbo run dev",
-    "lint": "node_modules/turbo/bin/turbo run lint",
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "agentic:validate": "node scripts/agentic-validate.mjs --mode=validate",
     "agentic:check-drift": "node scripts/agentic-validate.mjs --mode=drift",
-    "clean": "node_modules/turbo/bin/turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {
     "@types/node": "^25.0.1",
@@ -21,8 +21,5 @@
     "turbo": "^2.3.0",
     "typescript": "^5.3.0"
   },
-  "packageManager": "bun@1.2.23",
-  "trustedDependencies": [
-    "@contentauth/c2pa-node"
-  ]
+  "packageManager": "pnpm@9.15.0"
 }

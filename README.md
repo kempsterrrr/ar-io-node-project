@@ -7,7 +7,7 @@ A monorepo containing an AR.IO gateway wrapper and extensible sidecar packages. 
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
-- [Bun](https://bun.sh/) (v1.2+)
+- [Node.js](https://nodejs.org/) (v20+) + [pnpm](https://pnpm.io/)
 
 ### Local Development
 
@@ -17,7 +17,7 @@ git clone https://github.com/YOUR_USERNAME/ar-io-node-project.git
 cd ar-io-node-project
 
 # Install dependencies
-bun install
+pnpm install
 
 # Set up the gateway
 cp apps/gateway/.env.example apps/gateway/.env
@@ -97,18 +97,18 @@ Run from the project root:
 
 ```bash
 # Development
-bun run dev              # Start all services in dev mode
-bun run build            # Build all packages
-bun run lint             # Lint all packages
-bun run format           # Format all files with Prettier
-bun run format:check     # Check formatting
+pnpm run dev              # Start all services in dev mode
+pnpm run build            # Build all packages
+pnpm run lint             # Lint all packages
+pnpm run format           # Format all files with Prettier
+pnpm run format:check     # Check formatting
 ./scripts/run-trusthash-integration.sh  # Run isolated trusthash integration tests
 
 # Gateway-specific (from apps/gateway/)
-bun run --filter @ar-io/gateway dev     # Start gateway in dev mode
-bun run --filter @ar-io/gateway start   # Start gateway in production mode
-bun run --filter @ar-io/gateway stop    # Stop gateway
-bun run --filter @ar-io/gateway logs    # View gateway logs
+pnpm run --filter @ar-io/gateway dev     # Start gateway in dev mode
+pnpm run --filter @ar-io/gateway start   # Start gateway in production mode
+pnpm run --filter @ar-io/gateway stop    # Stop gateway
+pnpm run --filter @ar-io/gateway logs    # View gateway logs
 ```
 
 ## Deployment to Hetzner
@@ -234,11 +234,11 @@ The project provides a complete C2PA signing and discovery pipeline:
 
 ```bash
 # Terminal 1: start sidecar
-cd packages/trusthash-sidecar && bun run dev
+cd packages/trusthash-sidecar && pnpm run dev
 
 # Terminal 2: sign + upload
 cd packages/turbo-c2pa
-bun run scripts/demo-upload.ts /path/to/image.jpg
+pnpm exec tsx scripts/demo-upload.ts /path/to/image.jpg
 ```
 
 **Known limitation**: CAWG identity assertion (`cawg.identity`) is built but disabled by default. The c2pa-rs library does not yet support validating identity assertions — both c2pa-node and contentcredentials.org crash when reading them. The code is ready and will activate when upstream support ships.
@@ -413,7 +413,7 @@ cd apps/gateway
 - [AR.IO Gateway Documentation](https://docs.ar.io/build/run-a-gateway/quick-start)
 - [AR.IO Node GitHub](https://github.com/ar-io/ar-io-node)
 - [Turborepo Documentation](https://turbo.build/repo/docs)
-- [Bun Documentation](https://bun.sh/docs)
+- [pnpm Documentation](https://pnpm.io/)
 
 ## License
 

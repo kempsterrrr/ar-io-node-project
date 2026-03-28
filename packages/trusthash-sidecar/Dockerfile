@@ -1,32 +1,37 @@
 # =============================================================================
 # Trusthash Sidecar — Docker image
 # =============================================================================
-# Uses bun as both build and runtime to avoid native module bundling issues
-# (DuckDB, sharp, c2pa-node, @iscc/lib all have .node binaries).
-# Build tools (python3, make, g++) are needed for DuckDB's node-pre-gyp.
+# Node.js runtime with pnpm for dependency management.
+# Native modules (DuckDB, sharp) compile correctly via pnpm lifecycle scripts.
 # =============================================================================
 
-FROM oven/bun:1.2
+FROM node:20-bookworm-slim
+
+# Enable pnpm via corepack
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 WORKDIR /app
 
-# Install build tools for native modules (DuckDB node-pre-gyp) and curl for healthcheck
+# Install build tools for native modules (DuckDB node-pre-gyp, sharp) and curl for healthcheck
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy root workspace files
-COPY package.json bun.lock* ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 # Copy workspace packages needed for dependency resolution
 COPY packages/c2pa-protocol/ packages/c2pa-protocol/
 COPY packages/trusthash-sidecar/package.json packages/trusthash-sidecar/
 
-# Install dependencies with lifecycle scripts enabled for native modules
-RUN bun install --trust
+# Install dependencies (pnpm runs lifecycle scripts by default)
+RUN pnpm install --frozen-lockfile
 
 # Copy sidecar source code
 COPY packages/trusthash-sidecar/ packages/trusthash-sidecar/
+
+# Build the backend
+RUN pnpm --filter @ar-io/trusthash-sidecar run build
 
 # Create directory for data
 RUN mkdir -p /app/data
@@ -40,4 +45,4 @@ EXPOSE 3003
 
 WORKDIR /app/packages/trusthash-sidecar
 
-CMD ["bun", "run", "src/index.ts"]
+CMD ["node", "dist/index.js"]

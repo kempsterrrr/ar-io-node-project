@@ -7,7 +7,7 @@
  * - GET /v1/cert endpoint
  */
 
-import { afterEach, beforeAll, describe, expect, it, mock } from 'bun:test';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import crypto from 'node:crypto';
 import { Hono } from 'hono';
 
@@ -131,7 +131,7 @@ describe('signing routes', () => {
 
   afterEach(() => {
     process.env = { ...originalEnv };
-    mock.restore();
+    vi.restoreAllMocks();
   });
 
   function createSigningApp(enabled: boolean) {

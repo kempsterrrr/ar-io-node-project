@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll, mock } from 'bun:test';
+import { describe, it, expect, afterAll, vi } from 'vitest';
 
 // Mock config before importing client
-mock.module('../../src/config.js', () => ({
+vi.mock('../../src/config.js', () => ({
   config: {
     PORT: 4001,
     NODE_ENV: 'test',
@@ -13,7 +13,7 @@ mock.module('../../src/config.js', () => ({
 }));
 
 // Mock logger
-mock.module('../../src/utils/logger.js', () => ({
+vi.mock('../../src/utils/logger.js', () => ({
   logger: {
     info: () => {},
     warn: () => {},

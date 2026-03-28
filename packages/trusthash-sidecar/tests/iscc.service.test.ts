@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
 import { computeIsccImageCode } from '../src/services/iscc.service.js';
 

@@ -2,6 +2,5 @@ node_modules
 dist
 .next
 .turbo
-bun.lockb
-*.lock
+pnpm-lock.yaml
 

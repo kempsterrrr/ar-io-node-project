@@ -1,7 +1,7 @@
-import { describe, it, expect, mock } from 'bun:test';
+import { describe, it, expect, vi } from 'vitest';
 import type { VerificationResult } from '../../src/types';
 
-mock.module('../../src/config.js', () => ({
+vi.mock('../../src/config.js', () => ({
   config: {
     PORT: 4001,
     NODE_ENV: 'test',
@@ -12,7 +12,7 @@ mock.module('../../src/config.js', () => ({
   },
 }));
 
-mock.module('../../src/utils/logger.js', () => ({
+vi.mock('../../src/utils/logger.js', () => ({
   logger: {
     info: () => {},
     warn: () => {},

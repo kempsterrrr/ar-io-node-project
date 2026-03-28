@@ -7,7 +7,7 @@ This is the AR.IO Gateway wrapper for local development and production deploymen
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
-- [Bun](https://bun.sh/) (optional, for workspace commands)
+- [pnpm](https://pnpm.io/) (optional, for workspace commands)
 
 ### Running Locally
 
@@ -24,7 +24,7 @@ This is the AR.IO Gateway wrapper for local development and production deploymen
    docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up
 
    # Or from the project root
-   bun run --filter @ar-io/gateway dev
+   pnpm run --filter @ar-io/gateway dev
    ```
 
 3. **Test the gateway:**
@@ -39,31 +39,31 @@ This is the AR.IO Gateway wrapper for local development and production deploymen
 
 ```bash
 # Start in development mode (foreground with logs)
-bun run dev
+pnpm run dev
 
 # Start in development mode (detached)
-bun run dev:detached
+pnpm run dev:detached
 
 # Start in production mode
-bun run start
+pnpm run start
 
 # Stop the gateway
-bun run stop
+pnpm run stop
 
 # View logs
-bun run logs
+pnpm run logs
 
 # View only core service logs
-bun run logs:core
+pnpm run logs:core
 
 # Pull latest images
-bun run pull
+pnpm run pull
 
 # Restart the gateway
-bun run restart
+pnpm run restart
 
 # Stop and remove volumes (clean slate)
-bun run clean
+pnpm run clean
 ```
 
 ## Configuration

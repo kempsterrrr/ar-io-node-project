@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeAll } from 'bun:test';
+import { describe, expect, it, beforeAll } from 'vitest';
 import sharp from 'sharp';
 import {
   computePHash,

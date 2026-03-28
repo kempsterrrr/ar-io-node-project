@@ -21,7 +21,7 @@ Both modes produce the same ANS-104 tag structure, so webhook indexing and SBR d
 
 ### Prerequisites
 
-- Bun 1.2+
+- Node.js 20+ and pnpm
 - For sign mode: Trusthash Sidecar running with signing enabled (see `packages/trusthash-sidecar`)
 - Ethereum wallet with [Turbo credits](https://turbo.ardrive.io)
 
@@ -45,14 +45,14 @@ cd ../trusthash-sidecar
 ```bash
 # Terminal 1: Start sidecar (sign mode only)
 cd packages/trusthash-sidecar
-bun run dev
+pnpm run dev
 
 # Terminal 2: Sign + upload (new manifest)
 cd packages/turbo-c2pa
-bun run scripts/demo-upload.ts /path/to/image.jpg --source-type digitalCapture
+pnpm exec tsx scripts/demo-upload.ts /path/to/image.jpg --source-type digitalCapture
 
 # OR: Store + upload (preserve existing manifest)
-bun run scripts/demo-upload.ts /path/to/image-with-c2pa.jpg --store
+pnpm exec tsx scripts/demo-upload.ts /path/to/image-with-c2pa.jpg --store
 ```
 
 ## API
@@ -187,5 +187,5 @@ CAWG identity assertion support (`cawg.identity`) is built but **disabled by def
 ## Tests
 
 ```bash
-bun test    # 37 tests (sign mode, store mode, tags, detection, signer)
+pnpm test    # 37 tests (sign mode, store mode, tags, detection, signer)
 ```

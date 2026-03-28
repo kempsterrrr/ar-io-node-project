@@ -5,13 +5,13 @@
  * tag schema and rejects legacy tags.
  */
 
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the database module before importing webhook service
-const mockGetManifestByTxId = mock(() => Promise.resolve(null));
-const mockUpsertManifestArtifactWithBindings = mock(() => Promise.resolve());
+const mockGetManifestByTxId = vi.fn(() => Promise.resolve(null));
+const mockUpsertManifestArtifactWithBindings = vi.fn(() => Promise.resolve());
 
-mock.module('../src/db/index.js', () => ({
+vi.mock('../src/db/index.js', () => ({
   getManifestByTxId: mockGetManifestByTxId,
   upsertManifestArtifactWithBindings: mockUpsertManifestArtifactWithBindings,
 }));

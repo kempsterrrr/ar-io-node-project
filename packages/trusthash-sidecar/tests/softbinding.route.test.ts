@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import sharp from 'sharp';
 import softbinding from '../src/routes/softbinding.js';
@@ -18,7 +18,7 @@ function graphqlResponse(body: unknown, status: number = 200): Response {
 
 afterEach(() => {
   (globalThis as { fetch: typeof fetch }).fetch = originalFetch;
-  mock.restore();
+  vi.restoreAllMocks();
 });
 
 const originalFetch = globalThis.fetch;

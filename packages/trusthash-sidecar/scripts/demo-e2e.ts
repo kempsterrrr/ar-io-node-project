@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env tsx
 /**
  * End-to-end demo of the C2PA signing oracle + webhook + SBR pipeline.
  *
@@ -12,10 +12,10 @@
  *   ./scripts/generate-dev-cert.sh
  *
  *   # Then run (sidecar must be running):
- *   bun run scripts/demo-e2e.ts
+ *   pnpm exec tsx scripts/demo-e2e.ts
  *
  *   # Or with custom base URL:
- *   BASE_URL=http://localhost:3003 bun run scripts/demo-e2e.ts
+ *   BASE_URL=http://localhost:3003 pnpm exec tsx scripts/demo-e2e.ts
  */
 
 import {

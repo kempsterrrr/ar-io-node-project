@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   GatewayGraphQLError,
   lookupBySoftBinding,
@@ -14,7 +14,7 @@ function graphqlResponse(body: unknown, status: number = 200): Response {
 
 afterEach(() => {
   (globalThis as { fetch: typeof fetch }).fetch = originalFetch;
-  mock.restore();
+  vi.restoreAllMocks();
 });
 
 const originalFetch = globalThis.fetch;
