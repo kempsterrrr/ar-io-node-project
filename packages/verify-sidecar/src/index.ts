@@ -15,12 +15,15 @@ const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// API routes
-app.use('/health', healthRouter);
-app.use('/api/v1/verify', verifyRouter);
+// API routes — mounted under a sub-router so we can serve at both '/' and '/verify/'
+// This supports two access paths:
+//   1. Domain access via reverse proxy that strips /verify/ prefix (e.g., nginx proxy_pass)
+//   2. Direct IP access where the frontend uses /verify/ as its base path
+const apiRouter = express.Router();
+apiRouter.use('/health', healthRouter);
+apiRouter.use('/api/v1/verify', verifyRouter);
 
-// Root endpoint - service info
-app.get('/api', (_req, res) => {
+apiRouter.get('/api', (_req, res) => {
   res.json({
     name: 'Verify Sidecar',
     version: '0.1.0',
@@ -33,6 +36,9 @@ app.get('/api', (_req, res) => {
     },
   });
 });
+
+app.use('/', apiRouter);
+app.use('/verify', apiRouter);
 
 // Serve frontend static files if they exist
 const __filename = fileURLToPath(import.meta.url);
@@ -51,7 +57,12 @@ if (existsSync(webDistPath)) {
 
   // SPA fallback: serve index.html for non-API routes
   app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api/') || req.path.startsWith('/health')) {
+    if (
+      req.path.startsWith('/api/') ||
+      req.path.startsWith('/health') ||
+      req.path.startsWith('/verify/api/') ||
+      req.path.startsWith('/verify/health')
+    ) {
       next();
       return;
     }
