@@ -38,8 +38,10 @@ export interface VerificationResult {
   };
 }
 
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+
 export async function verifyTransaction(txId: string): Promise<VerificationResult> {
-  const res = await fetch('/api/v1/verify', {
+  const res = await fetch(`${BASE}/api/v1/verify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ txId }),
@@ -52,7 +54,7 @@ export async function verifyTransaction(txId: string): Promise<VerificationResul
 }
 
 export async function getVerification(id: string): Promise<VerificationResult> {
-  const res = await fetch(`/api/v1/verify/${id}`);
+  const res = await fetch(`${BASE}/api/v1/verify/${id}`);
   if (!res.ok) {
     throw new Error(`Verification not found`);
   }
@@ -60,5 +62,5 @@ export async function getVerification(id: string): Promise<VerificationResult> {
 }
 
 export function getPdfUrl(id: string): string {
-  return `/api/v1/verify/${id}/pdf`;
+  return `${BASE}/api/v1/verify/${id}/pdf`;
 }
