@@ -21,10 +21,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy root workspace files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-# Copy verify sidecar package
+# Copy verify sidecar and web package configs
 COPY packages/verify-sidecar/package.json packages/verify-sidecar/
+COPY packages/verify-sidecar/web/package.json packages/verify-sidecar/web/
 
-# Install dependencies (pnpm runs lifecycle scripts by default)
+# Install all workspace deps including web/ (pnpm runs lifecycle scripts by default)
 RUN pnpm install --frozen-lockfile
 
 # Copy sidecar source code
@@ -33,8 +34,8 @@ COPY packages/verify-sidecar/ packages/verify-sidecar/
 # Build the backend
 RUN pnpm --filter @ar-io/verify-sidecar run build
 
-# Build the frontend (vite)
-RUN cd packages/verify-sidecar/web && pnpm install && pnpm run build
+# Build the frontend (deps already installed via workspace)
+RUN pnpm --filter verify-web run build
 
 # Create directory for data
 RUN mkdir -p /app/data
