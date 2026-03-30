@@ -42,16 +42,16 @@ export default function VerifyInput() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <div className="rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
-        <h1 className="mb-2 text-2xl font-bold text-gray-900">Verify Arweave Data</h1>
-        <p className="mb-6 text-gray-600">
+      <div className="rounded-lg border border-ario-stroke-mid bg-ario-surface p-8">
+        <h1 className="mb-2 text-2xl font-bold text-ario-text-high">Verify Arweave Data</h1>
+        <p className="mb-6 text-ario-text-mid">
           Enter a transaction ID to produce cryptographic proof of existence, integrity, and
           authorship.
         </p>
 
         <div className="space-y-4">
           <div>
-            <label htmlFor="txId" className="mb-1 block text-sm font-medium text-gray-700">
+            <label htmlFor="txId" className="mb-1 block text-sm font-medium text-ario-text-mid">
               Transaction ID
             </label>
             <input
@@ -61,17 +61,21 @@ export default function VerifyInput() {
               onChange={(e) => setTxId(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !loading && handleVerify()}
               placeholder="e.g. 4jBV3ofWh41KhuTs2pFvj-KBZWUkbrbCYlJH0vLA6LM"
-              className="w-full rounded-md border border-gray-300 px-4 py-2.5 font-mono text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-md border border-ario-divider bg-ario-bg px-4 py-2.5 font-mono text-sm text-ario-text-high placeholder-ario-text-low focus:border-ario-success focus:outline-none focus:ring-1 focus:ring-ario-success"
               disabled={loading}
             />
           </div>
 
-          {error && <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+          {error && (
+            <div className="rounded-md border border-ario-error/30 bg-ario-error/10 p-3 text-sm text-ario-error">
+              {error}
+            </div>
+          )}
 
           <button
             onClick={handleVerify}
             disabled={loading}
-            className="w-full rounded-md bg-blue-600 px-4 py-2.5 font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-md bg-ario-success px-4 py-2.5 font-semibold text-white hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-ario-success focus:ring-offset-2 focus:ring-offset-ario-bg disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? 'Verifying...' : 'Verify'}
           </button>

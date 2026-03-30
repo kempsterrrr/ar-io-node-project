@@ -10,10 +10,10 @@ interface Props {
 export default function ExistenceCard({ existence, txId }: Props) {
   const statusColor =
     existence.status === 'confirmed'
-      ? 'text-green-600'
+      ? 'text-ario-success'
       : existence.status === 'pending'
-        ? 'text-amber-600'
-        : 'text-red-600';
+        ? 'text-ario-warning'
+        : 'text-ario-error';
 
   const statusIcon =
     existence.status === 'confirmed'
@@ -23,8 +23,10 @@ export default function ExistenceCard({ existence, txId }: Props) {
         : '&#10007;';
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-5">
-      <h3 className="mb-3 text-sm font-medium text-gray-500">Does this data exist on Arweave?</h3>
+    <div className="rounded-lg border border-ario-stroke-mid bg-ario-surface p-5">
+      <h3 className="mb-3 text-sm font-medium text-ario-text-low">
+        Does this data exist on Arweave?
+      </h3>
       <div className="flex items-center gap-2">
         <span
           className={`text-3xl ${statusColor}`}
@@ -39,16 +41,18 @@ export default function ExistenceCard({ existence, txId }: Props) {
                 : 'Not Found'}
           </p>
           {existence.blockHeight && (
-            <p className="text-sm text-gray-600">Block {existence.blockHeight.toLocaleString()}</p>
+            <p className="text-sm text-ario-text-mid">
+              Block {existence.blockHeight.toLocaleString()}
+            </p>
           )}
           {existence.confirmations !== null && existence.confirmations > 0 && (
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-ario-text-low">
               {existence.confirmations.toLocaleString()} confirmations
             </p>
           )}
         </div>
       </div>
-      <p className="mt-3 break-all font-mono text-xs text-gray-400">{txId}</p>
+      <p className="mt-3 break-all font-mono text-xs text-ario-text-low">{txId}</p>
     </div>
   );
 }
