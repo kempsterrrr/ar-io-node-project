@@ -2,11 +2,13 @@ import { getTransaction, getTransactionStatus, getBlock } from '../gateway/clien
 import { ownerToAddress } from '../utils/crypto.js';
 import { logger } from '../utils/logger.js';
 import type { VerificationResult } from '../types.js';
+import type { GatewayTransaction } from '../gateway/types.js';
 
 interface MetadataResult {
   existence: VerificationResult['existence'];
   owner: VerificationResult['owner'];
   metadata: VerificationResult['metadata'];
+  rawTransaction: GatewayTransaction | null;
 }
 
 /**
@@ -34,6 +36,7 @@ export async function fetchMetadata(txId: string): Promise<MetadataResult | null
         contentType: null,
         tags: [],
       },
+      rawTransaction: null,
     };
   }
 
@@ -70,6 +73,7 @@ export async function fetchMetadata(txId: string): Promise<MetadataResult | null
       },
       owner,
       metadata,
+      rawTransaction: tx,
     };
   }
 
@@ -92,6 +96,7 @@ export async function fetchMetadata(txId: string): Promise<MetadataResult | null
     },
     owner,
     metadata,
+    rawTransaction: tx,
   };
 }
 

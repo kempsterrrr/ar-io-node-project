@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont } from 'pdf-lib';
+import QRCode from 'qrcode';
 import {
   METHODOLOGY_TIER_1,
   METHODOLOGY_TIER_2,
@@ -7,6 +8,7 @@ import {
   integrityStatement,
   bundleStatement,
 } from './templates.js';
+import { config } from '../config.js';
 import type { VerificationResult } from '../types.js';
 
 const MARGIN = 50;
@@ -151,6 +153,41 @@ export async function generatePdf(result: VerificationResult): Promise<Uint8Arra
     y = drawTableRow(page, fontRegular, 8, MARGIN, y, row, [160, 80, CONTENT_WIDTH - 240], null);
   }
   y -= 20;
+
+  // --- QR Code ---
+  const publicUrl = config.PUBLIC_URL;
+  if (publicUrl) {
+    if (y < MARGIN + 140) {
+      page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+      y = PAGE_HEIGHT - MARGIN;
+    }
+
+    try {
+      const qrUrl = `${publicUrl}/report/${result.verificationId}`;
+      const qrBuffer = await QRCode.toBuffer(qrUrl, {
+        type: 'png',
+        width: 120,
+        margin: 1,
+        color: { dark: '#1E1E24', light: '#FFFFFF' },
+      });
+      const qrImage = await doc.embedPng(qrBuffer);
+      const qrSize = 80;
+      page.drawImage(qrImage, { x: MARGIN, y: y - qrSize, width: qrSize, height: qrSize });
+      drawText(
+        page,
+        'Scan to view live verification report',
+        fontRegular,
+        8,
+        MARGIN + qrSize + 10,
+        y - 20,
+        rgb(0.3, 0.3, 0.3)
+      );
+      drawText(page, qrUrl, fontRegular, 7, MARGIN + qrSize + 10, y - 34, rgb(0.4, 0.4, 0.4));
+      y -= qrSize + 20;
+    } catch {
+      // QR generation failed — skip silently
+    }
+  }
 
   // --- Cryptographic Proof Appendix ---
   if (y < MARGIN + 120) {

@@ -81,4 +81,6 @@ export interface VerifyRequest {
   txId: string;
   deepVerification?: boolean;
   multiGateway?: boolean;
+  files?: Array<{ originalname: string; buffer: Buffer }>;
+  receipt?: Record<string, unknown>;
 }

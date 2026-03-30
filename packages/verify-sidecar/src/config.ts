@@ -13,6 +13,17 @@ const envSchema = z.object({
 
   // Database
   SQLITE_PATH: z.string().default('./data/verify.db'),
+
+  // PDF / Attestation
+  PUBLIC_URL: z.string().optional(),
+
+  // On-demand indexing
+  GATEWAY_ADMIN_API_KEY: z.string().optional(),
+  ON_DEMAND_INDEX_ENABLED: z
+    .string()
+    .transform((v) => v === 'true')
+    .default('false'),
+  ON_DEMAND_INDEX_TIMEOUT_MS: z.coerce.number().default(60000),
 });
 
 export type Config = z.infer<typeof envSchema>;
