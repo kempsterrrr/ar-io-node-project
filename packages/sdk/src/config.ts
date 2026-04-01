@@ -1,4 +1,4 @@
-import type { ArIOConfig } from './types.js';
+import type { AgenticWayConfig } from './types.js';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
@@ -9,9 +9,9 @@ export interface ResolvedConfig {
   timeoutMs: number;
 }
 
-export function resolveConfig(config: ArIOConfig): ResolvedConfig {
+export function resolveConfig(config: AgenticWayConfig): ResolvedConfig {
   if (!config.gatewayUrl) {
-    throw new Error('ArIO: gatewayUrl is required');
+    throw new Error('AgenticWay: gatewayUrl is required');
   }
 
   const gatewayUrl = config.gatewayUrl.replace(/\/+$/, '');

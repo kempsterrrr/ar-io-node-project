@@ -1,7 +1,7 @@
 import type { Tag } from '@ar-io/c2pa-protocol';
 
-/** Configuration for the ArIO SDK. */
-export interface ArIOConfig {
+/** Configuration for the AgenticWay SDK. */
+export interface AgenticWayConfig {
   /** Gateway base URL (e.g. 'https://ario.agenticway.io' or 'http://localhost:3000'). */
   gatewayUrl: string;
   /** Trusthash sidecar base URL (for C2PA provenance features). */

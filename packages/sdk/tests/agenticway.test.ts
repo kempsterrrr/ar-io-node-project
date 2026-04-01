@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ArIO } from '../src/ario.js';
+import { AgenticWay } from '../src/agenticway.js';
 
-describe('ArIO', () => {
+describe('AgenticWay', () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -14,37 +14,37 @@ describe('ArIO', () => {
   });
 
   it('constructs with minimal config (gateway only)', () => {
-    const ario = new ArIO({ gatewayUrl: 'http://localhost:3000' });
-    expect(ario.gateway).toBeDefined();
-    expect(ario.signer).toBeNull();
-    expect(ario.manifests).toBeNull();
-    expect(ario.verifier).toBeDefined();
+    const client = new AgenticWay({ gatewayUrl: 'http://localhost:3000' });
+    expect(client.gateway).toBeDefined();
+    expect(client.signer).toBeNull();
+    expect(client.manifests).toBeNull();
+    expect(client.verifier).toBeDefined();
   });
 
   it('constructs with full config', () => {
-    const ario = new ArIO({
+    const client = new AgenticWay({
       gatewayUrl: 'http://localhost:3000',
       trusthashUrl: 'http://localhost:3000/trusthash/v1',
       turboWallet: '0xabc',
     });
-    expect(ario.signer).not.toBeNull();
-    expect(ario.manifests).not.toBeNull();
+    expect(client.signer).not.toBeNull();
+    expect(client.manifests).not.toBeNull();
   });
 
   it('info() delegates to gateway client', async () => {
-    const ario = new ArIO({ gatewayUrl: 'http://localhost:3000' });
+    const client = new AgenticWay({ gatewayUrl: 'http://localhost:3000' });
     const mockInfo = { processId: 'abc', release: '1.0.0' };
     fetchSpy.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(mockInfo),
     });
 
-    const result = await ario.info();
+    const result = await client.info();
     expect(result).toEqual(mockInfo);
   });
 
   it('retrieve() fetches transaction data', async () => {
-    const ario = new ArIO({ gatewayUrl: 'http://localhost:3000' });
+    const client = new AgenticWay({ gatewayUrl: 'http://localhost:3000' });
     const txId = 'short-id';
     fetchSpy.mockResolvedValue({
       ok: true,
@@ -52,18 +52,18 @@ describe('ArIO', () => {
       arrayBuffer: () => Promise.resolve(new TextEncoder().encode('test').buffer),
     });
 
-    const result = await ario.retrieve(txId);
+    const result = await client.retrieve(txId);
     expect(result.contentType).toBe('text/plain');
     expect(result.data.toString()).toBe('test');
   });
 
   it('search() throws without trusthashUrl', async () => {
-    const ario = new ArIO({ gatewayUrl: 'http://localhost:3000' });
-    await expect(ario.search({ phash: 'abc' })).rejects.toThrow('trusthashUrl is required');
+    const client = new AgenticWay({ gatewayUrl: 'http://localhost:3000' });
+    await expect(client.search({ phash: 'abc' })).rejects.toThrow('trusthashUrl is required');
   });
 
   it('search() delegates to manifest repo', async () => {
-    const ario = new ArIO({
+    const client = new AgenticWay({
       gatewayUrl: 'http://localhost:3000',
       trusthashUrl: 'http://localhost:3000/trusthash/v1',
     });
@@ -77,23 +77,23 @@ describe('ArIO', () => {
         }),
     });
 
-    const result = await ario.search({ phash: 'a5a5a5a5a5a5a5a5' });
+    const result = await client.search({ phash: 'a5a5a5a5a5a5a5a5' });
     expect(result.results).toEqual([]);
     expect(result.total).toBe(0);
   });
 
   it('store() throws without turboWallet', async () => {
-    const ario = new ArIO({
+    const client = new AgenticWay({
       gatewayUrl: 'http://localhost:3000',
     });
 
     await expect(
-      ario.store({ data: Buffer.from('hello'), contentType: 'text/plain' })
+      client.store({ data: Buffer.from('hello'), contentType: 'text/plain' })
     ).rejects.toThrow('turboWallet is required');
   });
 
   it('query() delegates to gateway GraphQL', async () => {
-    const ario = new ArIO({ gatewayUrl: 'http://localhost:3000' });
+    const client = new AgenticWay({ gatewayUrl: 'http://localhost:3000' });
 
     fetchSpy.mockResolvedValue({
       ok: true,
@@ -119,7 +119,7 @@ describe('ArIO', () => {
         }),
     });
 
-    const result = await ario.query({ tags: [{ name: 'agent', values: ['bot'] }] });
+    const result = await client.query({ tags: [{ name: 'agent', values: ['bot'] }] });
     expect(result.edges).toHaveLength(1);
     expect(result.edges[0].txId).toBe('tx123');
     expect(result.edges[0].owner).toBe('owner1');
@@ -128,14 +128,14 @@ describe('ArIO', () => {
   });
 
   it('resolve() delegates to gateway ArNS resolver', async () => {
-    const ario = new ArIO({ gatewayUrl: 'http://localhost:3000' });
+    const client = new AgenticWay({ gatewayUrl: 'http://localhost:3000' });
 
     fetchSpy.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ txId: 'resolved-tx-id' }),
     });
 
-    const result = await ario.resolve('my-data');
+    const result = await client.resolve('my-data');
     expect(result.txId).toBe('resolved-tx-id');
   });
 });

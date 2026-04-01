@@ -18,7 +18,7 @@ export async function executeStore(
   options: StoreOptions
 ): Promise<StoreResult> {
   if (!config.turboWallet) {
-    throw new Error('ArIO.store(): turboWallet is required in config');
+    throw new Error('AgenticWay.store(): turboWallet is required in config');
   }
 
   const data = Buffer.isBuffer(options.data) ? options.data : Buffer.from(options.data);
@@ -41,10 +41,10 @@ export async function executeStore(
   // C2PA provenance (opt-in)
   if (options.provenance) {
     if (!config.trusthashUrl) {
-      throw new Error('ArIO.store(): trusthashUrl is required for provenance signing');
+      throw new Error('AgenticWay.store(): trusthashUrl is required for provenance signing');
     }
     if (!signingOracle) {
-      throw new Error('ArIO.store(): trusthashUrl is required for provenance signing');
+      throw new Error('AgenticWay.store(): trusthashUrl is required for provenance signing');
     }
 
     try {
@@ -102,7 +102,7 @@ export async function executeStore(
         (err.message.includes('Cannot find module') || err.message.includes('MODULE_NOT_FOUND'))
       ) {
         throw new Error(
-          'ArIO.store(): provenance signing requires @ar-io/turbo-c2pa and its dependencies (npm install @contentauth/c2pa-node sharp blockhash-core)'
+          'AgenticWay.store(): provenance signing requires @ar-io/turbo-c2pa and its dependencies (npm install @contentauth/c2pa-node sharp blockhash-core)'
         );
       }
       throw err;

@@ -1,6 +1,6 @@
 import { resolveConfig, type ResolvedConfig } from './config.js';
 import type {
-  ArIOConfig,
+  AgenticWayConfig,
   GatewayInfo,
   QueryOptions,
   QueryResult,
@@ -30,7 +30,7 @@ import { executeResolve } from './operations/resolve.js';
  * just a gateway URL. Provenance features (C2PA signing, search) require
  * trusthashUrl configuration.
  */
-export class ArIO {
+export class AgenticWay {
   private config: ResolvedConfig;
 
   /** Gateway HTTP client for direct access. */
@@ -42,7 +42,7 @@ export class ArIO {
   /** Verify sidecar client. Uses gateway URL + /verify path by default. */
   readonly verifier: VerifyClient;
 
-  constructor(config: ArIOConfig) {
+  constructor(config: AgenticWayConfig) {
     this.config = resolveConfig(config);
 
     this.gateway = new GatewayClient(this.config.gatewayUrl, this.config.timeoutMs);
@@ -100,7 +100,7 @@ export class ArIO {
    */
   async search(options: SearchOptions): Promise<SearchResult> {
     if (!this.manifests) {
-      throw new Error('ArIO.search(): trusthashUrl is required for search operations');
+      throw new Error('AgenticWay.search(): trusthashUrl is required for search operations');
     }
     return executeSearch(this.manifests, options);
   }

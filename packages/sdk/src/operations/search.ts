@@ -37,5 +37,5 @@ export async function executeSearch(
     };
   }
 
-  throw new Error('ArIO.search(): either image or phash is required');
+  throw new Error('AgenticWay.search(): either image or phash is required');
 }

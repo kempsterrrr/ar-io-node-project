@@ -1,9 +1,9 @@
 // Main orchestrator
-export { ArIO } from './ario.js';
+export { AgenticWay } from './agenticway.js';
 
 // Types
 export type {
-  ArIOConfig,
+  AgenticWayConfig,
   StoreOptions,
   StoreResult,
   RetrieveResult,
