@@ -1,0 +1,58 @@
+{
+  "name": "@agenticway/sdk",
+  "version": "0.2.0",
+  "description": "TypeScript SDK for permanently storing, retrieving, verifying, and querying data on Arweave",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@ar-io/c2pa-protocol": "workspace:*",
+    "@ardrive/turbo-sdk": "^1.41.0"
+  },
+  "optionalDependencies": {
+    "@contentauth/c2pa-node": "^0.5.4",
+    "blockhash-core": "^0.1.0",
+    "ethers": "^6.13.0",
+    "sharp": "^0.33.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "agenticway",
+    "ar-io",
+    "arweave",
+    "sdk",
+    "ai-data",
+    "permanent-storage",
+    "verifiable"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ar-io/ar-io-node-project",
+    "directory": "packages/sdk"
+  }
+}
