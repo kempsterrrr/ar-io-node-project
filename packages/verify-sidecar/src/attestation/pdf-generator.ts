@@ -1,11 +1,11 @@
 import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont } from 'pdf-lib';
 import {
-  METHODOLOGY_TIER_1,
-  METHODOLOGY_TIER_2,
+  METHODOLOGY_VERIFIED,
+  METHODOLOGY_BASIC,
   existenceStatement,
-  authorshipStatement,
-  integrityStatement,
+  authenticityStatement,
   bundleStatement,
+  gatewayAssessmentStatement,
 } from './templates.js';
 import type { VerificationResult } from '../types.js';
 
@@ -14,9 +14,18 @@ const PAGE_WIDTH = 595; // A4
 const PAGE_HEIGHT = 842;
 const CONTENT_WIDTH = PAGE_WIDTH - 2 * MARGIN;
 
-/**
- * Generate an unsigned PDF attestation certificate for a verification result.
- */
+const LEVEL_LABELS: Record<number, string> = {
+  3: 'Complete Verification (Level 3)',
+  2: 'Strong Verification (Level 2)',
+  1: 'Partial Verification (Level 1)',
+};
+
+const LEVEL_COLORS: Record<number, ReturnType<typeof rgb>> = {
+  3: rgb(0.0, 0.5, 0.0),
+  2: rgb(0.0, 0.4, 0.6),
+  1: rgb(0.7, 0.5, 0.0),
+};
+
 export async function generatePdf(result: VerificationResult): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const fontRegular = await doc.embedFont(StandardFonts.Helvetica);
@@ -25,23 +34,19 @@ export async function generatePdf(result: VerificationResult): Promise<Uint8Arra
   let page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
   let y = PAGE_HEIGHT - MARGIN;
 
-  // --- Header ---
+  // Header
   y = drawText(page, 'Verification Certificate', fontBold, 20, MARGIN, y, rgb(0.1, 0.1, 0.1));
   y -= 8;
-
-  const tierLabel =
-    result.tier === 'full' ? 'Full Verification (Tier 1)' : 'Basic Verification (Tier 2)';
   y = drawText(
     page,
-    tierLabel,
+    LEVEL_LABELS[result.level],
     fontBold,
     12,
     MARGIN,
     y,
-    result.tier === 'full' ? rgb(0.0, 0.5, 0.0) : rgb(0.7, 0.5, 0.0)
+    LEVEL_COLORS[result.level]
   );
   y -= 16;
-
   y = drawText(
     page,
     `Verification ID: ${result.verificationId}`,
@@ -57,7 +62,6 @@ export async function generatePdf(result: VerificationResult): Promise<Uint8Arra
   y = drawText(page, `Transaction: ${result.txId}`, fontRegular, 9, MARGIN, y, rgb(0.3, 0.3, 0.3));
   y -= 20;
 
-  // --- Divider ---
   page.drawLine({
     start: { x: MARGIN, y },
     end: { x: PAGE_WIDTH - MARGIN, y },
@@ -66,12 +70,11 @@ export async function generatePdf(result: VerificationResult): Promise<Uint8Arra
   });
   y -= 20;
 
-  // --- Methodology ---
+  // Methodology
   y = drawText(page, 'Methodology', fontBold, 13, MARGIN, y, rgb(0.1, 0.1, 0.1));
   y -= 8;
-
-  const methodology = result.tier === 'full' ? METHODOLOGY_TIER_1 : METHODOLOGY_TIER_2;
-  const methodResult = drawWrappedText(
+  const methodology = result.level >= 3 ? METHODOLOGY_VERIFIED : METHODOLOGY_BASIC;
+  const mResult = drawWrappedText(
     page,
     doc,
     methodology,
@@ -83,19 +86,20 @@ export async function generatePdf(result: VerificationResult): Promise<Uint8Arra
     13,
     rgb(0.2, 0.2, 0.2)
   );
-  page = methodResult.page;
-  y = methodResult.y;
+  page = mResult.page;
+  y = mResult.y;
   y -= 20;
 
-  // --- Statement of Facts ---
+  // Statement of Facts
   y = drawText(page, 'Statement of Facts', fontBold, 13, MARGIN, y, rgb(0.1, 0.1, 0.1));
   y -= 10;
 
+  const checksPass = result.authenticity.status === 'signature_verified';
   const facts = [
     existenceStatement(result.txId, result.existence.blockHeight, result.existence.blockTimestamp),
-    authorshipStatement(result.owner.address, result.owner.signatureValid),
-    integrityStatement(result.tier, result.integrity.hash),
+    authenticityStatement(result.authenticity, result.owner),
     bundleStatement(result.bundle.isBundled, result.bundle.rootTransactionId),
+    gatewayAssessmentStatement(result.gatewayAssessment, checksPass),
   ].filter(Boolean);
 
   for (const fact of facts) {
@@ -103,7 +107,7 @@ export async function generatePdf(result: VerificationResult): Promise<Uint8Arra
       page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
       y = PAGE_HEIGHT - MARGIN;
     }
-    const factResult = drawWrappedText(
+    const fResult = drawWrappedText(
       page,
       doc,
       fact,
@@ -115,23 +119,21 @@ export async function generatePdf(result: VerificationResult): Promise<Uint8Arra
       13,
       rgb(0.15, 0.15, 0.15)
     );
-    page = factResult.page;
-    y = factResult.y;
+    page = fResult.page;
+    y = fResult.y;
     y -= 12;
   }
   y -= 8;
 
-  // --- Evidence Summary Table ---
+  // Evidence Summary Table
   if (y < MARGIN + 160) {
     page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     y = PAGE_HEIGHT - MARGIN;
   }
-
   y = drawText(page, 'Evidence Summary', fontBold, 13, MARGIN, y, rgb(0.1, 0.1, 0.1));
   y -= 14;
 
   const rows = buildEvidenceRows(result);
-  // Table header
   y = drawTableRow(
     page,
     fontBold,
@@ -142,7 +144,6 @@ export async function generatePdf(result: VerificationResult): Promise<Uint8Arra
     [160, 80, CONTENT_WIDTH - 240],
     rgb(0.9, 0.9, 0.9)
   );
-
   for (const row of rows) {
     if (y < MARGIN + 30) {
       page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
@@ -152,26 +153,28 @@ export async function generatePdf(result: VerificationResult): Promise<Uint8Arra
   }
   y -= 20;
 
-  // --- Cryptographic Proof Appendix ---
+  // Appendix
   if (y < MARGIN + 120) {
     page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     y = PAGE_HEIGHT - MARGIN;
   }
-
   y = drawText(page, 'Cryptographic Proof Appendix', fontBold, 13, MARGIN, y, rgb(0.1, 0.1, 0.1));
   y -= 10;
 
-  const appendixLines = [
+  const appendix = [
     `Transaction ID: ${result.txId}`,
-    `Verification Tier: ${result.tier === 'full' ? 'Full (Tier 1)' : 'Basic (Tier 2)'}`,
+    `Verification Level: ${result.level} (${LEVEL_LABELS[result.level]})`,
+    `Authenticity: ${result.authenticity.status}`,
     result.existence.blockHeight ? `Block Height: ${result.existence.blockHeight}` : null,
     result.existence.blockId ? `Block ID: ${result.existence.blockId}` : null,
     result.existence.blockTimestamp ? `Block Timestamp: ${result.existence.blockTimestamp}` : null,
     result.owner.address ? `Owner Address: ${result.owner.address}` : null,
-    result.integrity.hash ? `SHA-256 Data Hash: ${result.integrity.hash}` : null,
+    result.authenticity.dataHash ? `Data SHA-256: ${result.authenticity.dataHash}` : null,
+    result.authenticity.gatewayHash ? `Gateway SHA-256: ${result.authenticity.gatewayHash}` : null,
+    result.gatewayAssessment.hops !== null ? `Data Hops: ${result.gatewayAssessment.hops}` : null,
   ].filter(Boolean) as string[];
 
-  for (const line of appendixLines) {
+  for (const line of appendix) {
     if (y < MARGIN + 20) {
       page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
       y = PAGE_HEIGHT - MARGIN;
@@ -194,8 +197,15 @@ export async function generatePdf(result: VerificationResult): Promise<Uint8Arra
         page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
         y = PAGE_HEIGHT - MARGIN;
       }
-      const tagText = `  ${tag.name}: ${tag.value}`;
-      y = drawText(page, tagText.substring(0, 100), fontRegular, 7, MARGIN, y, rgb(0.4, 0.4, 0.4));
+      y = drawText(
+        page,
+        `  ${tag.name}: ${tag.value}`.substring(0, 100),
+        fontRegular,
+        7,
+        MARGIN,
+        y,
+        rgb(0.4, 0.4, 0.4)
+      );
       y -= 2;
     }
   }
@@ -214,37 +224,44 @@ function buildEvidenceRows(result: VerificationResult): string[][] {
         ? 'PENDING'
         : 'FAIL';
   const existDetail = result.existence.blockHeight
-    ? `Block ${result.existence.blockHeight}, ${result.existence.blockTimestamp ?? 'unknown time'}`
+    ? `Block ${result.existence.blockHeight}, ${result.existence.blockTimestamp ?? 'unknown'}`
     : result.existence.status;
   rows.push(['Transaction exists', existStatus, existDetail]);
 
-  // Integrity
-  if (result.tier === 'full') {
-    const intStatus = result.integrity.match ? 'PASS' : 'FAIL';
-    rows.push([
-      'Data integrity',
-      intStatus,
-      `SHA-256: ${result.integrity.hash?.substring(0, 20) ?? 'N/A'}...`,
-    ]);
+  // Authenticity (unified)
+  if (result.authenticity.status === 'signature_verified') {
+    rows.push(['Data authenticity', 'VERIFIED', 'RSA-PSS signature matches deep hash']);
+  } else if (result.authenticity.status === 'hash_verified') {
+    rows.push(['Data authenticity', 'HASH ONLY', 'SHA-256 fingerprint confirmed']);
   } else {
-    rows.push(['Data integrity', 'UNAVAILABLE', 'Data not indexed by this gateway']);
+    rows.push(['Data authenticity', 'UNVERIFIED', 'Signature and hash unavailable']);
   }
 
-  // Signature
-  if (result.owner.signatureValid === true) {
+  // Owner
+  if (result.owner.addressVerified === true) {
     rows.push([
-      'Signature valid',
-      'PASS',
-      `Owner: ${result.owner.address?.substring(0, 16) ?? 'N/A'}...`,
+      'Owner address',
+      'VERIFIED',
+      `SHA-256(pubkey) == ${result.owner.address?.substring(0, 16)}...`,
     ]);
-  } else if (result.owner.signatureValid === false) {
+  } else if (result.owner.address) {
+    rows.push(['Owner address', 'PRESENT', `${result.owner.address.substring(0, 20)}...`]);
+  }
+
+  // Hash fingerprint
+  if (result.authenticity.dataHash) {
     rows.push([
-      'Signature valid',
-      'FAIL',
-      `Owner: ${result.owner.address?.substring(0, 16) ?? 'N/A'}...`,
+      'SHA-256 fingerprint',
+      'COMPUTED',
+      `${result.authenticity.dataHash.substring(0, 28)}...`,
     ]);
-  } else {
-    rows.push(['Signature valid', 'NOT CHECKED', 'Signature verification not performed']);
+  }
+
+  // Gateway signals (only when our checks are incomplete)
+  if (result.authenticity.status !== 'signature_verified') {
+    if (result.gatewayAssessment.trusted === true) {
+      rows.push(['Trusted source', 'YES', 'Data from trusted source']);
+    }
   }
 
   // Bundle
@@ -259,8 +276,7 @@ function buildEvidenceRows(result: VerificationResult): string[][] {
   return rows;
 }
 
-// --- Drawing helpers ---
-
+// Drawing helpers (unchanged)
 function drawText(
   page: PDFPage,
   text: string,
@@ -288,33 +304,27 @@ function drawWrappedText(
 ): { page: PDFPage; y: number } {
   const words = text.split(' ');
   let line = '';
-  let currentPage = page;
-  let currentY = y;
-
+  let cp = page;
+  let cy = y;
   for (const word of words) {
-    const testLine = line ? `${line} ${word}` : word;
-    const width = font.widthOfTextAtSize(testLine, size);
-
-    if (width > maxWidth && line) {
-      currentPage.drawText(line, { x, y: currentY, size, font, color });
-      currentY -= lineHeight;
-
-      if (currentY < MARGIN + 20) {
-        currentPage = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-        currentY = PAGE_HEIGHT - MARGIN;
+    const tl = line ? `${line} ${word}` : word;
+    if (font.widthOfTextAtSize(tl, size) > maxWidth && line) {
+      cp.drawText(line, { x, y: cy, size, font, color });
+      cy -= lineHeight;
+      if (cy < MARGIN + 20) {
+        cp = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+        cy = PAGE_HEIGHT - MARGIN;
       }
       line = word;
     } else {
-      line = testLine;
+      line = tl;
     }
   }
-
   if (line) {
-    currentPage.drawText(line, { x, y: currentY, size, font, color });
-    currentY -= lineHeight;
+    cp.drawText(line, { x, y: cy, size, font, color });
+    cy -= lineHeight;
   }
-
-  return { page: currentPage, y: currentY };
+  return { page: cp, y: cy };
 }
 
 function drawTableRow(
@@ -327,30 +337,26 @@ function drawTableRow(
   colWidths: number[],
   bgColor: ReturnType<typeof rgb> | null
 ): number {
-  const rowHeight = 18;
-
+  const rh = 18;
   if (bgColor) {
     page.drawRectangle({
       x: startX,
-      y: y - rowHeight + 4,
+      y: y - rh + 4,
       width: colWidths.reduce((a, b) => a + b, 0),
-      height: rowHeight,
+      height: rh,
       color: bgColor,
     });
   }
-
   let x = startX;
   for (let i = 0; i < cells.length; i++) {
-    const cellText = cells[i].substring(0, Math.floor(colWidths[i] / (size * 0.5)));
-    page.drawText(cellText, {
+    page.drawText(cells[i].substring(0, Math.floor(colWidths[i] / (size * 0.5))), {
       x: x + 4,
-      y: y - rowHeight + 8,
+      y: y - rh + 8,
       size,
       font,
       color: rgb(0.1, 0.1, 0.1),
     });
     x += colWidths[i];
   }
-
-  return y - rowHeight;
+  return y - rh;
 }

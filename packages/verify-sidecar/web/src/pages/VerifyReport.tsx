@@ -1,18 +1,22 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { getVerification, getPdfUrl, type VerificationResult } from '../api/client';
-import TierIndicator from '../components/TierIndicator';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { getVerification, verifyTransaction, type VerificationResult } from '../api/client';
+import VerificationHero from '../components/VerificationHero';
+import ProvenanceChain from '../components/ProvenanceChain';
 import ExistenceCard from '../components/ExistenceCard';
-import TimestampCard from '../components/TimestampCard';
-import OwnerCard from '../components/OwnerCard';
-import IntegrityCard from '../components/IntegrityCard';
+import AuthenticityCard from '../components/AuthenticityCard';
 import MetadataCard from '../components/MetadataCard';
 import BundleCard from '../components/BundleCard';
+import GatewayAssessmentCard from '../components/GatewayAssessmentCard';
+import DataPreview from '../components/DataPreview';
+import FileCompare from '../components/FileCompare';
 
 export default function VerifyReport() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reverifying, setReverifying] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -21,13 +25,28 @@ export default function VerifyReport() {
       .catch((err) => setError(err.message));
   }, [id]);
 
+  const handleReverify = async () => {
+    if (!result) return;
+    setReverifying(true);
+    try {
+      const fresh = await verifyTransaction(result.txId);
+      navigate(`/report/${fresh.verificationId}`, { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Re-verification failed');
+    } finally {
+      setReverifying(false);
+    }
+  };
+
   if (error) {
     return (
       <div className="mx-auto max-w-2xl">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-8">
-          <h2 className="text-lg font-semibold text-red-800">Verification Not Found</h2>
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-8 shadow-sm">
+          <h2 className="font-heading text-lg font-extrabold tracking-tight text-red-800">
+            Verification Not Found
+          </h2>
           <p className="mt-2 text-red-700">{error}</p>
-          <Link to="/" className="mt-4 inline-block text-blue-600 hover:underline">
+          <Link to="/" className="mt-4 inline-block text-ario-primary hover:underline">
             Verify another transaction
           </Link>
         </div>
@@ -38,43 +57,83 @@ export default function VerifyReport() {
   if (!result) {
     return (
       <div className="flex justify-center py-16">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-ario-primary border-t-transparent" />
       </div>
     );
   }
 
+  const hasImage = result.metadata.contentType?.startsWith('image/');
+  const dataHash = result.authenticity.dataHash;
+  const checksPass = result.authenticity.status === 'signature_verified';
+
   return (
-    <div className="space-y-6">
-      <TierIndicator tier={result.tier} />
+    <div className="mx-auto max-w-4xl space-y-8 px-4 py-8">
+      {/* 1. Hero: verdict + actions + pills */}
+      <VerificationHero result={result} onReverify={handleReverify} reverifying={reverifying} />
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <ExistenceCard existence={result.existence} txId={result.txId} />
-        <TimestampCard existence={result.existence} />
-        <OwnerCard owner={result.owner} />
-        <IntegrityCard integrity={result.integrity} tier={result.tier} />
-        <MetadataCard metadata={result.metadata} />
-        {result.bundle.isBundled && <BundleCard bundle={result.bundle} />}
-      </div>
+      {/* 2. Provenance chain */}
+      <ProvenanceChain result={result} />
 
-      <div className="flex gap-3">
-        <a
-          href={getPdfUrl(result.verificationId)}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          download
-        >
-          Download Verification Certificate
-        </a>
-        <Link
-          to="/"
-          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Verify Another
-        </Link>
-      </div>
+      {/* 3. Proof */}
+      <section>
+        <h3 className="mb-4 font-heading text-base font-extrabold tracking-tight text-ario-black/70">
+          Proof
+        </h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          <AuthenticityCard authenticity={result.authenticity} owner={result.owner} />
+          <ExistenceCard existence={result.existence} txId={result.txId} />
+          {result.bundle.isBundled && <BundleCard bundle={result.bundle} />}
+        </div>
+      </section>
 
-      <div className="text-xs text-gray-400">
-        Verification ID: {result.verificationId} | Generated: {result.timestamp}
-      </div>
+      {/* 4. Preview & compare */}
+      {(hasImage || dataHash) && (
+        <section>
+          <h3 className="mb-4 font-heading text-base font-extrabold tracking-tight text-ario-black/70">
+            {hasImage ? 'Preview & compare' : 'Compare local file'}
+          </h3>
+          <div className={`grid gap-4 ${hasImage && dataHash ? 'md:grid-cols-2' : ''}`}>
+            {hasImage && (
+              <DataPreview txId={result.txId} contentType={result.metadata.contentType} />
+            )}
+            {dataHash && <FileCompare integrityHash={dataHash} />}
+          </div>
+        </section>
+      )}
+
+      {/* 5. Details */}
+      <section>
+        <h3 className="mb-4 font-heading text-base font-extrabold tracking-tight text-ario-black/70">
+          Details
+        </h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          <MetadataCard metadata={result.metadata} />
+          <GatewayAssessmentCard assessment={result.gatewayAssessment} checksPass={checksPass} />
+        </div>
+      </section>
+
+      {/* 6. Footer */}
+      <footer className="flex items-center justify-between border-t border-ario-border pt-4">
+        <div className="flex items-center gap-2">
+          <img src="https://ar.io/brand/ario-black.svg" alt="ar.io" className="h-4 opacity-30" />
+          <span className="text-xs text-ario-black/30">
+            Verified by ar.io gateway &middot; {result.verificationId}
+          </span>
+        </div>
+        <div className="flex items-center gap-4">
+          <a
+            href={`https://viewblock.io/arweave/tx/${result.txId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-ario-primary hover:underline"
+          >
+            View on Viewblock
+          </a>
+          <Link to="/" className="text-xs text-ario-black/40 hover:text-ario-black/60">
+            Verify another
+          </Link>
+        </div>
+      </footer>
     </div>
   );
 }

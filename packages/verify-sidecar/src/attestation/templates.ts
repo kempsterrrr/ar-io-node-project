@@ -1,21 +1,20 @@
-export const METHODOLOGY_TIER_1 = `This certificate documents the results of independent cryptographic verification \
-performed on data stored on the Arweave blockweave. The data identified by this \
-transaction was independently indexed and verified by this gateway instance. \
-Verification was performed by computing SHA-256 cryptographic hashes of the stored \
-data and comparing them against hashes recorded on-chain at the time of storage. \
-All stated facts are the result of mathematical computation and cryptographic proof. \
-This service does not make interpretive claims about the data's meaning, purpose, \
-or compliance with any particular regulation or requirement.`;
+import type { VerificationResult } from '../types.js';
 
-export const METHODOLOGY_TIER_2 = `This certificate documents the results of a basic verification performed on data \
-stored on the Arweave blockweave. The data identified by this transaction has not \
-been independently indexed by this gateway instance, which limits the scope of \
-verification. Transaction existence, block confirmation, and authorship have been \
-verified. Data integrity verification (SHA-256 hash comparison) was not performed, \
-as this requires the data to be indexed by the verifying gateway. All stated facts \
-are the result of cryptographic proof or direct blockchain query. This service does \
-not make interpretive claims about the data's meaning, purpose, or compliance with \
-any particular regulation or requirement.`;
+export const METHODOLOGY_VERIFIED = `This certificate documents the results of independent cryptographic verification \
+performed on data stored on the Arweave blockweave. The data identified by this \
+transaction was verified by: (1) confirming transaction existence on the blockchain, \
+(2) downloading the raw data and computing its SHA-256 fingerprint, and \
+(3) verifying the RSA-PSS cryptographic signature against the deep hash of the data, \
+proving the stated owner signed this exact data. All stated facts are the result of \
+mathematical computation and cryptographic proof. This service does not make interpretive \
+claims about the data's meaning, purpose, or compliance with any particular regulation.`;
+
+export const METHODOLOGY_BASIC = `This certificate documents the results of a verification performed on data \
+stored on the Arweave blockweave. The scope of verification was limited because \
+either the data has not been fully indexed by this gateway or the full public key \
+was not available for signature verification. All stated facts are the result of \
+cryptographic proof or direct blockchain query. This service does not make interpretive \
+claims about the data's meaning, purpose, or compliance with any particular regulation.`;
 
 export function existenceStatement(
   txId: string,
@@ -29,30 +28,61 @@ export function existenceStatement(
   return `Transaction Existence: Arweave Transaction ${txId} exists on the Arweave blockweave, confirmed in block ${blockHeight.toLocaleString()}${ts}.`;
 }
 
-export function authorshipStatement(
-  address: string | null,
-  signatureValid: boolean | null
+export function authenticityStatement(
+  auth: VerificationResult['authenticity'],
+  owner: VerificationResult['owner']
 ): string {
-  if (!address) {
-    return 'Authorship: Owner information unavailable.';
-  }
-  const sigStatus =
-    signatureValid === true
-      ? "The cryptographic signature has been verified as valid against the owner's public key."
-      : signatureValid === false
-        ? 'The cryptographic signature verification FAILED.'
-        : 'Signature verification was not performed.';
-  return `Authorship: The transaction was signed by wallet address ${address}. ${sigStatus}`;
-}
+  const parts: string[] = [];
 
-export function integrityStatement(tier: 'full' | 'basic', hash: string | null): string {
-  if (tier === 'full' && hash) {
-    return `Data Integrity: The SHA-256 hash of the stored data is ${hash}. This matches the hash recorded on-chain, confirming the data has not been altered since storage.`;
+  if (auth.status === 'signature_verified') {
+    parts.push('Data Authenticity: VERIFIED.');
+    parts.push(
+      'The RSA-PSS cryptographic signature has been verified against the deep hash of this data item.'
+    );
+    parts.push(
+      'This confirms the stated owner signed this exact data and it has not been modified since.'
+    );
+  } else if (auth.status === 'hash_verified') {
+    parts.push('Data Authenticity: PARTIALLY VERIFIED.');
+    parts.push(`SHA-256 fingerprint independently computed: ${auth.dataHash}.`);
+    if (auth.signatureSkipReason) {
+      parts.push(`Signature verification was not performed: ${auth.signatureSkipReason}.`);
+    }
+  } else {
+    parts.push(
+      'Data Authenticity: UNVERIFIED. Neither signature nor hash verification could be performed.'
+    );
   }
-  return 'Data Integrity: NOT VERIFIED - this gateway has not independently indexed this data. Data integrity verification requires the data to be indexed by the verifying gateway.';
+
+  if (owner.address) {
+    const addrNote = owner.addressVerified ? ' (address derived from public key via SHA-256)' : '';
+    parts.push(`Owner: ${owner.address}${addrNote}.`);
+  }
+
+  return parts.join(' ');
 }
 
 export function bundleStatement(isBundled: boolean, rootTxId: string | null): string {
   if (!isBundled || !rootTxId) return '';
-  return `Bundle: This data item is stored inside a bundle. It is anchored to the Arweave blockchain via root transaction ${rootTxId}.`;
+  return `Bundle: This is an ANS-104 bundled data item. Its signature and integrity are verified independently. It is anchored to the Arweave blockchain via root transaction ${rootTxId}.`;
+}
+
+export function gatewayAssessmentStatement(
+  assessment: VerificationResult['gatewayAssessment'],
+  checksPass?: boolean
+): string {
+  const parts: string[] = [];
+
+  if (!checksPass) {
+    if (assessment.verified === true) parts.push('data verified');
+    else if (assessment.verified === false) parts.push('data not yet verified');
+    if (assessment.stable === true) parts.push('block stable');
+    else if (assessment.stable === false) parts.push('block not yet stable');
+  }
+
+  if (assessment.trusted === true) parts.push('trusted source');
+  if (assessment.hops !== null) parts.push(`${assessment.hops} hop(s)`);
+
+  if (parts.length === 0) return '';
+  return `Gateway Assessment: The serving gateway reports: ${parts.join(', ')}.`;
 }

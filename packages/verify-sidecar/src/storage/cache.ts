@@ -5,7 +5,11 @@ import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 import type { VerificationResult } from '../types.js';
 
+const CACHE_MAX_AGE_DAYS = 30;
+const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
 let db: Database.Database;
+let cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
 export function initCache(): void {
   const dbPath = config.SQLITE_PATH;
@@ -28,7 +32,23 @@ export function initCache(): void {
     ON verification_results(tx_id)
   `);
 
+  pruneExpired();
+  cleanupTimer = setInterval(pruneExpired, CLEANUP_INTERVAL_MS);
+
   logger.info({ path: dbPath }, 'Verification cache initialized');
+}
+
+function pruneExpired(): void {
+  try {
+    const result = db
+      .prepare(`DELETE FROM verification_results WHERE created_at < datetime('now', ?)`)
+      .run(`-${CACHE_MAX_AGE_DAYS} days`);
+    if (result.changes > 0) {
+      logger.info({ deleted: result.changes }, 'Pruned expired verification results');
+    }
+  } catch (error) {
+    logger.error({ error }, 'Failed to prune expired results');
+  }
 }
 
 export function saveResult(result: VerificationResult): void {
@@ -47,7 +67,21 @@ export function getResultById(verificationId: string): VerificationResult | null
   return JSON.parse(row.result_json) as VerificationResult;
 }
 
+export function getResultsByTxId(txId: string): VerificationResult[] {
+  const rows = db
+    .prepare(
+      'SELECT result_json FROM verification_results WHERE tx_id = ? ORDER BY created_at DESC'
+    )
+    .all(txId) as { result_json: string }[];
+
+  return rows.map((row) => JSON.parse(row.result_json) as VerificationResult);
+}
+
 export function closeCache(): void {
+  if (cleanupTimer) {
+    clearInterval(cleanupTimer);
+    cleanupTimer = null;
+  }
   if (db) {
     db.close();
     logger.info('Verification cache closed');

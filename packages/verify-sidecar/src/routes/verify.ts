@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { runVerification } from '../pipeline/orchestrator.js';
-import { saveResult, getResultById } from '../storage/cache.js';
+import { saveResult, getResultById, getResultsByTxId } from '../storage/cache.js';
 import { generatePdf } from '../attestation/pdf-generator.js';
 import { logger } from '../utils/logger.js';
 
@@ -33,6 +33,22 @@ router.post('/', async (req, res) => {
     logger.error({ error, txId }, 'Verification failed');
     res.status(500).json({ error: 'Verification failed' });
   }
+});
+
+/**
+ * GET /api/v1/verify/tx/:txId
+ * Returns all cached verification results for a transaction ID (most recent first).
+ */
+router.get('/tx/:txId', (req, res) => {
+  const { txId } = req.params;
+
+  if (!TX_ID_PATTERN.test(txId)) {
+    res.status(400).json({ error: 'Invalid transaction ID format' });
+    return;
+  }
+
+  const results = getResultsByTxId(txId);
+  res.json({ txId, count: results.length, results });
 });
 
 /**

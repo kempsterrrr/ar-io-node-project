@@ -1,10 +1,27 @@
+import CopyHash from './CopyHash';
+
 interface Props {
   existence: {
     status: 'confirmed' | 'pending' | 'not_found';
     blockHeight: number | null;
+    blockTimestamp: string | null;
     confirmations: number | null;
   };
   txId: string;
+}
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
 }
 
 export default function ExistenceCard({ existence, txId }: Props) {
@@ -23,8 +40,8 @@ export default function ExistenceCard({ existence, txId }: Props) {
         : '&#10007;';
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-5">
-      <h3 className="mb-3 text-sm font-medium text-gray-500">Does this data exist on Arweave?</h3>
+    <div className="rounded-2xl border border-ario-border bg-ario-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+      <h3 className="mb-3 text-sm font-medium text-ario-black/50">Is this data on Arweave?</h3>
       <div className="flex items-center gap-2">
         <span
           className={`text-3xl ${statusColor}`}
@@ -39,16 +56,40 @@ export default function ExistenceCard({ existence, txId }: Props) {
                 : 'Not Found'}
           </p>
           {existence.blockHeight && (
-            <p className="text-sm text-gray-600">Block {existence.blockHeight.toLocaleString()}</p>
+            <a
+              href={`https://viewblock.io/arweave/block/${existence.blockHeight}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-ario-primary hover:underline"
+            >
+              Block {existence.blockHeight.toLocaleString()}
+            </a>
           )}
           {existence.confirmations !== null && existence.confirmations > 0 && (
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-ario-black/30">
               {existence.confirmations.toLocaleString()} confirmations
             </p>
           )}
         </div>
       </div>
-      <p className="mt-3 break-all font-mono text-xs text-gray-400">{txId}</p>
+      {existence.blockTimestamp && (
+        <p className="mt-2 text-xs text-ario-black/50">
+          {new Date(existence.blockTimestamp).toUTCString()}
+          <span className="ml-1 text-ario-black/30">
+            ({relativeTime(existence.blockTimestamp)})
+          </span>
+        </p>
+      )}
+      <div className="mt-2 text-xs">
+        <a
+          href={`https://viewblock.io/arweave/tx/${txId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-ario-primary hover:underline"
+        >
+          <CopyHash value={txId} />
+        </a>
+      </div>
     </div>
   );
 }
