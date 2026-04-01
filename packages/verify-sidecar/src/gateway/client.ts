@@ -14,9 +14,9 @@ const timeout = config.GATEWAY_TIMEOUT_MS;
 /** Max bytes to download for independent hash verification (10 MB) */
 const MAX_RAW_DOWNLOAD_BYTES = 10 * 1024 * 1024;
 
-/** Retry config for waiting on gateway indexing */
+/** Retry config for waiting on gateway indexing — keep total under 60s for proxy timeouts */
 const INDEX_RETRY_DELAY_MS = 10_000;
-const INDEX_MAX_RETRIES = 6;
+const INDEX_MAX_RETRIES = 4;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
