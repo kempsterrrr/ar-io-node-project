@@ -13,7 +13,7 @@ describe('ArIO', () => {
     vi.restoreAllMocks();
   });
 
-  it('constructs with minimal config', () => {
+  it('constructs with minimal config (gateway only)', () => {
     const ario = new ArIO({ gatewayUrl: 'http://localhost:3000' });
     expect(ario.gateway).toBeDefined();
     expect(ario.signer).toBeNull();
@@ -24,7 +24,7 @@ describe('ArIO', () => {
   it('constructs with full config', () => {
     const ario = new ArIO({
       gatewayUrl: 'http://localhost:3000',
-      signingOracleUrl: 'http://localhost:3000/trusthash/v1',
+      trusthashUrl: 'http://localhost:3000/trusthash/v1',
       turboWallet: '0xabc',
     });
     expect(ario.signer).not.toBeNull();
@@ -57,15 +57,15 @@ describe('ArIO', () => {
     expect(result.data.toString()).toBe('test');
   });
 
-  it('search() throws without signingOracleUrl', async () => {
+  it('search() throws without trusthashUrl', async () => {
     const ario = new ArIO({ gatewayUrl: 'http://localhost:3000' });
-    await expect(ario.search({ phash: 'abc' })).rejects.toThrow('signingOracleUrl is required');
+    await expect(ario.search({ phash: 'abc' })).rejects.toThrow('trusthashUrl is required');
   });
 
   it('search() delegates to manifest repo', async () => {
     const ario = new ArIO({
       gatewayUrl: 'http://localhost:3000',
-      signingOracleUrl: 'http://localhost:3000/trusthash/v1',
+      trusthashUrl: 'http://localhost:3000/trusthash/v1',
     });
 
     fetchSpy.mockResolvedValue({
@@ -85,14 +85,57 @@ describe('ArIO', () => {
   it('store() throws without turboWallet', async () => {
     const ario = new ArIO({
       gatewayUrl: 'http://localhost:3000',
-      signingOracleUrl: 'http://localhost:3000/trusthash/v1',
     });
-    // Create a minimal JPEG buffer
-    const jpeg = Buffer.alloc(12);
-    jpeg[0] = 0xff;
-    jpeg[1] = 0xd8;
-    jpeg[2] = 0xff;
 
-    await expect(ario.store({ data: jpeg })).rejects.toThrow('turboWallet is required');
+    await expect(
+      ario.store({ data: Buffer.from('hello'), contentType: 'text/plain' })
+    ).rejects.toThrow('turboWallet is required');
+  });
+
+  it('query() delegates to gateway GraphQL', async () => {
+    const ario = new ArIO({ gatewayUrl: 'http://localhost:3000' });
+
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          data: {
+            transactions: {
+              edges: [
+                {
+                  cursor: 'cursor1',
+                  node: {
+                    id: 'tx123',
+                    owner: { address: 'owner1' },
+                    tags: [{ name: 'agent', value: 'bot' }],
+                    block: { height: 100, timestamp: 1234567890 },
+                    data: { size: '42' },
+                  },
+                },
+              ],
+              pageInfo: { hasNextPage: false },
+            },
+          },
+        }),
+    });
+
+    const result = await ario.query({ tags: [{ name: 'agent', values: ['bot'] }] });
+    expect(result.edges).toHaveLength(1);
+    expect(result.edges[0].txId).toBe('tx123');
+    expect(result.edges[0].owner).toBe('owner1');
+    expect(result.edges[0].dataSize).toBe(42);
+    expect(result.pageInfo.hasNextPage).toBe(false);
+  });
+
+  it('resolve() delegates to gateway ArNS resolver', async () => {
+    const ario = new ArIO({ gatewayUrl: 'http://localhost:3000' });
+
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ txId: 'resolved-tx-id' }),
+    });
+
+    const result = await ario.resolve('my-data');
+    expect(result.txId).toBe('resolved-tx-id');
   });
 });

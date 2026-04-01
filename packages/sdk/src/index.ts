@@ -9,6 +9,12 @@ export type {
   RetrieveResult,
   VerifyOptions,
   VerifyResult,
+  QueryOptions,
+  QueryEdge,
+  QueryResult,
+  PageInfo,
+  TagFilter,
+  ResolveResult,
   SearchOptions,
   SearchMatch,
   SearchResult,
@@ -21,7 +27,7 @@ export { SigningOracleClient } from './clients/signing-oracle.js';
 export { ManifestRepoClient } from './clients/manifest-repo.js';
 export { VerifyClient } from './clients/verify.js';
 
-// C2PA utilities
+// C2PA utilities (provenance features)
 export { detectContentType, SUPPORTED_CONTENT_TYPES } from './c2pa/detect.js';
 export { buildTags } from './c2pa/tags.js';
 export { uploadToArweave } from './c2pa/upload.js';

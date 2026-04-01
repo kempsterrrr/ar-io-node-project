@@ -1,5 +1,5 @@
 import type { Tag } from '@ar-io/c2pa-protocol';
-import type { GatewayInfo } from '../types.js';
+import type { GatewayInfo, QueryEdge, PageInfo } from '../types.js';
 
 /** Typed HTTP client for the AR.IO gateway. */
 export class GatewayClient {
@@ -22,7 +22,7 @@ export class GatewayClient {
     return { data: Buffer.from(arrayBuffer), contentType };
   }
 
-  /** GET /raw/:txId — fetch transaction tags via GraphQL. */
+  /** Fetch transaction tags via GraphQL. */
   async fetchTransactionTags(txId: string): Promise<Tag[]> {
     const query = `{
       transaction(id: "${txId}") {
@@ -38,6 +38,123 @@ export class GatewayClient {
       data?: { transaction?: { tags?: Tag[] } };
     };
     return json.data?.transaction?.tags ?? [];
+  }
+
+  /** Query transactions via GraphQL with filters. */
+  async queryGraphQL(options: {
+    tags?: Array<{ name: string; values: string[] }>;
+    owners?: string[];
+    first?: number;
+    after?: string;
+    sort?: 'HEIGHT_DESC' | 'HEIGHT_ASC';
+    minBlock?: number;
+    maxBlock?: number;
+  }): Promise<{ edges: QueryEdge[]; pageInfo: PageInfo }> {
+    const first = Math.min(options.first ?? 25, 100);
+    const sort = options.sort ?? 'HEIGHT_DESC';
+
+    // Build query variables
+    const tagFilters = options.tags
+      ? options.tags.map((t) => `{ name: "${t.name}", values: ${JSON.stringify(t.values)} }`)
+      : [];
+
+    const ownerFilter = options.owners?.length ? `owners: ${JSON.stringify(options.owners)}` : '';
+
+    const afterFilter = options.after ? `after: "${options.after}"` : '';
+
+    const blockFilter =
+      options.minBlock !== undefined || options.maxBlock !== undefined
+        ? `block: { min: ${options.minBlock ?? 0}${options.maxBlock !== undefined ? `, max: ${options.maxBlock}` : ''} }`
+        : '';
+
+    const tagFilterStr = tagFilters.length ? `tags: [${tagFilters.join(', ')}]` : '';
+
+    const filters = [
+      `first: ${first}`,
+      `sort: ${sort}`,
+      tagFilterStr,
+      ownerFilter,
+      afterFilter,
+      blockFilter,
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    const query = `{
+      transactions(${filters}) {
+        edges {
+          cursor
+          node {
+            id
+            owner { address }
+            tags { name value }
+            block { height timestamp }
+            data { size }
+          }
+        }
+        pageInfo {
+          hasNextPage
+        }
+      }
+    }`;
+
+    const res = await this.fetch('/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    });
+
+    const json = (await res.json()) as {
+      data?: {
+        transactions?: {
+          edges?: Array<{
+            cursor: string;
+            node: {
+              id: string;
+              owner: { address: string };
+              tags: Tag[];
+              block: { height: number; timestamp: number } | null;
+              data: { size: string };
+            };
+          }>;
+          pageInfo?: { hasNextPage: boolean };
+        };
+      };
+    };
+
+    const rawEdges = json.data?.transactions?.edges ?? [];
+    const edges: QueryEdge[] = rawEdges.map((e) => ({
+      txId: e.node.id,
+      owner: e.node.owner.address,
+      tags: e.node.tags,
+      block: e.node.block,
+      dataSize: parseInt(e.node.data.size, 10) || 0,
+    }));
+
+    const lastCursor = rawEdges.length > 0 ? rawEdges[rawEdges.length - 1].cursor : null;
+    const hasNextPage = json.data?.transactions?.pageInfo?.hasNextPage ?? false;
+
+    return {
+      edges,
+      pageInfo: { hasNextPage, endCursor: lastCursor },
+    };
+  }
+
+  /** Resolve an ArNS name to a transaction ID via the gateway. */
+  async resolveArNS(name: string): Promise<{ txId: string }> {
+    // AR.IO gateways serve ArNS data at subdomain or path. Try the /ar-io/resolver endpoint.
+    // If the name includes dots, it's a full domain — strip to get the ArNS label.
+    const label = name.replace(/\.ar-io\.dev$/, '').replace(/\.arweave\.net$/, '');
+    const res = await this.fetch(`/ar-io/resolver/${label}`);
+    const json = (await res.json()) as {
+      txId?: string;
+      ttl?: number;
+      owner?: string;
+    };
+    if (!json.txId) {
+      throw new Error(`ArNS name "${name}" could not be resolved`);
+    }
+    return { txId: json.txId };
   }
 
   /** GET /ar-io/healthcheck — gateway health. */

@@ -4,7 +4,7 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 
 export interface ResolvedConfig {
   gatewayUrl: string;
-  signingOracleUrl: string | null;
+  trusthashUrl: string | null;
   turboWallet: string | null;
   timeoutMs: number;
 }
@@ -18,7 +18,7 @@ export function resolveConfig(config: ArIOConfig): ResolvedConfig {
 
   return {
     gatewayUrl,
-    signingOracleUrl: config.signingOracleUrl?.replace(/\/+$/, '') ?? null,
+    trusthashUrl: config.trusthashUrl?.replace(/\/+$/, '') ?? null,
     turboWallet: config.turboWallet ?? null,
     timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
   };

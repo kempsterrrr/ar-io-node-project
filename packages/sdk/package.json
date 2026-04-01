@@ -1,7 +1,7 @@
 {
-  "name": "@ar-io/sdk",
-  "version": "0.1.0",
-  "description": "TypeScript SDK for storing, retrieving, verifying, and searching data on Arweave with C2PA provenance",
+  "name": "@agenticway/sdk",
+  "version": "0.2.0",
+  "description": "TypeScript SDK for permanently storing, retrieving, verifying, and querying data on Arweave",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -41,13 +41,13 @@
     "vitest": "^3.0.0"
   },
   "keywords": [
+    "agenticway",
     "ar-io",
     "arweave",
-    "c2pa",
     "sdk",
-    "provenance",
-    "verifiable",
-    "ai-data"
+    "ai-data",
+    "permanent-storage",
+    "verifiable"
   ],
   "license": "MIT",
   "repository": {

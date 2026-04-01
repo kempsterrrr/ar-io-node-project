@@ -2,6 +2,9 @@ import { resolveConfig, type ResolvedConfig } from './config.js';
 import type {
   ArIOConfig,
   GatewayInfo,
+  QueryOptions,
+  QueryResult,
+  ResolveResult,
   RetrieveResult,
   SearchOptions,
   SearchResult,
@@ -17,22 +20,24 @@ import { executeStore } from './operations/store.js';
 import { executeRetrieve } from './operations/retrieve.js';
 import { executeVerify } from './operations/verify.js';
 import { executeSearch } from './operations/search.js';
+import { executeQuery } from './operations/query.js';
+import { executeResolve } from './operations/resolve.js';
 
 /**
- * Main entry point for the AR.IO SDK.
+ * Main entry point for the @agenticway/sdk.
  *
- * Composes HTTP clients for the gateway, signing oracle, manifest repository,
- * and verify sidecar into a unified API with four core operations:
- * store(), retrieve(), verify(), and search().
+ * Core operations (store, retrieve, verify, query, resolve) work with
+ * just a gateway URL. Provenance features (C2PA signing, search) require
+ * trusthashUrl configuration.
  */
 export class ArIO {
   private config: ResolvedConfig;
 
   /** Gateway HTTP client for direct access. */
   readonly gateway: GatewayClient;
-  /** Signing oracle client (null if signingOracleUrl not configured). */
+  /** Signing oracle client (null if trusthashUrl not configured). */
   readonly signer: SigningOracleClient | null;
-  /** Manifest repository + search client (null if signingOracleUrl not configured). */
+  /** Manifest repository + search client (null if trusthashUrl not configured). */
   readonly manifests: ManifestRepoClient | null;
   /** Verify sidecar client. Uses gateway URL + /verify path by default. */
   readonly verifier: VerifyClient;
@@ -42,12 +47,12 @@ export class ArIO {
 
     this.gateway = new GatewayClient(this.config.gatewayUrl, this.config.timeoutMs);
 
-    this.signer = this.config.signingOracleUrl
-      ? new SigningOracleClient(this.config.signingOracleUrl, this.config.timeoutMs)
+    this.signer = this.config.trusthashUrl
+      ? new SigningOracleClient(this.config.trusthashUrl, this.config.timeoutMs)
       : null;
 
-    this.manifests = this.config.signingOracleUrl
-      ? new ManifestRepoClient(this.config.signingOracleUrl, this.config.timeoutMs)
+    this.manifests = this.config.trusthashUrl
+      ? new ManifestRepoClient(this.config.trusthashUrl, this.config.timeoutMs)
       : null;
 
     // Verify sidecar defaults to gateway URL (reverse-proxied at /verify)
@@ -55,38 +60,47 @@ export class ArIO {
   }
 
   /**
-   * Store data on Arweave with optional C2PA provenance.
+   * Store data permanently on Arweave.
    *
-   * Requires `turboWallet` in config. In 'sign' mode (default), creates a new
-   * C2PA manifest if `@ar-io/turbo-c2pa` and signing oracle are available.
-   * In 'preserve' mode, uploads data as-is with existing C2PA manifest.
+   * By default, stores raw data with the given content type and tags.
+   * Add `provenance` option to sign a C2PA manifest (requires trusthashUrl).
    */
   async store(options: StoreOptions): Promise<StoreResult> {
     return executeStore(this.config, this.gateway, this.signer, options);
   }
 
-  /**
-   * Retrieve data from Arweave by transaction ID or ArNS name.
-   */
+  /** Retrieve data from Arweave by transaction ID or ArNS name. */
   async retrieve(id: string): Promise<RetrieveResult> {
     return executeRetrieve(this.gateway, id);
   }
 
-  /**
-   * Verify the provenance and integrity of an Arweave transaction.
-   */
+  /** Verify the on-chain existence and integrity of an Arweave transaction. */
   async verify(txId: string): Promise<VerifyResult> {
     return executeVerify(this.verifier, txId);
   }
 
   /**
+   * Query for transactions on Arweave via GraphQL.
+   *
+   * Filter by tags, owners, block range. Supports cursor pagination.
+   */
+  async query(options: QueryOptions): Promise<QueryResult> {
+    return executeQuery(this.gateway, options);
+  }
+
+  /** Resolve an ArNS name to an Arweave transaction ID. */
+  async resolve(name: string): Promise<ResolveResult> {
+    return executeResolve(this.gateway, name);
+  }
+
+  /**
    * Search for similar content by perceptual hash or image.
    *
-   * Requires `signingOracleUrl` in config (manifest repository endpoint).
+   * Requires `trusthashUrl` in config (manifest repository endpoint).
    */
   async search(options: SearchOptions): Promise<SearchResult> {
     if (!this.manifests) {
-      throw new Error('ArIO.search(): signingOracleUrl is required for search operations');
+      throw new Error('ArIO.search(): trusthashUrl is required for search operations');
     }
     return executeSearch(this.manifests, options);
   }

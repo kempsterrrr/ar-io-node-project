@@ -4,8 +4,8 @@ import type { Tag } from '@ar-io/c2pa-protocol';
 export interface ArIOConfig {
   /** Gateway base URL (e.g. 'https://ario.agenticway.io' or 'http://localhost:3000'). */
   gatewayUrl: string;
-  /** Trusthash signing oracle base URL (e.g. 'https://ario.agenticway.io/trusthash/v1'). */
-  signingOracleUrl?: string;
+  /** Trusthash sidecar base URL (for C2PA provenance features). */
+  trusthashUrl?: string;
   /** Ethereum private key for Turbo uploads (hex string). */
   turboWallet?: string;
   /** Request timeout in milliseconds (default: 15000). */
@@ -14,30 +14,34 @@ export interface ArIOConfig {
 
 /** Options for the store() operation. */
 export interface StoreOptions {
-  /** Data to store (image or arbitrary bytes). */
+  /** Data to store (any bytes — text, JSON, image, etc.). */
   data: Buffer | Uint8Array;
-  /** IPTC digital source type (e.g. 'digitalCapture'). Required for sign mode. */
-  sourceType?: string;
-  /** Storage mode: 'sign' creates new C2PA manifest, 'preserve' keeps existing. Default: 'sign'. */
-  mode?: 'sign' | 'preserve';
-  /** Optional metadata tags to include on the Arweave transaction. */
-  metadata?: Record<string, string>;
-  /** Claim generator name/version. */
-  claimGenerator?: string;
-  /** Override the manifest repository URL (defaults to signingOracleUrl). */
-  manifestRepoUrl?: string;
+  /** Content type of the data (e.g. 'text/plain', 'application/json', 'image/jpeg'). Auto-detected from magic bytes if omitted. */
+  contentType?: string;
+  /** Custom tags to include on the Arweave transaction. */
+  tags?: Record<string, string>;
+  /** C2PA provenance options. When provided, store() signs a C2PA manifest. Requires trusthashUrl. */
+  provenance?: {
+    /** IPTC digital source type (e.g. 'compositeWithTrainedAlgorithmicMedia'). */
+    sourceType?: string;
+    /** Claim generator name/version. */
+    claimGenerator?: string;
+  };
 }
 
 /** Result of a store() operation. */
 export interface StoreResult {
   /** Arweave transaction ID. */
   txId: string;
-  /** C2PA manifest ID (urn:c2pa:...). */
-  manifestId: string;
-  /** base64url SHA-256 hash of the original asset. */
-  assetHash: string;
   /** URL to view the stored data. */
   viewUrl: string;
+  /** C2PA provenance details (only present when provenance option was used). */
+  provenance?: {
+    /** C2PA manifest ID (urn:c2pa:...). */
+    manifestId: string;
+    /** base64url SHA-256 hash of the original asset. */
+    assetHash: string;
+  };
 }
 
 /** Options for the retrieve() operation. */
@@ -96,7 +100,71 @@ export interface VerifyResult {
   };
 }
 
-/** Options for the search() operation. */
+/** Tag filter for query() operations. */
+export interface TagFilter {
+  /** Tag name to match. */
+  name: string;
+  /** Tag values to match (any of). */
+  values: string[];
+}
+
+/** Options for the query() operation. */
+export interface QueryOptions {
+  /** Filter by transaction tags. */
+  tags?: TagFilter[];
+  /** Filter by owner wallet addresses. */
+  owners?: string[];
+  /** Maximum results to return (default: 25, max: 100). */
+  first?: number;
+  /** Cursor for pagination (from pageInfo.endCursor). */
+  after?: string;
+  /** Sort order (default: 'HEIGHT_DESC'). */
+  sort?: 'HEIGHT_DESC' | 'HEIGHT_ASC';
+  /** Filter by minimum block height. */
+  minBlock?: number;
+  /** Filter by maximum block height. */
+  maxBlock?: number;
+}
+
+/** A single query result edge. */
+export interface QueryEdge {
+  /** Arweave transaction ID. */
+  txId: string;
+  /** Owner wallet address. */
+  owner: string;
+  /** Transaction tags. */
+  tags: Tag[];
+  /** Block info (null if pending). */
+  block: { height: number; timestamp: number } | null;
+  /** Data size in bytes. */
+  dataSize: number;
+}
+
+/** Pagination info for query results. */
+export interface PageInfo {
+  hasNextPage: boolean;
+  endCursor: string | null;
+}
+
+/** Result of a query() operation. */
+export interface QueryResult {
+  /** Matching transaction edges. */
+  edges: QueryEdge[];
+  /** Pagination info. */
+  pageInfo: PageInfo;
+}
+
+/** Result of a resolve() operation. */
+export interface ResolveResult {
+  /** Resolved Arweave transaction ID. */
+  txId: string;
+  /** TTL in seconds (if available). */
+  ttl: number | null;
+  /** Owner of the ArNS name. */
+  owner: string | null;
+}
+
+/** Options for the search() operation (requires trusthashUrl). */
 export interface SearchOptions {
   /** Image buffer to find similar content for. */
   image?: Buffer | Uint8Array;

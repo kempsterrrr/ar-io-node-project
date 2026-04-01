@@ -5,7 +5,7 @@ describe('resolveConfig', () => {
   it('resolves minimal config', () => {
     const config = resolveConfig({ gatewayUrl: 'http://localhost:3000' });
     expect(config.gatewayUrl).toBe('http://localhost:3000');
-    expect(config.signingOracleUrl).toBeNull();
+    expect(config.trusthashUrl).toBeNull();
     expect(config.turboWallet).toBeNull();
     expect(config.timeoutMs).toBe(15_000);
   });
@@ -13,10 +13,10 @@ describe('resolveConfig', () => {
   it('strips trailing slashes from URLs', () => {
     const config = resolveConfig({
       gatewayUrl: 'http://localhost:3000/',
-      signingOracleUrl: 'http://localhost:3000/trusthash/v1/',
+      trusthashUrl: 'http://localhost:3000/trusthash/v1/',
     });
     expect(config.gatewayUrl).toBe('http://localhost:3000');
-    expect(config.signingOracleUrl).toBe('http://localhost:3000/trusthash/v1');
+    expect(config.trusthashUrl).toBe('http://localhost:3000/trusthash/v1');
   });
 
   it('passes through turboWallet and timeoutMs', () => {

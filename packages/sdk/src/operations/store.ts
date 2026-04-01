@@ -1,10 +1,9 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import type { ResolvedConfig } from '../config.js';
 import type { StoreOptions, StoreResult } from '../types.js';
 import { GatewayClient } from '../clients/gateway.js';
 import { SigningOracleClient } from '../clients/signing-oracle.js';
 import { detectContentType } from '../c2pa/detect.js';
-import { buildTags } from '../c2pa/tags.js';
 import { uploadToArweave } from '../c2pa/upload.js';
 
 function sha256Base64Url(data: Buffer | Uint8Array): string {
@@ -23,63 +22,67 @@ export async function executeStore(
   }
 
   const data = Buffer.isBuffer(options.data) ? options.data : Buffer.from(options.data);
-  const mode = options.mode ?? 'sign';
-  const manifestRepoUrl = options.manifestRepoUrl ?? config.signingOracleUrl;
 
-  // Detect content type
-  const contentType = detectContentType(data);
-  if (!contentType) {
-    throw new Error('ArIO.store(): unsupported file format (cannot detect content type)');
+  // Determine content type: explicit > auto-detect > default
+  const contentType = options.contentType ?? detectContentType(data) ?? 'application/octet-stream';
+
+  // Build Arweave tags
+  const tags: Array<{ name: string; value: string }> = [
+    { name: 'Content-Type', value: contentType },
+  ];
+
+  // Add custom tags
+  if (options.tags) {
+    for (const [name, value] of Object.entries(options.tags)) {
+      tags.push({ name, value });
+    }
   }
 
-  // Compute asset hash
-  const assetHash = sha256Base64Url(data);
+  // C2PA provenance (opt-in)
+  if (options.provenance) {
+    if (!config.trusthashUrl) {
+      throw new Error('ArIO.store(): trusthashUrl is required for provenance signing');
+    }
+    if (!signingOracle) {
+      throw new Error('ArIO.store(): trusthashUrl is required for provenance signing');
+    }
 
-  // Generate manifest ID
-  const manifestId = `urn:c2pa:${randomUUID()}`;
-
-  let uploadData = data;
-  let manifestStoreHash = assetHash;
-
-  if (mode === 'sign' && signingOracle) {
-    // Sign mode: try to use c2pa-node for manifest creation
     try {
       const { signAndPrepare } = await import('@ar-io/turbo-c2pa');
+      const { buildTags } = await import('../c2pa/tags.js');
+
       const result = await signAndPrepare({
         imageBuffer: data,
         remoteSigner: signingOracle as never,
-        manifestRepoUrl: manifestRepoUrl ?? '',
-        claimGenerator: options.claimGenerator ?? '@ar-io/sdk/0.1.0',
-        digitalSourceType: options.sourceType,
+        manifestRepoUrl: config.trusthashUrl,
+        claimGenerator: options.provenance.claimGenerator ?? '@agenticway/sdk/0.2.0',
+        digitalSourceType: options.provenance.sourceType,
       });
-      uploadData = result.signedBuffer;
-      manifestStoreHash = result.manifestStoreHash;
 
-      // Build tags from the full signing result
-      const tags = buildTags({
+      const provTags = buildTags({
         contentType,
         manifestId: result.manifestId,
         storageMode: 'full',
         assetHash: result.assetHash,
         manifestStoreHash: result.manifestStoreHash,
-        manifestRepoUrl: manifestRepoUrl ?? '',
+        manifestRepoUrl: config.trusthashUrl,
         softBindingAlg: result.pHashHex ? 'org.ar-io.phash' : undefined,
         softBindingValue: result.pHashHex
           ? Buffer.from(result.pHashHex, 'hex').toString('base64')
           : undefined,
-        claimGenerator: options.claimGenerator ?? '@ar-io/sdk/0.1.0',
+        claimGenerator: options.provenance.claimGenerator ?? '@agenticway/sdk/0.2.0',
       });
 
-      // Add any custom metadata tags
-      const allTags = [...tags];
-      if (options.metadata) {
-        for (const [name, value] of Object.entries(options.metadata)) {
+      // Merge provenance tags with custom tags (provenance first, then custom overrides)
+      const allTags = [...provTags];
+      if (options.tags) {
+        for (const [name, value] of Object.entries(options.tags)) {
           allTags.push({ name, value });
         }
       }
 
       const uploadResult = await uploadToArweave({
-        data: uploadData,
+        data: result.signedBuffer,
         tags: allTags,
         ethPrivateKey: config.turboWallet,
         gatewayUrl: config.gatewayUrl,
@@ -87,48 +90,28 @@ export async function executeStore(
 
       return {
         txId: uploadResult.txId,
-        manifestId: result.manifestId,
-        assetHash: result.assetHash,
         viewUrl: uploadResult.viewUrl,
+        provenance: {
+          manifestId: result.manifestId,
+          assetHash: result.assetHash,
+        },
       };
     } catch (err: unknown) {
       if (
         err instanceof Error &&
         (err.message.includes('Cannot find module') || err.message.includes('MODULE_NOT_FOUND'))
       ) {
-        // turbo-c2pa not available — fall through to raw upload
-      } else {
-        throw err;
+        throw new Error(
+          'ArIO.store(): provenance signing requires @ar-io/turbo-c2pa and its dependencies (npm install @contentauth/c2pa-node sharp blockhash-core)'
+        );
       }
+      throw err;
     }
   }
 
-  // Raw upload path (no C2PA signing or turbo-c2pa not available)
-  if (!manifestRepoUrl) {
-    throw new Error(
-      'ArIO.store(): signingOracleUrl is required for store operations (used as manifestRepoUrl)'
-    );
-  }
-
-  const tags = buildTags({
-    contentType,
-    manifestId,
-    storageMode: 'full',
-    assetHash,
-    manifestStoreHash,
-    manifestRepoUrl,
-    claimGenerator: options.claimGenerator ?? '@ar-io/sdk/0.1.0',
-  });
-
-  // Add custom metadata tags
-  if (options.metadata) {
-    for (const [name, value] of Object.entries(options.metadata)) {
-      tags.push({ name, value });
-    }
-  }
-
+  // Plain data upload (no C2PA)
   const uploadResult = await uploadToArweave({
-    data: uploadData,
+    data,
     tags,
     ethPrivateKey: config.turboWallet,
     gatewayUrl: config.gatewayUrl,
@@ -136,8 +119,6 @@ export async function executeStore(
 
   return {
     txId: uploadResult.txId,
-    manifestId,
-    assetHash,
     viewUrl: uploadResult.viewUrl,
   };
 }
