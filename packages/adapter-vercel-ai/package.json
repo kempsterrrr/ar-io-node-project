@@ -1,0 +1,55 @@
+{
+  "name": "@agenticway/adapter-vercel-ai",
+  "version": "0.1.0",
+  "description": "Vercel AI SDK adapter for @agenticway/sdk — AI agent tools for permanent data storage on Arweave",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "@agenticway/sdk": "workspace:*",
+    "ai": ">=3.0.0",
+    "zod": ">=3.0.0"
+  },
+  "devDependencies": {
+    "@agenticway/sdk": "workspace:*",
+    "ai": "^4.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^3.0.0",
+    "zod": "^3.23.0"
+  },
+  "keywords": [
+    "agenticway",
+    "vercel-ai",
+    "ai-sdk",
+    "arweave",
+    "tools",
+    "agent"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kempsterrrr/ar-io-node-project",
+    "directory": "packages/adapter-vercel-ai"
+  }
+}
