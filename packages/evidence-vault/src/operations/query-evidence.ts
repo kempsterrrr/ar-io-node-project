@@ -7,21 +7,34 @@ import { TAG_NAMES, TAG_VALUES } from '../tags.js';
  *
  * Translates AIUC-1 filter criteria into Arweave GraphQL tag queries
  * against the AgenticWay-Integrity protocol.
+ *
+ * When no domain/control/type filter is set, returns both single and batch
+ * anchors. When filters are set, returns only single anchors (batch anchors
+ * use aggregate tags that don't support per-item filtering via GraphQL).
+ * Use batch Merkle proofs to verify individual items within a batch.
  */
 export async function executeQueryEvidence(
   sdk: AgenticWay,
   options: QueryEvidenceOptions
 ): Promise<QueryEvidenceResult> {
-  const tags: TagFilter[] = [
-    { name: TAG_NAMES.PROTOCOL, values: [TAG_VALUES.PROTOCOL] },
-    {
+  const hasItemFilter = !!(options.domain || options.controlId || options.evidenceType);
+
+  const tags: TagFilter[] = [{ name: TAG_NAMES.PROTOCOL, values: [TAG_VALUES.PROTOCOL] }];
+
+  // When filtering by domain/control/type, target single anchors only.
+  // Batch anchors store aggregate metadata (comma-separated domains/controls)
+  // and Arweave GraphQL uses exact tag matching, so per-item filters
+  // cannot reliably match batch transactions.
+  if (hasItemFilter) {
+    tags.push({ name: TAG_NAMES.TYPE, values: [TAG_VALUES.TYPE_EVIDENCE] });
+  } else {
+    tags.push({
       name: TAG_NAMES.TYPE,
       values: [TAG_VALUES.TYPE_EVIDENCE, TAG_VALUES.TYPE_EVIDENCE_BATCH],
-    },
-  ];
+    });
+  }
 
   if (options.domain) {
-    // Match both single-anchor (AIUC1-Domain) and batch (AIUC1-Domains contains value)
     tags.push({ name: TAG_NAMES.AIUC1_DOMAIN, values: [options.domain] });
   }
   if (options.controlId) {
@@ -34,9 +47,7 @@ export async function executeQueryEvidence(
     tags.push({ name: TAG_NAMES.ORGANIZATION_ID, values: [options.organizationId] });
   }
 
-  // For domain/control filters, batch anchors use comma-separated tags.
-  // Query single anchors first, then batch anchors separately and merge.
-  const singleResult = await sdk.query({
+  const result = await sdk.query({
     tags,
     first: options.first,
     after: options.after,
@@ -45,47 +56,7 @@ export async function executeQueryEvidence(
     maxBlock: options.maxBlock,
   });
 
-  // If filtering by domain or control, also query batch anchors with batch-specific tags
-  let batchEdges: typeof singleResult.edges = [];
-  if (options.domain || options.controlId) {
-    const batchTags: TagFilter[] = [
-      { name: TAG_NAMES.PROTOCOL, values: [TAG_VALUES.PROTOCOL] },
-      { name: TAG_NAMES.TYPE, values: [TAG_VALUES.TYPE_EVIDENCE_BATCH] },
-    ];
-    if (options.organizationId) {
-      batchTags.push({ name: TAG_NAMES.ORGANIZATION_ID, values: [options.organizationId] });
-    }
-    // Batch anchors store domains/controls as comma-separated values in different tag names.
-    // Arweave GraphQL matches substring within tag values, so this finds batches containing
-    // the requested domain/control.
-    if (options.domain) {
-      batchTags.push({ name: 'AIUC1-Domains', values: [options.domain] });
-    }
-    if (options.controlId) {
-      batchTags.push({ name: 'AIUC1-Control-Ids', values: [options.controlId] });
-    }
-
-    const batchResult = await sdk.query({
-      tags: batchTags,
-      first: options.first,
-      sort: options.sort,
-      minBlock: options.minBlock,
-      maxBlock: options.maxBlock,
-    });
-    batchEdges = batchResult.edges;
-  }
-
-  // Merge and deduplicate by txId
-  const seenTxIds = new Set(singleResult.edges.map((e) => e.txId));
-  const mergedEdges = [...singleResult.edges];
-  for (const edge of batchEdges) {
-    if (!seenTxIds.has(edge.txId)) {
-      mergedEdges.push(edge);
-      seenTxIds.add(edge.txId);
-    }
-  }
-
-  const edges: EvidenceQueryEdge[] = mergedEdges.map((edge) => {
+  const edges: EvidenceQueryEdge[] = result.edges.map((edge) => {
     const tagMap = new Map(edge.tags.map((t) => [t.name, t.value]));
     return {
       txId: edge.txId,
@@ -102,6 +73,6 @@ export async function executeQueryEvidence(
 
   return {
     edges,
-    pageInfo: singleResult.pageInfo,
+    pageInfo: result.pageInfo,
   };
 }

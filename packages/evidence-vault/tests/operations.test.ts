@@ -347,14 +347,13 @@ describe('queryEvidence', () => {
     });
   });
 
-  it('queries with AIUC-1 filters and merges batch results', async () => {
+  it('queries with AIUC-1 filters (single anchors only)', async () => {
     const result = await executeQueryEvidence(sdk, {
       domain: 'security',
       controlId: 'S001',
     });
 
-    // First call: single anchors, second call: batch anchors
-    expect(sdk.query).toHaveBeenCalledTimes(2);
+    expect(sdk.query).toHaveBeenCalledOnce();
     expect(result.edges).toHaveLength(1);
     expect(result.edges[0].controlId).toBe('S001');
     expect(result.edges[0].domain).toBe('security');
@@ -363,24 +362,24 @@ describe('queryEvidence', () => {
     expect(result.edges[0].organizationId).toBe('org-123');
   });
 
-  it('passes protocol tags to SDK query', async () => {
+  it('narrows Type filter to single anchors when item filters are present', async () => {
     await executeQueryEvidence(sdk, { domain: 'security' });
 
     const queryTags = sdk.query.mock.calls[0][0].tags;
-    const protocolTag = queryTags.find((t: { name: string }) => t.name === TAG_NAMES.PROTOCOL);
-    expect(protocolTag.values).toContain(TAG_VALUES.PROTOCOL);
-
-    const domainTag = queryTags.find((t: { name: string }) => t.name === TAG_NAMES.AIUC1_DOMAIN);
-    expect(domainTag.values).toContain('security');
+    const typeTag = queryTags.find((t: { name: string }) => t.name === TAG_NAMES.TYPE);
+    // With domain filter, only single anchor type is queried
+    expect(typeTag.values).toEqual([TAG_VALUES.TYPE_EVIDENCE]);
+    expect(typeTag.values).not.toContain(TAG_VALUES.TYPE_EVIDENCE_BATCH);
   });
 
-  it('queries without filters does single query only', async () => {
+  it('includes both types when no item filters are set', async () => {
     await executeQueryEvidence(sdk, {});
 
-    // No domain/control filter → no batch query needed
-    expect(sdk.query).toHaveBeenCalledTimes(1);
+    expect(sdk.query).toHaveBeenCalledOnce();
     const queryTags = sdk.query.mock.calls[0][0].tags;
-    expect(queryTags).toHaveLength(2);
+    const typeTag = queryTags.find((t: { name: string }) => t.name === TAG_NAMES.TYPE);
+    expect(typeTag.values).toContain(TAG_VALUES.TYPE_EVIDENCE);
+    expect(typeTag.values).toContain(TAG_VALUES.TYPE_EVIDENCE_BATCH);
   });
 
   it('passes pagination options', async () => {
@@ -396,27 +395,15 @@ describe('queryEvidence', () => {
     expect(queryOpts.sort).toBe('HEIGHT_ASC');
   });
 
-  it('deduplicates results across single and batch queries', async () => {
+  it('returns correct pageInfo from SDK', async () => {
     sdk.query.mockResolvedValue({
-      edges: [
-        {
-          txId: 'tx-shared',
-          owner: 'owner-1',
-          tags: [
-            { name: TAG_NAMES.AIUC1_CONTROL_ID, value: 'S001' },
-            { name: TAG_NAMES.AIUC1_DOMAIN, value: 'security' },
-            { name: TAG_NAMES.EVIDENCE_TYPE, value: 'policy-document' },
-          ],
-          block: { height: 1500000, timestamp: 1712016000 },
-          dataSize: 128,
-        },
-      ],
-      pageInfo: { hasNextPage: false, endCursor: null },
+      edges: [],
+      pageInfo: { hasNextPage: true, endCursor: 'cursor-xyz' },
     });
 
-    const result = await executeQueryEvidence(sdk, { domain: 'security' });
-    // Same txId returned by both queries should be deduplicated
-    expect(result.edges).toHaveLength(1);
+    const result = await executeQueryEvidence(sdk, {});
+    expect(result.pageInfo.hasNextPage).toBe(true);
+    expect(result.pageInfo.endCursor).toBe('cursor-xyz');
   });
 });
 
