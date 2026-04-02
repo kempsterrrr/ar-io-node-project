@@ -193,7 +193,7 @@ Anchor multiple items in a single transaction using a Merkle tree. Each item get
 ```typescript
 const result = await client.batchAnchor({
   items: [
-    { data: Buffer.from('item-1'), metadata: { type: 'log' } },
+    { data: Buffer.from('item-1') },
     { data: Buffer.from('item-2') },
     { data: Buffer.from('item-3') },
   ],

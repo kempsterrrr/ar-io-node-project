@@ -15,11 +15,11 @@ export async function executeVerifyAnchor(
   const data = Buffer.isBuffer(options.data) ? options.data : Buffer.from(options.data);
   const hash = sha256Hex(data);
 
-  // Fetch the anchor transaction tags
-  const tags = await gateway.fetchTransactionTags(options.txId);
+  // Fetch the anchor transaction tags + block info in one GraphQL call
+  const txInfo = await gateway.fetchTransactionInfo(options.txId);
 
-  const anchoredHash = tags.find((t) => t.name === 'Data-Hash')?.value ?? null;
-  const protocol = tags.find((t) => t.name === 'Data-Protocol')?.value;
+  const anchoredHash = txInfo.tags.find((t) => t.name === 'Data-Hash')?.value ?? null;
+  const protocol = txInfo.tags.find((t) => t.name === 'Data-Protocol')?.value;
 
   if (protocol !== 'AgenticWay-Integrity') {
     return {
@@ -31,16 +31,9 @@ export async function executeVerifyAnchor(
     };
   }
 
-  // Query block info via GraphQL
-  const queryResult = await gateway.queryGraphQL({
-    tags: [{ name: 'Data-Protocol', values: ['AgenticWay-Integrity'] }],
-    first: 1,
-  });
-
-  const edge = queryResult.edges.find((e) => e.txId === options.txId);
-  const blockHeight = edge?.block?.height ?? null;
-  const timestamp = edge?.block?.timestamp
-    ? new Date(edge.block.timestamp * 1000).toISOString()
+  const blockHeight = txInfo.block?.height ?? null;
+  const timestamp = txInfo.block?.timestamp
+    ? new Date(txInfo.block.timestamp * 1000).toISOString()
     : null;
 
   return {
