@@ -240,8 +240,6 @@ export interface VerifyAnchorResult {
 export interface BatchAnchorItem {
   /** Data to anchor. */
   data: Buffer | Uint8Array;
-  /** Optional metadata for this item. */
-  metadata?: Record<string, string>;
 }
 
 /** Proof for a single item in a batch anchor. */

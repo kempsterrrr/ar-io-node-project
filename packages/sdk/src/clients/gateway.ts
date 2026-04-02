@@ -24,9 +24,19 @@ export class GatewayClient {
 
   /** Fetch transaction tags via GraphQL. */
   async fetchTransactionTags(txId: string): Promise<Tag[]> {
+    const info = await this.fetchTransactionInfo(txId);
+    return info.tags;
+  }
+
+  /** Fetch transaction tags and block info via GraphQL. */
+  async fetchTransactionInfo(txId: string): Promise<{
+    tags: Tag[];
+    block: { height: number; timestamp: number } | null;
+  }> {
     const query = `{
       transaction(id: "${txId}") {
         tags { name value }
+        block { height timestamp }
       }
     }`;
     const res = await this.fetch('/graphql', {
@@ -35,9 +45,12 @@ export class GatewayClient {
       body: JSON.stringify({ query }),
     });
     const json = (await res.json()) as {
-      data?: { transaction?: { tags?: Tag[] } };
+      data?: { transaction?: { tags?: Tag[]; block?: { height: number; timestamp: number } } };
     };
-    return json.data?.transaction?.tags ?? [];
+    return {
+      tags: json.data?.transaction?.tags ?? [],
+      block: json.data?.transaction?.block ?? null,
+    };
   }
 
   /** Query transactions via GraphQL with filters. */
