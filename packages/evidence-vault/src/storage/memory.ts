@@ -11,11 +11,11 @@ export class MemoryStorageAdapter implements StorageAdapter {
     if (!buf) {
       throw new Error(`Key not found: ${key}`);
     }
-    return buf;
+    return Buffer.from(buf);
   }
 
   async store(key: string, data: Buffer | Uint8Array): Promise<string> {
-    this.data.set(key, Buffer.isBuffer(data) ? data : Buffer.from(data));
+    this.data.set(key, Buffer.from(data));
     return key;
   }
 

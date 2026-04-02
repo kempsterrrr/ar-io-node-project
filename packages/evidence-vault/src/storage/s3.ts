@@ -95,8 +95,13 @@ export class S3StorageAdapter implements StorageAdapter {
         })
       );
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      const err = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+      const status = err.$metadata?.httpStatusCode;
+      if (status === 404 || err.name === 'NotFound' || err.name === 'NoSuchKey') {
+        return false;
+      }
+      throw error;
     }
   }
 }

@@ -32,7 +32,17 @@ export async function executeAnchorEvidence(
     metadata[TAG_NAMES.ORGANIZATION_ID] = options.organizationId;
   }
   if (options.metadata) {
-    Object.assign(metadata, options.metadata);
+    const reserved = new Set([
+      TAG_NAMES.TYPE,
+      TAG_NAMES.AIUC1_CONTROL_ID,
+      TAG_NAMES.AIUC1_DOMAIN,
+      TAG_NAMES.EVIDENCE_TYPE,
+      TAG_NAMES.EVIDENCE_LABEL,
+      TAG_NAMES.ORGANIZATION_ID,
+    ]);
+    for (const [k, v] of Object.entries(options.metadata)) {
+      if (!reserved.has(k)) metadata[k] = v;
+    }
   }
 
   const result = await sdk.anchor({

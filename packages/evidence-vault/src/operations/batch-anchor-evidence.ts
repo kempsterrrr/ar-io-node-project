@@ -46,7 +46,15 @@ export async function executeBatchAnchorEvidence(
     metadata[TAG_NAMES.ORGANIZATION_ID] = options.organizationId;
   }
   if (options.metadata) {
-    Object.assign(metadata, options.metadata);
+    const reserved = new Set([
+      TAG_NAMES.TYPE,
+      TAG_NAMES.ORGANIZATION_ID,
+      'AIUC1-Domains',
+      'AIUC1-Control-Ids',
+    ]);
+    for (const [k, v] of Object.entries(options.metadata)) {
+      if (!reserved.has(k)) metadata[k] = v;
+    }
   }
 
   const result = await sdk.batchAnchor({
@@ -54,14 +62,20 @@ export async function executeBatchAnchorEvidence(
     metadata,
   });
 
-  // Enrich proofs with AIUC-1 metadata
-  const proofs: BatchEvidenceProof[] = result.proofs.map((proof, index) => ({
-    index: proof.index,
-    hash: proof.hash,
-    controlId: options.items[index].controlId,
-    evidenceType: options.items[index].evidenceType,
-    proof: proof.proof,
-  }));
+  // Enrich proofs with AIUC-1 metadata, mapping by proof.index
+  const proofs: BatchEvidenceProof[] = result.proofs.map((proof) => {
+    const item = options.items[proof.index];
+    if (!item) {
+      throw new Error(`Invalid proof index returned by SDK: ${proof.index}`);
+    }
+    return {
+      index: proof.index,
+      hash: proof.hash,
+      controlId: item.controlId,
+      evidenceType: item.evidenceType,
+      proof: proof.proof,
+    };
+  });
 
   return {
     txId: result.txId,

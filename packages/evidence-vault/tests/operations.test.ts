@@ -94,6 +94,24 @@ describe('anchorEvidence', () => {
     expect(metadata['Custom-Tag']).toBe('custom-value');
   });
 
+  it('prevents reserved tag overwrite from custom metadata', async () => {
+    await executeAnchorEvidence(sdk, {
+      data: Buffer.from('test'),
+      controlId: 'S001',
+      evidenceType: 'policy-document',
+      metadata: {
+        [TAG_NAMES.TYPE]: 'ATTACK',
+        [TAG_NAMES.AIUC1_CONTROL_ID]: 'FAKE',
+        'Custom-Tag': 'allowed',
+      },
+    });
+
+    const metadata = sdk.anchor.mock.calls[0][0].metadata;
+    expect(metadata[TAG_NAMES.TYPE]).toBe(TAG_VALUES.TYPE_EVIDENCE);
+    expect(metadata[TAG_NAMES.AIUC1_CONTROL_ID]).toBe('S001');
+    expect(metadata['Custom-Tag']).toBe('allowed');
+  });
+
   it('works with all 6 domains', async () => {
     const domainControls = [
       { controlId: 'S001', domain: 'security' },
@@ -179,6 +197,48 @@ describe('batchAnchorEvidence', () => {
         items: [{ data: Buffer.from('x'), controlId: 'UNKNOWN', evidenceType: 'other' }],
       })
     ).rejects.toThrow('Unknown AIUC-1 control ID');
+  });
+
+  it('prevents reserved tag overwrite from custom metadata', async () => {
+    sdk.batchAnchor.mockResolvedValue({
+      txId: 'batch-tx-reserved',
+      merkleRoot: 'root',
+      proofs: [{ index: 0, hash: 'hash0', proof: [] }],
+      timestamp: '2026-04-02T00:00:00.000Z',
+    });
+
+    await executeBatchAnchorEvidence(sdk, {
+      items: [{ data: Buffer.from('a'), controlId: 'S001', evidenceType: 'policy-document' }],
+      metadata: { [TAG_NAMES.TYPE]: 'ATTACK', 'Custom-Tag': 'allowed' },
+    });
+
+    const metadata = sdk.batchAnchor.mock.calls[0][0].metadata;
+    expect(metadata[TAG_NAMES.TYPE]).toBe(TAG_VALUES.TYPE_EVIDENCE_BATCH);
+    expect(metadata['Custom-Tag']).toBe('allowed');
+  });
+
+  it('maps proofs by proof.index not array position', async () => {
+    sdk.batchAnchor.mockResolvedValue({
+      txId: 'batch-tx-002',
+      merkleRoot: 'root',
+      proofs: [
+        { index: 1, hash: 'hash1', proof: [] },
+        { index: 0, hash: 'hash0', proof: [] },
+      ],
+      timestamp: '2026-04-02T00:00:00.000Z',
+    });
+
+    const result = await executeBatchAnchorEvidence(sdk, {
+      items: [
+        { data: Buffer.from('first'), controlId: 'S001', evidenceType: 'policy-document' },
+        { data: Buffer.from('second'), controlId: 'R001', evidenceType: 'test-result' },
+      ],
+    });
+
+    // Proof at array[0] has index=1, so should get R001
+    expect(result.proofs[0].controlId).toBe('R001');
+    // Proof at array[1] has index=0, so should get S001
+    expect(result.proofs[1].controlId).toBe('S001');
   });
 });
 
@@ -287,12 +347,14 @@ describe('queryEvidence', () => {
     });
   });
 
-  it('queries with AIUC-1 filters', async () => {
+  it('queries with AIUC-1 filters and merges batch results', async () => {
     const result = await executeQueryEvidence(sdk, {
       domain: 'security',
       controlId: 'S001',
     });
 
+    // First call: single anchors, second call: batch anchors
+    expect(sdk.query).toHaveBeenCalledTimes(2);
     expect(result.edges).toHaveLength(1);
     expect(result.edges[0].controlId).toBe('S001');
     expect(result.edges[0].domain).toBe('security');
@@ -312,11 +374,12 @@ describe('queryEvidence', () => {
     expect(domainTag.values).toContain('security');
   });
 
-  it('queries without filters returns all evidence', async () => {
+  it('queries without filters does single query only', async () => {
     await executeQueryEvidence(sdk, {});
 
+    // No domain/control filter → no batch query needed
+    expect(sdk.query).toHaveBeenCalledTimes(1);
     const queryTags = sdk.query.mock.calls[0][0].tags;
-    // Should have protocol + type tags but no domain/control filters
     expect(queryTags).toHaveLength(2);
   });
 
@@ -331,6 +394,29 @@ describe('queryEvidence', () => {
     expect(queryOpts.first).toBe(50);
     expect(queryOpts.after).toBe('cursor-abc');
     expect(queryOpts.sort).toBe('HEIGHT_ASC');
+  });
+
+  it('deduplicates results across single and batch queries', async () => {
+    sdk.query.mockResolvedValue({
+      edges: [
+        {
+          txId: 'tx-shared',
+          owner: 'owner-1',
+          tags: [
+            { name: TAG_NAMES.AIUC1_CONTROL_ID, value: 'S001' },
+            { name: TAG_NAMES.AIUC1_DOMAIN, value: 'security' },
+            { name: TAG_NAMES.EVIDENCE_TYPE, value: 'policy-document' },
+          ],
+          block: { height: 1500000, timestamp: 1712016000 },
+          dataSize: 128,
+        },
+      ],
+      pageInfo: { hasNextPage: false, endCursor: null },
+    });
+
+    const result = await executeQueryEvidence(sdk, { domain: 'security' });
+    // Same txId returned by both queries should be deduplicated
+    expect(result.edges).toHaveLength(1);
   });
 });
 

@@ -56,4 +56,21 @@ describe('MemoryStorageAdapter', () => {
     const key = await adapter.store('my-key', Buffer.from('data'));
     expect(key).toBe('my-key');
   });
+
+  it('returns defensive copies preventing mutation of stored data', async () => {
+    const original = Buffer.from('immutable evidence');
+    await adapter.store('key', original);
+
+    // Mutate the original buffer — should not affect stored data
+    original[0] = 0xff;
+
+    const retrieved = await adapter.retrieve('key');
+    expect(retrieved.toString()).toBe('immutable evidence');
+
+    // Mutate the retrieved buffer — should not affect stored data
+    retrieved[0] = 0x00;
+
+    const retrieved2 = await adapter.retrieve('key');
+    expect(retrieved2.toString()).toBe('immutable evidence');
+  });
 });
