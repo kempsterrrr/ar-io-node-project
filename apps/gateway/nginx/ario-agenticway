@@ -26,6 +26,18 @@ server {
         client_max_body_size 50M;
     }
 
+    # Bundler upload — ar-io-bundler data item upload service on port 3001
+    # Trailing slash on proxy_pass strips the /bundler prefix
+    location /bundler/ {
+        proxy_pass http://localhost:3001/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 100M;
+    }
+
     # Trusthash sidecar — C2PA manifest repository & SBR API on port 3003
     # Trailing slash on proxy_pass strips the /trusthash prefix
     location /trusthash/ {
