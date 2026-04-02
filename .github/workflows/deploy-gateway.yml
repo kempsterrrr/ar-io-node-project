@@ -145,6 +145,8 @@ jobs:
           WEBHOOK_TARGET_SERVERS=http://trusthash-sidecar:3003/webhook
           WEBHOOK_INDEX_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
           ANS104_INDEX_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
+          ANS104_UNBUNDLE_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
+          ANS104_UNBUNDLE_WORKERS=1
 
           # Envoy Peer EDS
           ENABLE_ARWEAVE_PEER_EDS=${{ vars.ENABLE_ARWEAVE_PEER_EDS || 'true' }}
@@ -261,13 +263,13 @@ jobs:
               -f verify-sidecar/docker-compose.verify.yaml \
               up -d
 
-            # Force-recreate verify proxy so nginx resolves the new sidecar IP
+            # Force-recreate both proxies so nginx resolves the new sidecar IPs
             # (docker compose up -d only recreates containers with config changes,
             # but the proxy's config doesn't change when the sidecar is rebuilt)
             docker compose -f docker-compose.yaml \
               -f sidecar/docker-compose.sidecar.yaml \
               -f verify-sidecar/docker-compose.verify.yaml \
-              up -d --force-recreate verify-proxy
+              up -d --force-recreate trusthash-proxy verify-proxy
           EOF
 
       - name: Verify deployment
