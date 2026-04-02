@@ -1,6 +1,19 @@
 import { z } from 'zod';
 import { existsSync, readFileSync } from 'node:fs';
 
+/**
+ * Parse a string env var as a boolean.
+ *
+ * z.coerce.boolean() uses Boolean() which treats ANY non-empty string
+ * (including "false") as true. This helper only treats "true" and "1"
+ * as truthy.
+ */
+const envBoolean = (defaultValue: boolean) =>
+  z.preprocess(
+    (val) => (typeof val === 'string' ? val === 'true' || val === '1' : val),
+    z.boolean().default(defaultValue)
+  );
+
 const envSchema = z.object({
   // Server
   PORT: z.coerce.number().default(3003),
@@ -23,14 +36,14 @@ const envSchema = z.object({
   REMOTE_MANIFEST_MAX_BYTES: z.coerce.number().default(25 * 1024 * 1024),
 
   // Integration/Testing
-  ALLOW_INSECURE_REFERENCE_URL: z.coerce.boolean().default(false),
+  ALLOW_INSECURE_REFERENCE_URL: envBoolean(false),
 
   // Feature flags
-  ENABLE_PROOF_LOCATOR_ARTIFACTS: z.coerce.boolean().default(true),
-  ENABLE_BY_REFERENCE: z.coerce.boolean().default(true),
+  ENABLE_PROOF_LOCATOR_ARTIFACTS: envBoolean(true),
+  ENABLE_BY_REFERENCE: envBoolean(true),
 
   // Signing oracle
-  ENABLE_SIGNING: z.coerce.boolean().default(false),
+  ENABLE_SIGNING: envBoolean(false),
   SIGNING_ALGORITHM: z.enum(['ES256', 'ES384']).default('ES256'),
   SIGNING_CERT_PEM: z.string().optional(),
   SIGNING_PRIVATE_KEY_PEM: z.string().optional(),
