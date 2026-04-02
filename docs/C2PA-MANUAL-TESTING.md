@@ -1,18 +1,24 @@
 # C2PA Manual Testing Procedure
 
-Step-by-step runbook for validating the C2PA end-to-end flow on a production deployment.
+Step-by-step runbook for validating the C2PA end-to-end flow on the production deployment.
 
-**Production URL:** `https://ario.agenticway.io`
-**Sidecar port:** 3003 (internal, proxied via nginx)
-**Verify sidecar port:** 4001 (internal, proxied via nginx)
+**Base URL:** `https://ario.agenticway.io`
+
+| Service                  | Public URL                              | Internal         |
+| ------------------------ | --------------------------------------- | ---------------- |
+| Gateway                  | `https://ario.agenticway.io/`           | `localhost:3000` |
+| Trusthash sidecar (C2PA) | `https://ario.agenticway.io/trusthash/` | `localhost:3003` |
+| Verify sidecar           | `https://ario.agenticway.io/verify/`    | `localhost:4001` |
+
+The nginx config at `apps/gateway/nginx/ario-agenticway` routes `/trusthash/*` and `/verify/*` to the respective sidecars, stripping the prefix. The `/webhook` endpoint is blocked externally by the sidecar's own nginx proxy (internal gateway-to-sidecar only).
 
 ---
 
 ## Prerequisites
 
 - `curl` and `jq` installed
-- Access to the Hetzner server (for container/log inspection)
 - For upload tests: Node.js 18+, pnpm, and an Ethereum wallet with Turbo credits
+- SSH access to Hetzner server (only needed for log inspection and webhook config checks)
 
 ## 1. Pre-flight Checks
 
@@ -34,11 +40,8 @@ Expected: `test`
 
 ### 1.3 Trusthash Sidecar Health
 
-From the Hetzner server (sidecar is not publicly exposed by default):
-
 ```bash
-# SSH into the server, then:
-curl -s http://localhost:3003/health | jq .
+curl -s https://ario.agenticway.io/trusthash/health | jq .
 ```
 
 Expected: `{"success": true, ...}` with database status and signing capability.
@@ -46,12 +49,12 @@ Expected: `{"success": true, ...}` with database status and signing capability.
 ### 1.4 Verify Sidecar Health
 
 ```bash
-curl -s http://localhost:4001/health | jq .
+curl -s https://ario.agenticway.io/verify/health | jq .
 ```
 
 Expected: `{"status": "ok"}` or similar health response.
 
-### 1.5 Container Status
+### 1.5 Container Status (requires SSH)
 
 ```bash
 cd ~/ar-io-gateway
@@ -63,7 +66,7 @@ docker compose -f docker-compose.yaml \
 
 All containers should show `Up` and `healthy`.
 
-### 1.6 Gateway Webhook Configuration
+### 1.6 Gateway Webhook Configuration (requires SSH)
 
 Verify the gateway `.env` includes the C2PA webhook settings:
 
@@ -90,7 +93,7 @@ If these are missing, the gateway will not send webhooks and the indexing pipeli
 ### 2.1 Retrieve Certificate Chain
 
 ```bash
-curl -s http://localhost:3003/v1/cert
+curl -s https://ario.agenticway.io/trusthash/v1/cert
 ```
 
 Expected: PEM-encoded X.509 certificate chain. If signing is disabled, returns 501.
@@ -101,122 +104,66 @@ Expected: PEM-encoded X.509 certificate chain. If signing is disabled, returns 5
 echo -n "test-payload" | curl -s -X POST \
   -H "Content-Type: application/octet-stream" \
   --data-binary @- \
-  http://localhost:3003/v1/sign | wc -c
+  https://ario.agenticway.io/trusthash/v1/sign | wc -c
 ```
 
 Expected: 64 bytes (ES256/P-256 IEEE P1363 signature format).
 
 ---
 
-## 3. Webhook Indexing (Simulated)
+## 3. SBR API Queries
 
-This test validates that the sidecar correctly processes webhook payloads without requiring an actual Arweave upload.
-
-### 3.1 Send a Synthetic Webhook
+### 3.1 Supported Algorithms
 
 ```bash
-MANIFEST_ID="urn:c2pa:manual-test-$(date +%s)"
-TX_ID="manual-test-tx-$(date +%s)"
-PHASH_B64=$(openssl rand -base64 8)
-
-curl -s -X POST http://localhost:3003/webhook \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"tx_id\": \"${TX_ID}\",
-    \"tags\": [
-      {\"name\": \"Protocol\", \"value\": \"C2PA-Manifest-Proof\"},
-      {\"name\": \"Protocol-Version\", \"value\": \"1.0.0\"},
-      {\"name\": \"Content-Type\", \"value\": \"application/c2pa\"},
-      {\"name\": \"C2PA-Manifest-ID\", \"value\": \"${MANIFEST_ID}\"},
-      {\"name\": \"C2PA-Storage-Mode\", \"value\": \"manifest\"},
-      {\"name\": \"C2PA-Asset-Hash\", \"value\": \"dGVzdA\"},
-      {\"name\": \"C2PA-Manifest-Store-Hash\", \"value\": \"dGVzdA\"},
-      {\"name\": \"C2PA-Manifest-Repo-URL\", \"value\": \"http://localhost:3003/v1\"},
-      {\"name\": \"C2PA-Soft-Binding-Alg\", \"value\": \"org.ar-io.phash\"},
-      {\"name\": \"C2PA-Soft-Binding-Value\", \"value\": \"${PHASH_B64}\"},
-      {\"name\": \"C2PA-Claim-Generator\", \"value\": \"manual-test/1.0\"}
-    ],
-    \"owner\": \"test-owner\",
-    \"block_height\": 9999999,
-    \"block_timestamp\": $(date +%s)
-  }" | jq .
-```
-
-Expected:
-
-```json
-{
-  "success": true,
-  "data": {
-    "txId": "manual-test-tx-...",
-    "action": "indexed"
-  }
-}
-```
-
-### 3.2 Query Back via SBR API
-
-```bash
-curl -s "http://localhost:3003/v1/matches/byBinding?alg=org.ar-io.phash&value=${PHASH_B64}" | jq .
-```
-
-Expected: Response contains a `matches` array with the manifest ID from step 3.1.
-
-### 3.3 Verify Duplicate Rejection
-
-Re-send the same webhook from step 3.1 (same TX_ID):
-
-Expected: `"action": "skipped"` with `"reason": "Already indexed"`.
-
----
-
-## 4. SBR API Queries
-
-### 4.1 Supported Algorithms
-
-```bash
-curl -s http://localhost:3003/v1/services/supportedAlgorithms | jq .
+curl -s https://ario.agenticway.io/trusthash/v1/services/supportedAlgorithms | jq .
 ```
 
 Expected: List including `org.ar-io.phash` and `io.iscc.v0`.
 
-### 4.2 Manifest Retrieval
+### 3.2 Query by Binding
 
 ```bash
-# Use a manifest ID from a previously indexed transaction
-curl -s http://localhost:3003/v1/manifests/<MANIFEST_ID> -o /dev/null -w "%{http_code}"
+curl -s "https://ario.agenticway.io/trusthash/v1/matches/byBinding?alg=org.ar-io.phash&value=<BASE64_PHASH>" | jq .
 ```
 
-Expected: 200 (with `application/c2pa` bytes) or 302 redirect to the manifest source.
+Expected: `matches` array with any manifests matching the given pHash value.
 
-### 4.3 Content-Based Lookup (Image Upload)
+### 3.3 Content-Based Lookup (Image Upload)
 
 ```bash
-curl -s -X POST http://localhost:3003/v1/matches/byContent \
+curl -s -X POST https://ario.agenticway.io/trusthash/v1/matches/byContent \
   -F "file=@/path/to/test-image.jpg" | jq .
 ```
 
 Expected: `matches` array with manifests that have a similar pHash to the uploaded image.
 
+### 3.4 Manifest Retrieval
+
+```bash
+# Use a manifest ID from a previously indexed transaction
+curl -s https://ario.agenticway.io/trusthash/v1/manifests/<MANIFEST_ID> -o /dev/null -w "%{http_code}\n"
+```
+
+Expected: 200 (with `application/c2pa` bytes) or 302 redirect to the manifest source.
+
 ---
 
-## 5. End-to-End Upload Test
+## 4. End-to-End Upload Test (Sign Mode)
 
 This requires the turbo-c2pa SDK and an Ethereum wallet with Turbo credits.
 
-### 5.1 Sign Mode (Full Pipeline)
+### 4.1 Upload and Sign an Image
 
 From the project root:
 
 ```bash
 cd packages/turbo-c2pa
 
-# Set environment variables
 export ETH_PRIVATE_KEY="<your-eth-private-key>"
-export SIDECAR_URL="http://localhost:3003"
+export SIDECAR_URL="https://ario.agenticway.io/trusthash"
 export GATEWAY_URL="https://turbo-gateway.com"
 
-# Upload and sign an image
 pnpm exec tsx scripts/demo-upload.ts /path/to/image.jpg --source-type digitalCapture
 ```
 
@@ -226,18 +173,20 @@ Expected output:
 - Arweave transaction ID printed
 - Manifest ID printed
 
-### 5.2 Wait for Gateway Indexing
+Save the TX ID and Manifest ID for the following steps.
 
-After upload, the gateway needs to index the transaction (may take minutes depending on block confirmation):
+### 4.2 Wait for Gateway Indexing
+
+After upload, wait for the gateway to index the transaction (may take a few minutes):
 
 ```bash
-# Check if the transaction is available on the gateway
-curl -sL https://ario.agenticway.io/<ARWEAVE_TX_ID> -o /dev/null -w "%{http_code}"
+# Poll until the transaction is available
+curl -sL https://ario.agenticway.io/<ARWEAVE_TX_ID> -o /dev/null -w "%{http_code}\n"
 ```
 
 Expected: 200 once indexed.
 
-### 5.3 Verify Webhook Was Received
+### 4.3 Verify Webhook Was Received (requires SSH)
 
 Check sidecar logs for the webhook:
 
@@ -246,17 +195,57 @@ cd ~/ar-io-gateway
 docker compose -f docker-compose.yaml \
   -f sidecar/docker-compose.sidecar.yaml \
   -f verify-sidecar/docker-compose.verify.yaml \
-  logs trusthash-sidecar --tail 50 | grep "webhook"
+  logs trusthash-sidecar --tail 50 | grep -i "indexed\|webhook"
 ```
 
 Expected: Log entry showing `Manifest indexed from webhook` with the transaction ID.
 
-### 5.4 Query via SBR
+### 4.4 Query the Manifest via SBR
 
 ```bash
-# Use the manifest ID from the upload output
-curl -s "http://localhost:3003/v1/manifests/<MANIFEST_ID>" | head -c 100
+# By manifest ID
+curl -s "https://ario.agenticway.io/trusthash/v1/manifests/<MANIFEST_ID>" | head -c 200
+
+# By soft binding (use the pHash from the upload output)
+curl -s "https://ario.agenticway.io/trusthash/v1/matches/byBinding?alg=org.ar-io.phash&value=<PHASH_B64>" | jq .
 ```
+
+Expected: Manifest bytes returned, and the manifest appears in the binding query results.
+
+### 4.5 Content-Based Rediscovery
+
+Upload the same image to find it via content matching:
+
+```bash
+curl -s -X POST https://ario.agenticway.io/trusthash/v1/matches/byContent \
+  -F "file=@/path/to/same-image.jpg" | jq .
+```
+
+Expected: The manifest from step 4.1 appears in the matches.
+
+---
+
+## 5. End-to-End Upload Test (Store Mode)
+
+Store mode preserves an existing C2PA manifest without re-signing.
+
+### 5.1 Upload an Image with Existing C2PA
+
+```bash
+cd packages/turbo-c2pa
+
+export ETH_PRIVATE_KEY="<your-eth-private-key>"
+export SIDECAR_URL="https://ario.agenticway.io/trusthash"
+export GATEWAY_URL="https://turbo-gateway.com"
+
+pnpm exec tsx scripts/demo-upload.ts /path/to/image-with-c2pa.jpg --store
+```
+
+Expected: Original image bytes preserved, Arweave TX ID and Manifest ID printed.
+
+### 5.2 Verify Indexing and Retrieval
+
+Follow the same steps as 4.2-4.5 using the TX ID and Manifest ID from the store mode upload.
 
 ---
 
@@ -265,7 +254,7 @@ curl -s "http://localhost:3003/v1/manifests/<MANIFEST_ID>" | head -c 100
 ### 6.1 Verify a Transaction
 
 ```bash
-curl -s -X POST http://localhost:4001/api/v1/verify \
+curl -s -X POST https://ario.agenticway.io/verify/api/v1/verify \
   -H "Content-Type: application/json" \
   -d '{"txId": "<ARWEAVE_TX_ID>"}' | jq .
 ```
@@ -276,7 +265,7 @@ Expected: JSON with `verificationId`, `tier`, `existence`, `integrity`, and `met
 
 ```bash
 # Use the verificationId from step 6.1
-curl -s http://localhost:4001/api/v1/verify/<VERIFICATION_ID>/pdf \
+curl -s https://ario.agenticway.io/verify/api/v1/verify/<VERIFICATION_ID>/pdf \
   -o attestation.pdf
 ```
 
@@ -286,7 +275,7 @@ Expected: Valid PDF file downloaded.
 
 ## 7. E2E Demo Script (Automated)
 
-The sidecar includes an automated E2E demo that tests signing, webhook indexing, and SBR queries in sequence:
+The sidecar includes an automated E2E demo that tests signing, webhook indexing, and SBR queries in one run. The webhook test in this script sends directly to the sidecar's internal webhook endpoint, so it must be run from the server or against a local instance.
 
 ```bash
 cd packages/trusthash-sidecar
@@ -294,7 +283,7 @@ cd packages/trusthash-sidecar
 # Against local sidecar
 pnpm exec tsx scripts/demo-e2e.ts
 
-# Against production (from the server)
+# Against production (from the Hetzner server)
 BASE_URL=http://localhost:3003 pnpm exec tsx scripts/demo-e2e.ts
 ```
 
@@ -309,17 +298,30 @@ This runs 7 steps: health check, certificate retrieval, COSE signing, webhook si
 1. Check `.env` has `WEBHOOK_TARGET_SERVERS` and `WEBHOOK_INDEX_FILTER` set
 2. Restart the gateway after changing `.env`:
    ```bash
-   docker compose -f docker-compose.yaml ... restart core
+   cd ~/ar-io-gateway
+   docker compose -f docker-compose.yaml \
+     -f sidecar/docker-compose.sidecar.yaml \
+     -f verify-sidecar/docker-compose.verify.yaml \
+     restart core
    ```
 3. Check gateway logs for webhook delivery errors:
    ```bash
-   docker compose ... logs core | grep -i webhook
+   docker compose -f docker-compose.yaml \
+     -f sidecar/docker-compose.sidecar.yaml \
+     -f verify-sidecar/docker-compose.verify.yaml \
+     logs core | grep -i webhook
    ```
 
 ### Sidecar not indexing
 
-1. Check sidecar container is running: `docker compose ... ps trusthash-sidecar`
-2. Check sidecar logs: `docker compose ... logs trusthash-sidecar --tail 100`
+1. Check sidecar container is running and healthy (section 1.5)
+2. Check sidecar logs:
+   ```bash
+   docker compose -f docker-compose.yaml \
+     -f sidecar/docker-compose.sidecar.yaml \
+     -f verify-sidecar/docker-compose.verify.yaml \
+     logs trusthash-sidecar --tail 100
+   ```
 3. Common issues:
    - `Protocol` tag missing or wrong value (must be `C2PA-Manifest-Proof`)
    - `C2PA-Storage-Mode` missing (must be `full`, `manifest`, or `proof`)
@@ -331,7 +333,10 @@ This runs 7 steps: health check, certificate retrieval, COSE signing, webhook si
 2. Confirm `ANS104_INDEX_FILTER` is set so the gateway indexes C2PA bundle data items
 3. Check DuckDB has data:
    ```bash
-   docker compose ... exec trusthash-sidecar ls -la /app/data/provenance.duckdb
+   docker compose -f docker-compose.yaml \
+     -f sidecar/docker-compose.sidecar.yaml \
+     -f verify-sidecar/docker-compose.verify.yaml \
+     exec trusthash-sidecar ls -la /app/data/provenance.duckdb
    ```
 
 ### Signing returns 501
@@ -346,3 +351,9 @@ This runs 7 steps: health check, certificate retrieval, COSE signing, webhook si
 - Check `START_HEIGHT` in `.env` - if set too high, older transactions won't be indexed
 - For new uploads via Turbo, data is typically available within a few minutes
 - Check: `curl -s https://ario.agenticway.io/ar-io/info | jq .currentBlock`
+
+### Public URL returns 404 for sidecar endpoints
+
+- Ensure the nginx config at `apps/gateway/nginx/ario-agenticway` has the `/trusthash/` and `/verify/` location blocks
+- Verify nginx was reloaded after the last deploy: `nginx -t && systemctl reload nginx`
+- Note: `/webhook` is intentionally blocked externally (returns 404) - webhooks flow internally from gateway to sidecar
