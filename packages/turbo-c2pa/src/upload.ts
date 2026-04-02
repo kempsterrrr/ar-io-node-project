@@ -15,6 +15,13 @@ export interface UploadOptions {
   ethPrivateKey: string;
   /** Gateway base URL for constructing view URLs (default: https://arweave.net). */
   gatewayUrl?: string;
+  /**
+   * Custom upload service URL (e.g. a self-hosted ar-io-bundler).
+   * When set, data items are sent to this endpoint instead of the
+   * default Turbo upload service, enabling optimistic caching and
+   * immediate gateway availability before L1 confirmation.
+   */
+  uploadServiceUrl?: string;
 }
 
 export interface UploadResult {
@@ -32,7 +39,13 @@ export interface UploadResult {
  * Upload a signed image to Arweave via Turbo SDK using an Ethereum wallet.
  */
 export async function uploadToArweave(options: UploadOptions): Promise<UploadResult> {
-  const { signedBuffer, tags, ethPrivateKey, gatewayUrl = 'https://turbo-gateway.com' } = options;
+  const {
+    signedBuffer,
+    tags,
+    ethPrivateKey,
+    gatewayUrl = 'https://turbo-gateway.com',
+    uploadServiceUrl,
+  } = options;
 
   // Normalize private key (ensure 0x prefix for Turbo SDK)
   const normalizedKey = ethPrivateKey.startsWith('0x') ? ethPrivateKey : `0x${ethPrivateKey}`;
@@ -40,6 +53,7 @@ export async function uploadToArweave(options: UploadOptions): Promise<UploadRes
   const turbo = TurboFactory.authenticated({
     privateKey: normalizedKey,
     token: 'ethereum',
+    ...(uploadServiceUrl ? { uploadServiceConfig: { url: uploadServiceUrl } } : {}),
   });
 
   const result = await turbo.uploadFile({

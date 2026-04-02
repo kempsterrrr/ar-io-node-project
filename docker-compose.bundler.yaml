@@ -1,0 +1,162 @@
+# =============================================================================
+# Optional: ar-io-bundler for optimistic C2PA indexing
+# =============================================================================
+# Layer on top of docker-compose.local.yaml for immediate data availability:
+#
+#   docker compose \
+#     -f docker-compose.local.yaml \
+#     -f docker-compose.bundler.yaml \
+#     up -d
+#
+# This adds a self-hosted bundler that stores data items in MinIO and makes
+# them immediately available through the gateway via optimistic caching,
+# eliminating the wait for L1 confirmation before soft binding API queries.
+#
+# Upload to the bundler by setting UPLOAD_SERVICE_URL=http://localhost:3001
+# in turbo-c2pa demo scripts or SDK consumers.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # ar-io-bundler upload service (receives data items)
+  # ---------------------------------------------------------------------------
+  bundler-upload:
+    image: ghcr.io/vilenarios/ar-io-bundler:${BUNDLER_IMAGE_TAG:-latest}
+    restart: 'no'
+    ports:
+      - '${BUNDLER_UPLOAD_PORT:-3001}:3001'
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DATABASE_URL=postgresql://bundler:bundler@bundler-postgres:5432/bundler
+      - REDIS_CACHE_URL=redis://bundler-redis-cache:6379
+      - REDIS_QUEUE_URL=redis://bundler-redis-queue:6379
+      - MINIO_ENDPOINT=bundler-minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=${BUNDLER_MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${BUNDLER_MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_BUCKET=${BUNDLER_MINIO_BUCKET:-ar-io-bundler}
+      - OPTICAL_BRIDGING_ENABLED=true
+      - AR_IO_ADMIN_URL=http://core:4000
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
+      - AR_IO_WALLET=${AR_IO_WALLET:-}
+    depends_on:
+      bundler-postgres:
+        condition: service_healthy
+      bundler-redis-cache:
+        condition: service_healthy
+      bundler-redis-queue:
+        condition: service_healthy
+      bundler-minio:
+        condition: service_healthy
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3001/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # ar-io-bundler payment service (pricing + x402)
+  # ---------------------------------------------------------------------------
+  bundler-payment:
+    image: ghcr.io/vilenarios/ar-io-bundler:${BUNDLER_IMAGE_TAG:-latest}
+    restart: 'no'
+    ports:
+      - '${BUNDLER_PAYMENT_PORT:-4002}:4001'
+    environment:
+      - NODE_ENV=development
+      - PORT=4001
+      - SERVICE=payment
+      - DATABASE_URL=postgresql://bundler:bundler@bundler-postgres:5432/bundler
+      - REDIS_CACHE_URL=redis://bundler-redis-cache:6379
+      - AR_IO_GATEWAY_URL=http://core:4000
+    depends_on:
+      bundler-postgres:
+        condition: service_healthy
+      bundler-redis-cache:
+        condition: service_healthy
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:4001/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Bundler infrastructure: PostgreSQL
+  # ---------------------------------------------------------------------------
+  bundler-postgres:
+    image: postgres:16-alpine
+    restart: 'no'
+    environment:
+      - POSTGRES_USER=bundler
+      - POSTGRES_PASSWORD=bundler
+      - POSTGRES_DB=bundler
+    volumes:
+      - bundler-postgres-data:/var/lib/postgresql/data
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bundler']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Bundler infrastructure: Redis (cache)
+  # ---------------------------------------------------------------------------
+  bundler-redis-cache:
+    image: redis:7-alpine
+    restart: 'no'
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Bundler infrastructure: Redis (job queue)
+  # ---------------------------------------------------------------------------
+  bundler-redis-queue:
+    image: redis:7-alpine
+    restart: 'no'
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Bundler infrastructure: MinIO (S3-compatible object storage)
+  # ---------------------------------------------------------------------------
+  bundler-minio:
+    image: minio/minio:latest
+    restart: 'no'
+    command: server /data --console-address ":9001"
+    ports:
+      - '${BUNDLER_MINIO_CONSOLE_PORT:-9001}:9001'
+    environment:
+      - MINIO_ROOT_USER=${BUNDLER_MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${BUNDLER_MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - bundler-minio-data:/data
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  bundler-postgres-data:
+  bundler-minio-data:

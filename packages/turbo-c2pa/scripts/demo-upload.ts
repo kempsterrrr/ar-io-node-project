@@ -26,6 +26,7 @@
  *   ETH_PRIVATE_KEY       — Ethereum private key (required)
  *   SIDECAR_URL           — Sidecar base URL (default: http://localhost:3003)
  *   GATEWAY_URL           — Gateway for viewing (default: https://turbo-gateway.com)
+ *   UPLOAD_SERVICE_URL    — Custom bundler URL (e.g. http://localhost:3001 for ar-io-bundler)
  *   C2PA_TRUST_ANCHOR_PEM — Base64 CA cert for dev signing (from generate-dev-cert.sh)
  *   MANIFEST_REPO_URL     — SBR API base URL (default: SIDECAR_URL + /v1)
  *   DIGITAL_SOURCE_TYPE   — Default digital source type (overridden by --source-type)
@@ -101,6 +102,7 @@ async function main() {
     console.log('Optional env vars:');
     console.log('  SIDECAR_URL           default: http://localhost:3003');
     console.log('  GATEWAY_URL           default: https://turbo-gateway.com');
+    console.log('  UPLOAD_SERVICE_URL    custom bundler (e.g. http://localhost:3001)');
     console.log('  MANIFEST_REPO_URL     default: SIDECAR_URL/v1');
     console.log('  C2PA_TRUST_ANCHOR_PEM Base64 CA cert (sign mode only)');
     console.log('  DIGITAL_SOURCE_TYPE   Default source type (sign mode)');
@@ -117,6 +119,7 @@ async function main() {
 
   const sidecarUrl = process.env.SIDECAR_URL || 'http://localhost:3003';
   const gatewayUrl = process.env.GATEWAY_URL || 'https://turbo-gateway.com';
+  const uploadServiceUrl = process.env.UPLOAD_SERVICE_URL;
   const manifestRepoUrl = process.env.MANIFEST_REPO_URL || `${sidecarUrl}/v1`;
 
   const isStoreMode = process.argv.includes('--store');
@@ -132,6 +135,7 @@ async function main() {
   );
   if (!isStoreMode) console.log(`  Sidecar:  ${sidecarUrl}`);
   console.log(`  Gateway:  ${gatewayUrl}`);
+  if (uploadServiceUrl) console.log(`  Bundler:  ${uploadServiceUrl} (local ar-io-bundler)`);
 
   // 1. Read image
   log('1/5', 'Reading image');
@@ -253,6 +257,7 @@ async function main() {
     tags,
     ethPrivateKey,
     gatewayUrl,
+    uploadServiceUrl,
   });
 
   console.log(`  TX ID:    ${uploadResult.txId}`);
