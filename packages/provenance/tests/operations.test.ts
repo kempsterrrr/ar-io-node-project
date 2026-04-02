@@ -5,7 +5,8 @@ import { executeVerifyProvenance } from '../src/operations/verify-provenance.js'
 import { executeQueryProvenance } from '../src/operations/query-provenance.js';
 import { TAG_NAMES, TAG_VALUES } from '../src/tags.js';
 
-function createMockSdk(overrides: Partial<AgenticWay> = {}): AgenticWay {
+function createMockSdk(overrides: Record<string, any> = {}): AgenticWay {
+  const { gateway, ...rest } = overrides;
   return {
     store: vi.fn(),
     anchor: vi.fn(),
@@ -17,7 +18,11 @@ function createMockSdk(overrides: Partial<AgenticWay> = {}): AgenticWay {
     batchAnchor: vi.fn(),
     verifyAnchor: vi.fn(),
     info: vi.fn(),
-    ...overrides,
+    gateway: {
+      fetchTransactionInfo: vi.fn(),
+      ...(gateway ?? {}),
+    },
+    ...rest,
   } as unknown as AgenticWay;
 }
 
@@ -157,7 +162,7 @@ describe('executeVerifyProvenance', () => {
           contentType: 'image/jpeg',
           tags: [
             { name: 'Content-Type', value: 'image/jpeg' },
-            { name: 'C2PA-Protocol', value: 'C2PA-Manifest-Proof' },
+            { name: 'Protocol', value: 'C2PA-Manifest-Proof' },
             { name: 'C2PA-Manifest-ID', value: 'urn:c2pa:test-manifest' },
             { name: 'C2PA-Storage-Mode', value: 'full' },
             { name: 'C2PA-Asset-Hash', value: 'abc123' },
@@ -281,15 +286,27 @@ describe('executeVerifyProvenance', () => {
     expect(result.existence.status).toBe('not_found');
   });
 
-  it('uses provided anchorTxId for direct verification', async () => {
+  it('uses provided anchorTxId for direct transaction lookup', async () => {
+    (sdk.gateway.fetchTransactionInfo as ReturnType<typeof vi.fn>).mockResolvedValue({
+      tags: [
+        { name: 'Data-Protocol', value: 'AgenticWay-Integrity' },
+        { name: 'Type', value: 'integrity-provenance-anchor' },
+        { name: 'Content-Tx-Id', value: 'content-tx-123' },
+        { name: 'Data-Hash', value: 'deadbeef' },
+      ],
+      block: { height: 1500001, timestamp: 1711929600 },
+    });
+
     const result = await executeVerifyProvenance(sdk, {
       contentTxId: 'content-tx-123',
       anchorTxId: 'anchor-tx-789',
     });
 
     expect(result.anchor).not.toBeNull();
-    // Should query for the specific anchor
-    expect(sdk.query).toHaveBeenCalled();
+    expect(result.anchor!.valid).toBe(true);
+    expect(result.anchor!.txId).toBe('anchor-tx-789');
+    // Should use fetchTransactionInfo, not query
+    expect(sdk.gateway.fetchTransactionInfo).toHaveBeenCalledWith('anchor-tx-789');
   });
 
   it('extracts metadata from verification result', async () => {
@@ -314,7 +331,7 @@ describe('executeQueryProvenance', () => {
             owner: 'owner-1',
             tags: [
               { name: 'Content-Type', value: 'image/png' },
-              { name: 'C2PA-Protocol', value: 'C2PA-Manifest-Proof' },
+              { name: 'Protocol', value: 'C2PA-Manifest-Proof' },
               { name: 'C2PA-Manifest-ID', value: 'urn:c2pa:manifest-1' },
               { name: 'C2PA-Storage-Mode', value: 'full' },
               { name: 'C2PA-Asset-Hash', value: 'hash-1' },
@@ -327,7 +344,7 @@ describe('executeQueryProvenance', () => {
             owner: 'owner-2',
             tags: [
               { name: 'Content-Type', value: 'image/jpeg' },
-              { name: 'C2PA-Protocol', value: 'C2PA-Manifest-Proof' },
+              { name: 'Protocol', value: 'C2PA-Manifest-Proof' },
               { name: 'C2PA-Manifest-ID', value: 'urn:c2pa:manifest-2' },
               { name: 'C2PA-Storage-Mode', value: 'manifest' },
               { name: 'C2PA-Asset-Hash', value: 'hash-2' },
@@ -346,7 +363,7 @@ describe('executeQueryProvenance', () => {
 
     expect(sdk.query).toHaveBeenCalledWith(
       expect.objectContaining({
-        tags: expect.arrayContaining([{ name: 'C2PA-Protocol', values: ['C2PA-Manifest-Proof'] }]),
+        tags: expect.arrayContaining([{ name: 'Protocol', values: ['C2PA-Manifest-Proof'] }]),
       })
     );
   });

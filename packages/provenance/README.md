@@ -103,7 +103,7 @@ IPTC digital source types for describing how content was created:
 
 ## Architecture
 
-```
+```text
 AI Agent generates content
         ↓
   C2PA manifest created

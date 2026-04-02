@@ -3,7 +3,7 @@ import type { QueryProvenanceOptions, QueryProvenanceResult, ProvenanceRecord } 
 import { getTagValue } from '../tags.js';
 
 /** C2PA protocol tag name used to identify C2PA content on Arweave. */
-const C2PA_PROTOCOL_TAG = 'C2PA-Protocol';
+const C2PA_PROTOCOL_TAG = 'Protocol';
 const C2PA_PROTOCOL_VALUE = 'C2PA-Manifest-Proof';
 
 /**

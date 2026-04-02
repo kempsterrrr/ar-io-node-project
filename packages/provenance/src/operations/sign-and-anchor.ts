@@ -48,6 +48,7 @@ export async function executeSignAndAnchor(
   const anchorResult = await sdk.anchor({
     data: manifestPayload,
     metadata: {
+      ...(options.metadata ?? {}),
       [TAG_NAMES.TYPE]: TAG_VALUES.TYPE_PROVENANCE_ANCHOR,
       [TAG_NAMES.MANIFEST_ID]: storeResult.provenance.manifestId,
       [TAG_NAMES.ASSET_HASH]: storeResult.provenance.assetHash,

@@ -9,7 +9,7 @@ import { TAG_NAMES, TAG_VALUES, getTagValue } from '../tags.js';
 
 /** C2PA protocol tag names from @ar-io/c2pa-protocol. */
 const C2PA_TAGS = {
-  PROTOCOL: 'C2PA-Protocol',
+  PROTOCOL: 'Protocol',
   MANIFEST_ID: 'C2PA-Manifest-ID',
   STORAGE_MODE: 'C2PA-Storage-Mode',
   ASSET_HASH: 'C2PA-Asset-Hash',
@@ -54,35 +54,25 @@ async function findAndVerifyAnchor(
   contentTxId: string,
   anchorTxId?: string
 ): Promise<AnchorVerification | null> {
-  // If we have a known anchor, verify it directly
+  // If we have a known anchor, fetch it directly by transaction ID
   if (anchorTxId) {
-    const result = await sdk.query({
-      tags: [
-        { name: TAG_NAMES.PROTOCOL, values: [TAG_VALUES.PROTOCOL] },
-        { name: TAG_NAMES.TYPE, values: [TAG_VALUES.TYPE_PROVENANCE_ANCHOR] },
-      ],
-      first: 1,
-    });
+    const txInfo = await sdk.gateway.fetchTransactionInfo(anchorTxId);
+    const anchoredHash = getTagValue(txInfo.tags, 'Data-Hash');
+    const typeTag = getTagValue(txInfo.tags, TAG_NAMES.TYPE);
+    const contentTxTag = getTagValue(txInfo.tags, TAG_NAMES.CONTENT_TX_ID);
 
-    // Filter to exact txId match
-    const edge = result.edges.find((e) => e.txId === anchorTxId);
-    if (!edge) {
-      return {
-        valid: false,
-        txId: anchorTxId,
-        anchoredHash: null,
-        blockHeight: null,
-        timestamp: null,
-      };
-    }
+    // Validate this is a provenance anchor that references our content
+    const isValidAnchor =
+      typeTag === TAG_VALUES.TYPE_PROVENANCE_ANCHOR &&
+      contentTxTag === contentTxId &&
+      anchoredHash != null;
 
-    const anchoredHash = getTagValue(edge.tags, 'Data-Hash');
     return {
-      valid: anchoredHash != null,
+      valid: isValidAnchor,
       txId: anchorTxId,
       anchoredHash,
-      blockHeight: edge.block?.height ?? null,
-      timestamp: edge.block ? new Date(edge.block.timestamp * 1000).toISOString() : null,
+      blockHeight: txInfo.block?.height ?? null,
+      timestamp: txInfo.block ? new Date(txInfo.block.timestamp * 1000).toISOString() : null,
     };
   }
 
@@ -141,8 +131,13 @@ export async function executeVerifyProvenance(
   // Step 4: Determine owner from tags/verify result
   const ownerTag = getTagValue(verifyResult.metadata.tags, 'Owner');
 
-  // Overall validity: content exists + C2PA is valid + anchor valid (if present)
-  const valid = existence.status === 'confirmed' && c2pa.valid && (anchor == null || anchor.valid);
+  // Overall validity: SDK integrity passes + content exists + C2PA valid + anchor valid (if present)
+  const integrityOk = verifyResult.valid && verifyResult.integrity.match !== false;
+  const valid =
+    integrityOk &&
+    existence.status === 'confirmed' &&
+    c2pa.valid &&
+    (anchor == null || anchor.valid);
 
   return {
     valid,
