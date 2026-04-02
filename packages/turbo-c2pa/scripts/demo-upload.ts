@@ -135,7 +135,7 @@ async function main() {
   );
   if (!isStoreMode) console.log(`  Sidecar:  ${sidecarUrl}`);
   console.log(`  Gateway:  ${gatewayUrl}`);
-  if (uploadServiceUrl) console.log(`  Bundler:  ${uploadServiceUrl} (local ar-io-bundler)`);
+  if (uploadServiceUrl) console.log(`  Bundler:  ${uploadServiceUrl} (ar-io-bundler)`);
 
   // 1. Read image
   log('1/5', 'Reading image');

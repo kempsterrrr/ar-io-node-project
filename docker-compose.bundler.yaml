@@ -47,6 +47,8 @@ services:
       - ADMIN_API_KEY=${ADMIN_API_KEY}
       - AR_IO_WALLET=${AR_IO_WALLET:-}
     depends_on:
+      core:
+        condition: service_started
       bundler-postgres:
         condition: service_healthy
       bundler-redis-cache:
@@ -80,6 +82,8 @@ services:
       - REDIS_CACHE_URL=redis://bundler-redis-cache:6379
       - AR_IO_GATEWAY_URL=http://core:4000
     depends_on:
+      core:
+        condition: service_started
       bundler-postgres:
         condition: service_healthy
       bundler-redis-cache:
