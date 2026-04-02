@@ -14,6 +14,8 @@
 #
 # Upload to the bundler by setting UPLOAD_SERVICE_URL=http://localhost:3001
 # in turbo-c2pa demo scripts or SDK consumers.
+#
+# Required env vars: ADMIN_API_KEY (shared with gateway for optical bridging)
 # =============================================================================
 
 services:
@@ -28,7 +30,7 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3001
-      - DATABASE_URL=postgresql://bundler:bundler@bundler-postgres:5432/bundler
+      - DATABASE_URL=postgresql://${BUNDLER_POSTGRES_USER:-bundler}:${BUNDLER_POSTGRES_PASSWORD:-bundler}@bundler-postgres:5432/${BUNDLER_POSTGRES_DB:-bundler}
       - REDIS_CACHE_URL=redis://bundler-redis-cache:6379
       - REDIS_QUEUE_URL=redis://bundler-redis-queue:6379
       - MINIO_ENDPOINT=bundler-minio
@@ -36,9 +38,11 @@ services:
       - MINIO_ACCESS_KEY=${BUNDLER_MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${BUNDLER_MINIO_SECRET_KEY:-minioadmin}
       - MINIO_BUCKET=${BUNDLER_MINIO_BUCKET:-ar-io-bundler}
+      # Optical bridging pushes data directly to the gateway for immediate indexing.
+      # ADMIN_API_KEY must match the gateway's ADMIN_API_KEY.
       - OPTICAL_BRIDGING_ENABLED=true
       - AR_IO_ADMIN_URL=http://core:4000
-      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
       - AR_IO_WALLET=${AR_IO_WALLET:-}
     depends_on:
       bundler-postgres:
@@ -48,7 +52,7 @@ services:
       bundler-redis-queue:
         condition: service_healthy
       bundler-minio:
-        condition: service_healthy
+        condition: service_started
     networks:
       - ar-io-network
     healthcheck:
@@ -70,7 +74,7 @@ services:
       - NODE_ENV=development
       - PORT=4001
       - SERVICE=payment
-      - DATABASE_URL=postgresql://bundler:bundler@bundler-postgres:5432/bundler
+      - DATABASE_URL=postgresql://${BUNDLER_POSTGRES_USER:-bundler}:${BUNDLER_POSTGRES_PASSWORD:-bundler}@bundler-postgres:5432/${BUNDLER_POSTGRES_DB:-bundler}
       - REDIS_CACHE_URL=redis://bundler-redis-cache:6379
       - AR_IO_GATEWAY_URL=http://core:4000
     depends_on:
@@ -94,15 +98,15 @@ services:
     image: postgres:16-alpine
     restart: 'no'
     environment:
-      - POSTGRES_USER=bundler
-      - POSTGRES_PASSWORD=bundler
-      - POSTGRES_DB=bundler
+      - POSTGRES_USER=${BUNDLER_POSTGRES_USER:-bundler}
+      - POSTGRES_PASSWORD=${BUNDLER_POSTGRES_PASSWORD:-bundler}
+      - POSTGRES_DB=${BUNDLER_POSTGRES_DB:-bundler}
     volumes:
       - bundler-postgres-data:/var/lib/postgresql/data
     networks:
       - ar-io-network
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U bundler']
+      test: ['CMD-SHELL', 'pg_isready -U ${BUNDLER_POSTGRES_USER:-bundler}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -137,6 +141,8 @@ services:
 
   # ---------------------------------------------------------------------------
   # Bundler infrastructure: MinIO (S3-compatible object storage)
+  # No healthcheck — mc/curl/wget are absent from minio/minio:latest.
+  # bundler-upload uses service_started with start_period instead.
   # ---------------------------------------------------------------------------
   bundler-minio:
     image: minio/minio:latest
@@ -151,12 +157,12 @@ services:
       - bundler-minio-data:/data
     networks:
       - ar-io-network
-    healthcheck:
-      test: ['CMD', 'mc', 'ready', 'local']
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
 volumes:
   bundler-postgres-data:
   bundler-minio-data:
+
+networks:
+  ar-io-network:
+    external: true
+    name: ar-io-network
