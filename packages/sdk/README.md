@@ -231,11 +231,16 @@ Standalone Merkle tree functions are exported for direct use:
 ```typescript
 import { sha256Hex, buildMerkleTree, generateProof, verifyProof } from '@agenticway/sdk';
 
-// Hash data
-const hash = sha256Hex(Buffer.from('hello'));
+// Hash your data items
+const leaves = [
+  sha256Hex(Buffer.from('item-a')),
+  sha256Hex(Buffer.from('item-b')),
+  sha256Hex(Buffer.from('item-c')),
+  sha256Hex(Buffer.from('item-d')),
+];
 
 // Build a tree from leaf hashes
-const tree = buildMerkleTree([hash1, hash2, hash3, hash4]);
+const tree = buildMerkleTree(leaves);
 console.log(tree.root); // Merkle root (hex)
 
 // Generate an inclusion proof for leaf at index 2

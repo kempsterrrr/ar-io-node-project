@@ -32,9 +32,8 @@ export async function executeVerifyAnchor(
   }
 
   const blockHeight = txInfo.block?.height ?? null;
-  const timestamp = txInfo.block?.timestamp
-    ? new Date(txInfo.block.timestamp * 1000).toISOString()
-    : null;
+  const timestamp =
+    txInfo.block?.timestamp != null ? new Date(txInfo.block.timestamp * 1000).toISOString() : null;
 
   return {
     valid: anchoredHash === hash,
