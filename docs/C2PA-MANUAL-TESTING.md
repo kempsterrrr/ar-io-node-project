@@ -71,7 +71,7 @@ All containers should show `Up` and `healthy`.
 Verify the gateway `.env` includes the C2PA webhook settings:
 
 ```bash
-grep -E 'WEBHOOK_|ANS104_INDEX' ~/ar-io-gateway/.env
+grep -E 'WEBHOOK_|ANS104_' ~/ar-io-gateway/.env
 ```
 
 Expected output:
@@ -80,11 +80,18 @@ Expected output:
 WEBHOOK_TARGET_SERVERS=http://trusthash-sidecar:3003/webhook
 WEBHOOK_INDEX_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
 ANS104_INDEX_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
+ANS104_UNBUNDLE_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
+ANS104_UNBUNDLE_WORKERS=1
 ```
 
-The webhook filter is intentionally broad (only requires the `Protocol` tag). The sidecar validates all required fields and gracefully skips incomplete payloads.
+All five settings are required:
 
-If these are missing, the gateway will not send webhooks and the indexing pipeline is broken.
+- `WEBHOOK_TARGET_SERVERS` / `WEBHOOK_INDEX_FILTER` — send webhooks to the sidecar when C2PA data items are indexed
+- `ANS104_INDEX_FILTER` — index C2PA data items for GraphQL queries
+- `ANS104_UNBUNDLE_FILTER` — unpack ANS-104 bundles to discover C2PA data items inside
+- `ANS104_UNBUNDLE_WORKERS` — number of concurrent unbundle workers (at least 1)
+
+If any are missing, the pipeline won't work. Without the unbundle filter in particular, the gateway will never discover data items uploaded via Turbo.
 
 ---
 
@@ -177,14 +184,17 @@ Save the TX ID and Manifest ID for the following steps.
 
 ### 4.2 Wait for Gateway Indexing
 
-After upload, wait for the gateway to index the transaction (may take a few minutes):
+Turbo uploads are ANS-104 bundles. The gateway must wait for the bundle to land on Arweave L1 before it can unbundle and index the individual data items. This typically takes **10-60 minutes** depending on Turbo's posting schedule and L1 block confirmation.
 
 ```bash
-# Poll until the transaction is available
+# Check if L1 has confirmed the transaction
+curl -s "https://arweave.net/tx/<ARWEAVE_TX_ID>/status"
+
+# Check if the gateway can serve the raw data (may work before unbundling)
 curl -sL https://ario.agenticway.io/<ARWEAVE_TX_ID> -o /dev/null -w "%{http_code}\n"
 ```
 
-Expected: 200 once indexed.
+Expected: 200 once L1-confirmed and the gateway has synced.
 
 ### 4.3 Verify Webhook Was Received (requires SSH)
 
@@ -345,11 +355,27 @@ This runs 7 steps: health check, certificate retrieval, COSE signing, webhook si
 - Check `SIGNING_CERT_PEM` and `SIGNING_PRIVATE_KEY_PEM` are correctly populated
 - For dev testing, generate dev certs: `./packages/trusthash-sidecar/scripts/generate-dev-cert.sh`
 
+### Gateway not unbundling Turbo uploads
+
+Turbo uploads are ANS-104 bundles. The gateway must unbundle them to discover C2PA data items.
+
+1. Verify `ANS104_UNBUNDLE_FILTER` is set:
+   ```bash
+   curl -s https://ario.agenticway.io/ar-io/info | jq .ans104UnbundleFilter
+   ```
+   If it shows `{"never": true}`, the filter is missing from `.env`.
+2. Verify `ANS104_UNBUNDLE_WORKERS` is at least 1
+3. The bundle must be confirmed on Arweave L1 before the gateway can process it. Check L1 status:
+   ```bash
+   curl -s "https://arweave.net/tx/<TX_ID>/status"
+   ```
+   This typically takes 10-60 minutes after a Turbo upload.
+
 ### Gateway not serving uploaded data
 
 - The gateway must have synced past the block containing the transaction
 - Check `START_HEIGHT` in `.env` - if set too high, older transactions won't be indexed
-- For new uploads via Turbo, data is typically available within a few minutes
+- For new uploads via Turbo, raw data may be available before unbundling (via `TRUSTED_NODE_URL`), but data items won't appear in GraphQL or trigger webhooks until L1 confirmation
 - Check: `curl -s https://ario.agenticway.io/ar-io/info | jq .currentBlock`
 
 ### Public URL returns 404 for sidecar endpoints
