@@ -75,9 +75,11 @@ Expected output:
 
 ```
 WEBHOOK_TARGET_SERVERS=http://trusthash-sidecar:3003/webhook
-WEBHOOK_INDEX_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"},{"name":"C2PA-Storage-Mode"},{"name":"C2PA-Manifest-ID"},{"name":"C2PA-Soft-Binding-Alg"},{"name":"C2PA-Soft-Binding-Value"}]}
+WEBHOOK_INDEX_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
 ANS104_INDEX_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
 ```
+
+The webhook filter is intentionally broad (only requires the `Protocol` tag). The sidecar validates all required fields and gracefully skips incomplete payloads.
 
 If these are missing, the gateway will not send webhooks and the indexing pipeline is broken.
 

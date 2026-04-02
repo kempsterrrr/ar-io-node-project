@@ -150,9 +150,11 @@ The sidecar requires `C2PA-SoftBinding-Alg` and `C2PA-SoftBinding-Value` to have
 Configure the gateway to send webhooks for C2PA sidecar transactions:
 
 ```bash
-WEBHOOK_INDEX_FILTER='{"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"},{"name":"C2PA-Storage-Mode"},{"name":"C2PA-Manifest-ID"},{"name":"C2PA-Soft-Binding-Alg"},{"name":"C2PA-Soft-Binding-Value"}]}'
+WEBHOOK_INDEX_FILTER='{"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}'
 WEBHOOK_TARGET_SERVERS="http://trusthash-sidecar:3003/webhook"
 ```
+
+The filter is intentionally broad - the sidecar validates all required fields (storage mode, manifest ID, soft binding) and gracefully skips any incomplete payloads.
 
 If you also want the gateway to index these transactions for GraphQL queries:
 
