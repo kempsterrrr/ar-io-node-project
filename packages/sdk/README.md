@@ -1,6 +1,6 @@
 # @agenticway/sdk
 
-TypeScript SDK for permanently storing, retrieving, verifying, and querying data on Arweave.
+TypeScript SDK for permanently storing, retrieving, verifying, and querying data on Arweave — with built-in integrity anchoring via SHA-256 hashing and Merkle trees.
 
 ## Install
 
@@ -44,6 +44,32 @@ console.log(`Found ${results.edges.length} transactions`);
 // Resolve ArNS name
 const resolved = await client.resolve('my-data');
 console.log(`Resolved to: ${resolved.txId}`);
+
+// --- Integrity Anchoring (Layer 1) ---
+
+// Anchor data: store a SHA-256 hash proof on Arweave
+const anchor = await client.anchor({
+  data: Buffer.from(JSON.stringify({ decision: 'approved', confidence: 0.98 })),
+  metadata: { agent: 'compliance-bot', taskId: 'audit-77' },
+});
+console.log(`Anchored: txId=${anchor.txId}, hash=${anchor.hash}`);
+
+// Verify data against an existing anchor
+const check = await client.verifyAnchor({
+  data: Buffer.from(JSON.stringify({ decision: 'approved', confidence: 0.98 })),
+  txId: anchor.txId,
+});
+console.log(`Integrity valid: ${check.valid}`);
+
+// Batch anchor: Merkle tree for multiple items
+const batch = await client.batchAnchor({
+  items: [
+    { data: Buffer.from('document-1') },
+    { data: Buffer.from('document-2') },
+    { data: Buffer.from('document-3') },
+  ],
+});
+console.log(`Batch root: ${batch.merkleRoot}, proofs: ${batch.proofs.length}`);
 ```
 
 ## API Reference
@@ -126,6 +152,69 @@ const result = await client.resolve('my-data');
 // Returns: { txId, ttl, owner }
 ```
 
+### `client.anchor(options)`
+
+Anchor data on Arweave by storing its SHA-256 hash as a permanent integrity proof. Requires `turboWallet`.
+
+```typescript
+const result = await client.anchor({
+  data: Buffer.from('any data — text, JSON, binary'),
+  metadata: { agent: 'my-bot', purpose: 'audit-trail' }, // optional tags
+});
+// Returns: { txId, hash, timestamp }
+```
+
+The anchor transaction is tagged with `Data-Protocol: AgenticWay-Integrity` and `Type: integrity-anchor` for easy querying.
+
+### `client.verifyAnchor(options)`
+
+Verify data against an existing integrity anchor. Re-hashes the data and compares it against the hash stored on-chain.
+
+```typescript
+const result = await client.verifyAnchor({
+  data: originalData,
+  txId: 'anchor-transaction-id',
+});
+// Returns: { valid, hash, anchoredHash, blockHeight, timestamp }
+```
+
+| Field          | Description                                   |
+| -------------- | --------------------------------------------- |
+| `valid`        | `true` if the data matches the anchored hash  |
+| `hash`         | SHA-256 of the provided data (hex)            |
+| `anchoredHash` | Hash stored on-chain, or `null` if not found  |
+| `blockHeight`  | Arweave block height of the anchor, or `null` |
+| `timestamp`    | ISO timestamp of the anchor block, or `null`  |
+
+### `client.batchAnchor(options)`
+
+Anchor multiple items in a single transaction using a Merkle tree. Each item gets an individual inclusion proof. Requires `turboWallet`.
+
+```typescript
+const result = await client.batchAnchor({
+  items: [
+    { data: Buffer.from('item-1'), metadata: { type: 'log' } },
+    { data: Buffer.from('item-2') },
+    { data: Buffer.from('item-3') },
+  ],
+  metadata: { batch: 'daily-audit' }, // optional tags on the batch tx
+});
+// Returns: { txId, merkleRoot, proofs, timestamp }
+
+// Each proof can independently verify an item against the Merkle root:
+import { verifyProof } from '@agenticway/sdk';
+
+for (const p of result.proofs) {
+  const valid = verifyProof({
+    index: p.index,
+    leaf: p.hash,
+    path: p.proof,
+    root: result.merkleRoot,
+  });
+  console.log(`Item ${p.index}: ${valid}`); // true
+}
+```
+
 ### `client.info()`
 
 Get gateway metadata.
@@ -133,6 +222,27 @@ Get gateway metadata.
 ```typescript
 const info = await client.info();
 // Returns: { processId, release, ... }
+```
+
+## Merkle Tree Utilities
+
+Standalone Merkle tree functions are exported for direct use:
+
+```typescript
+import { sha256Hex, buildMerkleTree, generateProof, verifyProof } from '@agenticway/sdk';
+
+// Hash data
+const hash = sha256Hex(Buffer.from('hello'));
+
+// Build a tree from leaf hashes
+const tree = buildMerkleTree([hash1, hash2, hash3, hash4]);
+console.log(tree.root); // Merkle root (hex)
+
+// Generate an inclusion proof for leaf at index 2
+const proof = generateProof(tree, 2);
+
+// Verify the proof
+const valid = verifyProof(proof); // true
 ```
 
 ## Advanced: Direct client access
