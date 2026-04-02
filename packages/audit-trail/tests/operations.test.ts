@@ -218,16 +218,12 @@ describe('executeVerifyEntry', () => {
     expect(result.blockHeight).toBe(1500000);
   });
 
-  it('returns invalid when entry hash does not match proof', async () => {
+  it('short-circuits when entry hash does not match proof (no gateway call)', async () => {
     const entry = makeEntry();
 
+    const fetchMock = vi.fn();
     const sdk = makeMockSdk({
-      gateway: {
-        fetchTransactionInfo: vi.fn().mockResolvedValue({
-          tags: [{ name: 'Merkle-Root', value: 'some-root' }],
-          block: { height: 1500000, timestamp: 1711929600 },
-        }),
-      },
+      gateway: { fetchTransactionInfo: fetchMock },
     });
 
     const result = await executeVerifyEntry(sdk, {
@@ -243,6 +239,33 @@ describe('executeVerifyEntry', () => {
 
     expect(result.merkleProofValid).toBe(false);
     expect(result.valid).toBe(false);
+    expect(result.onChainValid).toBe(false);
+    // Should NOT have called the gateway
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('short-circuits when entry ID does not match proof (no gateway call)', async () => {
+    const entry = makeEntry();
+    const entryHash = sha256HexLocal(serializeEntry(entry));
+
+    const fetchMock = vi.fn();
+    const sdk = makeMockSdk({
+      gateway: { fetchTransactionInfo: fetchMock },
+    });
+
+    const result = await executeVerifyEntry(sdk, {
+      entry,
+      txId: 'tx-001',
+      proof: {
+        entryId: 'wrong-entry-id',
+        index: 0,
+        hash: entryHash,
+        proof: [],
+      },
+    });
+
+    expect(result.valid).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('returns invalid when on-chain root does not match', async () => {

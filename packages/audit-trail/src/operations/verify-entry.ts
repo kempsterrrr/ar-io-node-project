@@ -19,11 +19,24 @@ export async function executeVerifyEntry(
   const data = serializeEntry(options.entry);
   const entryHash = sha256Hex(data);
 
-  // Step 1: Verify the entry hash matches the proof's leaf
+  // Step 1: Verify the entry hash matches the proof's leaf and entry ID
   const hashMatches = entryHash === options.proof.hash;
+  const entryIdMatches = options.proof.entryId === options.entry.id;
+
+  // Short-circuit: if hash or entry ID don't match, skip the network call
+  if (!hashMatches || !entryIdMatches) {
+    return {
+      valid: false,
+      entryHash,
+      merkleProofValid: false,
+      onChainValid: false,
+      blockHeight: null,
+      timestamp: null,
+    };
+  }
 
   // Step 2: Walk the Merkle proof to compute the root
-  let computedRoot = options.proof.hash;
+  let computedRoot = entryHash;
   for (const step of options.proof.proof) {
     const left = step.position === 'left' ? step.hash : computedRoot;
     const right = step.position === 'left' ? computedRoot : step.hash;
