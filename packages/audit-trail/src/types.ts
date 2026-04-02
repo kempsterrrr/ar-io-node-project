@@ -125,14 +125,20 @@ export interface VerifyEntryOptions {
   entry: AuditLogEntry;
   /** Arweave transaction ID of the batch anchor. */
   txId: string;
+  /** Merkle proof for this entry (from FlushResult.proofs). */
+  proof: EntryProof;
 }
 
 /** Result of verifying a log entry. */
 export interface VerifyEntryResult {
-  /** Whether the entry is valid (hash matches and Merkle proof verifies). */
+  /** Whether the entry is valid (hash matches, Merkle proof valid, root matches on-chain). */
   valid: boolean;
   /** SHA-256 hash of the entry (hex). */
   entryHash: string;
+  /** Whether the Merkle inclusion proof is valid. */
+  merkleProofValid: boolean;
+  /** Whether the Merkle root matches the on-chain anchor. */
+  onChainValid: boolean;
   /** Block height of the anchor transaction. */
   blockHeight: number | null;
   /** ISO timestamp of the anchor block. */

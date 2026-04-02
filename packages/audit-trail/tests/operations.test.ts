@@ -1,10 +1,25 @@
 import { describe, it, expect, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { serializeEntry } from '../src/operations/flush-batch.js';
 import { executeFlushBatch } from '../src/operations/flush-batch.js';
 import { executeVerifyEntry } from '../src/operations/verify-entry.js';
 import { executeQueryLogs } from '../src/operations/query-logs.js';
 import type { AuditLogEntry } from '../src/types.js';
 import type { AgenticWay } from '@agenticway/sdk';
+
+// Real sha256Hex for computing expected hashes in tests
+function sha256HexLocal(data: Buffer | Uint8Array): string {
+  return createHash('sha256').update(data).digest('hex');
+}
+
+// Mock sha256Hex from SDK (used by verify-entry)
+vi.mock('@agenticway/sdk', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    sha256Hex: (data: Buffer | Uint8Array) => createHash('sha256').update(data).digest('hex'),
+  };
+});
 
 function makeEntry(overrides?: Partial<AuditLogEntry>): AuditLogEntry {
   return {
@@ -25,13 +40,16 @@ function makeMockSdk(overrides?: Record<string, unknown>) {
       proofs: [{ index: 0, hash: 'hash-0', proof: [{ hash: 's0', position: 'right' }] }],
       timestamp: '2026-04-01T12:00:00.000Z',
     }),
-    verifyAnchor: vi.fn().mockResolvedValue({
-      valid: true,
-      hash: 'abc123',
-      anchoredHash: 'abc123',
-      blockHeight: 1500000,
-      timestamp: '2026-04-01T12:00:00.000Z',
-    }),
+    gateway: {
+      fetchTransactionInfo: vi.fn().mockImplementation(async () => ({
+        tags: [
+          { name: 'Data-Protocol', value: 'AgenticWay-Integrity' },
+          { name: 'Type', value: 'integrity-audit-batch' },
+          { name: 'Merkle-Root', value: 'will-be-overridden' },
+        ],
+        block: { height: 1500000, timestamp: 1711929600 },
+      })),
+    },
     query: vi.fn().mockResolvedValue({
       edges: [
         {
@@ -161,16 +179,99 @@ describe('executeFlushBatch', () => {
 });
 
 describe('executeVerifyEntry', () => {
-  it('serializes entry and calls verifyAnchor', async () => {
-    const sdk = makeMockSdk();
+  it('verifies entry hash, Merkle proof, and on-chain root', async () => {
+    const entry = makeEntry();
+    const entryHash = sha256HexLocal(serializeEntry(entry));
+    const siblingHash = 'aabbccdd';
+
+    // Compute expected Merkle root: hash(entryHash || siblingHash)
+    const combined = Buffer.concat([
+      Buffer.from(entryHash, 'hex'),
+      Buffer.from(siblingHash, 'hex'),
+    ]);
+    const expectedRoot = sha256HexLocal(combined);
+
+    const sdk = makeMockSdk({
+      gateway: {
+        fetchTransactionInfo: vi.fn().mockResolvedValue({
+          tags: [{ name: 'Merkle-Root', value: expectedRoot }],
+          block: { height: 1500000, timestamp: 1711929600 },
+        }),
+      },
+    });
+
+    const result = await executeVerifyEntry(sdk, {
+      entry,
+      txId: 'tx-001',
+      proof: {
+        entryId: entry.id,
+        index: 0,
+        hash: entryHash,
+        proof: [{ hash: siblingHash, position: 'right' as const }],
+      },
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.entryHash).toBe(entryHash);
+    expect(result.merkleProofValid).toBe(true);
+    expect(result.onChainValid).toBe(true);
+    expect(result.blockHeight).toBe(1500000);
+  });
+
+  it('returns invalid when entry hash does not match proof', async () => {
     const entry = makeEntry();
 
-    const result = await executeVerifyEntry(sdk, { entry, txId: 'tx-001' });
+    const sdk = makeMockSdk({
+      gateway: {
+        fetchTransactionInfo: vi.fn().mockResolvedValue({
+          tags: [{ name: 'Merkle-Root', value: 'some-root' }],
+          block: { height: 1500000, timestamp: 1711929600 },
+        }),
+      },
+    });
 
-    expect(sdk.verifyAnchor).toHaveBeenCalledOnce();
-    expect(result.valid).toBe(true);
-    expect(result.entryHash).toBe('abc123');
-    expect(result.blockHeight).toBe(1500000);
+    const result = await executeVerifyEntry(sdk, {
+      entry,
+      txId: 'tx-001',
+      proof: {
+        entryId: entry.id,
+        index: 0,
+        hash: 'wrong-hash',
+        proof: [],
+      },
+    });
+
+    expect(result.merkleProofValid).toBe(false);
+    expect(result.valid).toBe(false);
+  });
+
+  it('returns invalid when on-chain root does not match', async () => {
+    const entry = makeEntry();
+    const entryHash = sha256HexLocal(serializeEntry(entry));
+
+    const sdk = makeMockSdk({
+      gateway: {
+        fetchTransactionInfo: vi.fn().mockResolvedValue({
+          tags: [{ name: 'Merkle-Root', value: 'mismatched-root' }],
+          block: { height: 1500000, timestamp: 1711929600 },
+        }),
+      },
+    });
+
+    const result = await executeVerifyEntry(sdk, {
+      entry,
+      txId: 'tx-001',
+      proof: {
+        entryId: entry.id,
+        index: 0,
+        hash: entryHash,
+        proof: [],
+      },
+    });
+
+    expect(result.merkleProofValid).toBe(true);
+    expect(result.onChainValid).toBe(false);
+    expect(result.valid).toBe(false);
   });
 });
 

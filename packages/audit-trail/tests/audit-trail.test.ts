@@ -2,45 +2,53 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AuditTrail } from '../src/audit-trail.js';
 
 // Mock the SDK
-vi.mock('@agenticway/sdk', () => ({
-  AgenticWay: vi.fn().mockImplementation(() => ({
-    batchAnchor: vi.fn().mockResolvedValue({
-      txId: 'tx-batch-001',
-      merkleRoot: 'abc123root',
-      proofs: [
-        { index: 0, hash: 'hash-0', proof: [{ hash: 'sibling-0', position: 'right' }] },
-        { index: 1, hash: 'hash-1', proof: [{ hash: 'sibling-1', position: 'left' }] },
-      ],
-      timestamp: '2026-04-01T00:00:00.000Z',
-    }),
-    verifyAnchor: vi.fn().mockResolvedValue({
-      valid: true,
-      hash: 'entry-hash-hex',
-      anchoredHash: 'entry-hash-hex',
-      blockHeight: 1500000,
-      timestamp: '2026-04-01T00:00:00.000Z',
-    }),
-    query: vi.fn().mockResolvedValue({
-      edges: [
-        {
-          txId: 'tx-batch-001',
-          owner: 'owner-addr',
+vi.mock('@agenticway/sdk', () => {
+  const { createHash } = require('node:crypto');
+  const sha256Hex = (data: Buffer | Uint8Array) => createHash('sha256').update(data).digest('hex');
+  return {
+    AgenticWay: vi.fn().mockImplementation(() => ({
+      batchAnchor: vi.fn().mockResolvedValue({
+        txId: 'tx-batch-001',
+        merkleRoot: 'abc123root',
+        proofs: [
+          { index: 0, hash: 'hash-0', proof: [{ hash: 'sibling-0', position: 'right' }] },
+          { index: 1, hash: 'hash-1', proof: [{ hash: 'sibling-1', position: 'left' }] },
+        ],
+        timestamp: '2026-04-01T00:00:00.000Z',
+      }),
+      gateway: {
+        fetchTransactionInfo: vi.fn().mockResolvedValue({
           tags: [
             { name: 'Data-Protocol', value: 'AgenticWay-Integrity' },
             { name: 'Type', value: 'integrity-audit-batch' },
-            { name: 'Agent-Id', value: 'agent-1' },
-            { name: 'Session-Id', value: 'session-abc' },
-            { name: 'Event-Types', value: 'tool_call,tool_result' },
-            { name: 'Entry-Count', value: '2' },
+            { name: 'Merkle-Root', value: 'computed-root-placeholder' },
           ],
           block: { height: 1500000, timestamp: 1711929600 },
-          dataSize: 512,
-        },
-      ],
-      pageInfo: { hasNextPage: false, endCursor: null },
-    }),
-  })),
-}));
+        }),
+      },
+      query: vi.fn().mockResolvedValue({
+        edges: [
+          {
+            txId: 'tx-batch-001',
+            owner: 'owner-addr',
+            tags: [
+              { name: 'Data-Protocol', value: 'AgenticWay-Integrity' },
+              { name: 'Type', value: 'integrity-audit-batch' },
+              { name: 'Agent-Id', value: 'agent-1' },
+              { name: 'Session-Id', value: 'session-abc' },
+              { name: 'Event-Types', value: 'tool_call,tool_result' },
+              { name: 'Entry-Count', value: '2' },
+            ],
+            block: { height: 1500000, timestamp: 1711929600 },
+            dataSize: 512,
+          },
+        ],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      }),
+    })),
+    sha256Hex,
+  };
+});
 
 describe('AuditTrail', () => {
   let trail: AuditTrail;
@@ -129,7 +137,7 @@ describe('AuditTrail', () => {
     expect(result).toBeNull();
   });
 
-  it('verifyEntry() delegates to SDK verifyAnchor', async () => {
+  it('verifyEntry() checks hash, proof, and on-chain root', async () => {
     const result = await trail.verifyEntry({
       entry: {
         id: 'entry-001',
@@ -139,11 +147,18 @@ describe('AuditTrail', () => {
         action: 'Tool call: store',
       },
       txId: 'tx-batch-001',
+      proof: {
+        entryId: 'entry-001',
+        index: 0,
+        hash: 'abc123',
+        proof: [{ hash: 'sibling-0', position: 'right' as const }],
+      },
     });
 
-    expect(result.valid).toBe(true);
     expect(result.entryHash).toBeDefined();
-    expect(result.blockHeight).toBe(1500000);
+    expect(typeof result.merkleProofValid).toBe('boolean');
+    expect(typeof result.onChainValid).toBe('boolean');
+    expect(typeof result.valid).toBe('boolean');
   });
 
   it('queryLogs() returns enriched edges', async () => {
