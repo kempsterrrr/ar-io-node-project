@@ -196,6 +196,84 @@ export interface SearchResult {
   total: number;
 }
 
+/** Options for the anchor() operation. */
+export interface AnchorOptions {
+  /** Data to anchor (any bytes). */
+  data: Buffer | Uint8Array;
+  /** Optional metadata tags stored alongside the integrity proof. */
+  metadata?: Record<string, string>;
+}
+
+/** Result of an anchor() operation. */
+export interface AnchorResult {
+  /** Arweave transaction ID of the integrity proof. */
+  txId: string;
+  /** SHA-256 hash of the data (hex). */
+  hash: string;
+  /** ISO timestamp when the anchor was created. */
+  timestamp: string;
+}
+
+/** Options for the verifyAnchor() operation. */
+export interface VerifyAnchorOptions {
+  /** Data to verify against the anchor. */
+  data: Buffer | Uint8Array;
+  /** Arweave transaction ID of the integrity proof. */
+  txId: string;
+}
+
+/** Result of a verifyAnchor() operation. */
+export interface VerifyAnchorResult {
+  /** Whether the data matches the anchored hash. */
+  valid: boolean;
+  /** SHA-256 hash of the provided data (hex). */
+  hash: string;
+  /** SHA-256 hash stored on-chain (hex), or null if not found. */
+  anchoredHash: string | null;
+  /** Block height of the anchor transaction, or null if pending. */
+  blockHeight: number | null;
+  /** ISO timestamp of the anchor block, or null if pending. */
+  timestamp: string | null;
+}
+
+/** A single item in a batch anchor request. */
+export interface BatchAnchorItem {
+  /** Data to anchor. */
+  data: Buffer | Uint8Array;
+  /** Optional metadata for this item. */
+  metadata?: Record<string, string>;
+}
+
+/** Proof for a single item in a batch anchor. */
+export interface BatchAnchorProof {
+  /** Index of the item in the original batch. */
+  index: number;
+  /** SHA-256 hash of the item data (hex). */
+  hash: string;
+  /** Merkle inclusion proof path. */
+  proof: Array<{ hash: string; position: 'left' | 'right' }>;
+}
+
+/** Options for the batchAnchor() operation. */
+export interface BatchAnchorOptions {
+  /** Items to anchor as a batch. */
+  items: BatchAnchorItem[];
+  /** Optional metadata tags stored on the batch anchor transaction. */
+  metadata?: Record<string, string>;
+}
+
+/** Result of a batchAnchor() operation. */
+export interface BatchAnchorResult {
+  /** Arweave transaction ID of the batch integrity proof. */
+  txId: string;
+  /** Merkle root hash (hex). */
+  merkleRoot: string;
+  /** Individual proofs for each item. */
+  proofs: BatchAnchorProof[];
+  /** ISO timestamp when the batch anchor was created. */
+  timestamp: string;
+}
+
 /** Gateway info response. */
 export interface GatewayInfo {
   processId: string;

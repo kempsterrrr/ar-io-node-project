@@ -19,6 +19,14 @@ export type {
   SearchMatch,
   SearchResult,
   GatewayInfo,
+  AnchorOptions,
+  AnchorResult,
+  VerifyAnchorOptions,
+  VerifyAnchorResult,
+  BatchAnchorItem,
+  BatchAnchorOptions,
+  BatchAnchorProof,
+  BatchAnchorResult,
 } from './types.js';
 
 // Clients (for advanced/direct use)
@@ -31,6 +39,17 @@ export { VerifyClient } from './clients/verify.js';
 export { detectContentType, SUPPORTED_CONTENT_TYPES } from './c2pa/detect.js';
 export { buildTags } from './c2pa/tags.js';
 export { uploadToArweave } from './c2pa/upload.js';
+
+// Integrity primitives (Layer 1)
+export {
+  buildMerkleTree,
+  generateProof,
+  verifyProof,
+  sha256Hex,
+  type MerkleProof,
+  type MerkleProofStep,
+  type MerkleTreeResult,
+} from './integrity/merkle.js';
 
 // Re-export protocol constants
 export {

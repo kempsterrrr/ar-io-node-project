@@ -1,6 +1,10 @@
 import { resolveConfig, type ResolvedConfig } from './config.js';
 import type {
   AgenticWayConfig,
+  AnchorOptions,
+  AnchorResult,
+  BatchAnchorOptions,
+  BatchAnchorResult,
   GatewayInfo,
   QueryOptions,
   QueryResult,
@@ -10,6 +14,8 @@ import type {
   SearchResult,
   StoreOptions,
   StoreResult,
+  VerifyAnchorOptions,
+  VerifyAnchorResult,
   VerifyResult,
 } from './types.js';
 import { GatewayClient } from './clients/gateway.js';
@@ -22,6 +28,9 @@ import { executeVerify } from './operations/verify.js';
 import { executeSearch } from './operations/search.js';
 import { executeQuery } from './operations/query.js';
 import { executeResolve } from './operations/resolve.js';
+import { executeAnchor } from './operations/anchor.js';
+import { executeVerifyAnchor } from './operations/verify-anchor.js';
+import { executeBatchAnchor } from './operations/batch-anchor.js';
 
 /**
  * Main entry point for the @agenticway/sdk.
@@ -103,6 +112,36 @@ export class AgenticWay {
       throw new Error('AgenticWay.search(): trusthashUrl is required for search operations');
     }
     return executeSearch(this.manifests, options);
+  }
+
+  /**
+   * Anchor data on Arweave by storing its SHA-256 hash.
+   *
+   * Creates a permanent integrity proof that the data existed at anchor time.
+   * Requires `turboWallet` in config.
+   */
+  async anchor(options: AnchorOptions): Promise<AnchorResult> {
+    return executeAnchor(this.config, options);
+  }
+
+  /**
+   * Verify data against an existing integrity anchor on Arweave.
+   *
+   * Re-hashes the data and compares it against the hash stored on-chain.
+   */
+  async verifyAnchor(options: VerifyAnchorOptions): Promise<VerifyAnchorResult> {
+    return executeVerifyAnchor(this.gateway, options);
+  }
+
+  /**
+   * Anchor a batch of items using a Merkle tree.
+   *
+   * Builds a binary Merkle tree from item hashes, anchors the root on Arweave,
+   * and returns individual inclusion proofs for each item.
+   * Requires `turboWallet` in config.
+   */
+  async batchAnchor(options: BatchAnchorOptions): Promise<BatchAnchorResult> {
+    return executeBatchAnchor(this.config, options);
   }
 
   /** Get gateway metadata. */
