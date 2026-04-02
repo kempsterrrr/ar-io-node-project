@@ -150,16 +150,14 @@ The sidecar requires `C2PA-SoftBinding-Alg` and `C2PA-SoftBinding-Value` to have
 Configure the gateway to send webhooks for C2PA sidecar transactions:
 
 ```bash
-WEBHOOK_INDEX_FILTER='{"tags":[{"name":"Content-Type","value":"application/c2pa"},{"name":"Manifest-Type","value":"sidecar"},{"name":"C2PA-Manifest-Id"},{"name":"C2PA-SoftBinding-Alg","value":"org.ar-io.phash"},{"name":"C2PA-SoftBinding-Value"},{"name":"pHash"}]}'
+WEBHOOK_INDEX_FILTER='{"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"},{"name":"C2PA-Storage-Mode"},{"name":"C2PA-Manifest-ID"},{"name":"C2PA-Soft-Binding-Alg"},{"name":"C2PA-Soft-Binding-Value"}]}'
 WEBHOOK_TARGET_SERVERS="http://trusthash-sidecar:3003/webhook"
 ```
-
-> The sidecar accepts both `C2PA-SoftBinding-*` and `C2PA-Soft-Binding-*` naming families, and both `C2PA-Manifest-Id` and `C2PA-Manifest-ID`.
 
 If you also want the gateway to index these transactions for GraphQL queries:
 
 ```bash
-ANS104_INDEX_FILTER='{"tags":[{"name":"Content-Type","value":"application/c2pa"},{"name":"Manifest-Type","value":"sidecar"}]}'
+ANS104_INDEX_FILTER='{"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}'
 ```
 
 ## API Endpoints
