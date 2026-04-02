@@ -16,7 +16,7 @@ export interface UploadOptions {
   /** Gateway base URL for constructing view URLs (default: https://arweave.net). */
   gatewayUrl?: string;
   /**
-   * Custom upload service URL (e.g. a self-hosted ar-io-bundler).
+   * Custom upload service URL (e.g. https://ario.agenticway.io/bundler).
    * When set, data items are sent to this endpoint instead of the
    * default Turbo upload service, enabling optimistic caching and
    * immediate gateway availability before L1 confirmation.

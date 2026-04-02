@@ -12,8 +12,10 @@
 # them immediately available through the gateway via optimistic caching,
 # eliminating the wait for L1 confirmation before soft binding API queries.
 #
-# Upload to the bundler by setting UPLOAD_SERVICE_URL=http://localhost:3001
-# in turbo-c2pa demo scripts or SDK consumers.
+# Upload to the bundler by setting UPLOAD_SERVICE_URL to the public bundler URL
+# (e.g. https://ario.agenticway.io/bundler) in turbo-c2pa SDK consumers.
+# The bundler is exposed publicly via the Nginx reverse proxy (see
+# apps/gateway/nginx/ario-agenticway for the /bundler/ location block).
 #
 # Required env vars: ADMIN_API_KEY (shared with gateway for optical bridging)
 # =============================================================================
