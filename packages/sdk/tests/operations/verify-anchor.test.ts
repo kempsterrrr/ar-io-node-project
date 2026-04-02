@@ -20,7 +20,7 @@ describe('executeVerifyAnchor', () => {
     const data = Buffer.from('hello world');
     const hash = sha256Hex(data);
 
-    // Mock fetchTransactionTags
+    // Single GraphQL call: fetchTransactionInfo returns tags + block
     fetchSpy.mockResolvedValueOnce({
       ok: true,
       json: () =>
@@ -33,31 +33,7 @@ describe('executeVerifyAnchor', () => {
                 { name: 'Hash-Algorithm', value: 'SHA-256' },
                 { name: 'Data-Hash', value: hash },
               ],
-            },
-          },
-        }),
-    });
-
-    // Mock queryGraphQL
-    fetchSpy.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          data: {
-            transactions: {
-              edges: [
-                {
-                  cursor: 'c1',
-                  node: {
-                    id: 'anchor-tx-id',
-                    owner: { address: 'owner1' },
-                    tags: [{ name: 'Data-Protocol', value: 'AgenticWay-Integrity' }],
-                    block: { height: 1234, timestamp: 1700000000 },
-                    data: { size: '64' },
-                  },
-                },
-              ],
-              pageInfo: { hasNextPage: false },
+              block: { height: 1234, timestamp: 1700000000 },
             },
           },
         }),
@@ -73,6 +49,8 @@ describe('executeVerifyAnchor', () => {
     expect(result.anchoredHash).toBe(hash);
     expect(result.blockHeight).toBe(1234);
     expect(result.timestamp).toBeDefined();
+    // Only one fetch call (no separate queryGraphQL)
+    expect(fetchSpy).toHaveBeenCalledOnce();
   });
 
   it('returns valid=false when hashes do not match', async () => {
@@ -88,19 +66,7 @@ describe('executeVerifyAnchor', () => {
                 { name: 'Data-Protocol', value: 'AgenticWay-Integrity' },
                 { name: 'Data-Hash', value: 'different-hash' },
               ],
-            },
-          },
-        }),
-    });
-
-    fetchSpy.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          data: {
-            transactions: {
-              edges: [],
-              pageInfo: { hasNextPage: false },
+              block: null,
             },
           },
         }),
@@ -113,6 +79,8 @@ describe('executeVerifyAnchor', () => {
 
     expect(result.valid).toBe(false);
     expect(result.anchoredHash).toBe('different-hash');
+    expect(result.blockHeight).toBeNull();
+    expect(result.timestamp).toBeNull();
   });
 
   it('returns valid=false when transaction is not an integrity anchor', async () => {
@@ -123,6 +91,7 @@ describe('executeVerifyAnchor', () => {
           data: {
             transaction: {
               tags: [{ name: 'Content-Type', value: 'text/plain' }],
+              block: { height: 100, timestamp: 1600000000 },
             },
           },
         }),
