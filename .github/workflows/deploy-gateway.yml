@@ -110,6 +110,20 @@ jobs:
             nginx -t && systemctl reload nginx
           EOF
 
+      - name: Verify SSL certificate covers wildcard
+        run: |
+          ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
+            CERT_SANS=$(openssl x509 -in /etc/letsencrypt/live/ario.agenticway.io/fullchain.pem -noout -text | grep -A1 "Subject Alternative Name" | tail -1)
+            if echo "$CERT_SANS" | grep -q '\*.ario.agenticway.io'; then
+              echo "SSL certificate covers wildcard domain"
+            else
+              echo "WARNING: SSL certificate does NOT cover *.ario.agenticway.io"
+              echo "Current SANs: $CERT_SANS"
+              echo "Fix: certbot certonly --dns-cloudflare --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini -d ario.agenticway.io -d '*.ario.agenticway.io' --cert-name ario.agenticway.io --force-renewal"
+              exit 1
+            fi
+          EOF
+
       - name: Generate .env file
         run: |
           ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << EOF

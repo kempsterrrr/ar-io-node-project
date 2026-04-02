@@ -43,12 +43,29 @@
 # Check certificate status
 certbot certificates
 
+# Check certificate SANs (verify wildcard coverage)
+openssl x509 -in /etc/letsencrypt/live/ario.agenticway.io/fullchain.pem -noout -text | grep -A1 "Subject Alternative Name"
+
+# Issue/renew wildcard certificate (both base + wildcard required)
+certbot certonly \
+  --dns-cloudflare \
+  --dns-cloudflare-credentials /etc/letsencrypt/cloudflare.ini \
+  -d ario.agenticway.io \
+  -d "*.ario.agenticway.io" \
+  --cert-name ario.agenticway.io \
+  --force-renewal
+
+# Reload nginx after cert renewal
+systemctl reload nginx
+
 # Test renewal (dry run)
 certbot renew --dry-run
-
-# Force renewal
-certbot renew --force-renewal
 ```
+
+> **Important:** The certificate must include both `ario.agenticway.io` AND
+> `*.ario.agenticway.io` for ArNS subdomain routing to work. Without the
+> wildcard SAN, browsers will reject TLS connections to ArNS subdomains with
+> `ERR_SSL_VERSION_OR_CIPHER_MISMATCH`.
 
 ### Gateway Server Configuration
 
