@@ -14,6 +14,7 @@
 #
 # Required Secrets (continued):
 #   - ARNS_ROOT_HOST: Your domain name for ArNS routing
+#   - ADMIN_API_KEY: Shared key for gateway admin API and bundler optical bridging
 #
 # Optional Variables:
 #   - GRAPHQL_HOST: GraphQL endpoint (default: arweave.net)
@@ -34,6 +35,7 @@ on:
       - 'packages/verify-sidecar/docker-compose.verify.yaml'
       - 'packages/verify-sidecar/.env.docker'
       - 'packages/verify-sidecar/nginx.conf'
+      - 'docker-compose.bundler.yaml'
       - '.github/workflows/deploy-gateway.yml'
   workflow_dispatch:
     inputs:
@@ -100,6 +102,11 @@ jobs:
               packages/verify-sidecar/nginx.conf \
               ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:${{ env.DEPLOY_PATH }}/verify-sidecar/
 
+      - name: Copy bundler compose file
+        run: |
+          scp docker-compose.bundler.yaml \
+              ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }}:${{ env.DEPLOY_PATH }}/
+
       - name: Deploy nginx config
         run: |
           ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
@@ -148,6 +155,9 @@ jobs:
           ANS104_UNBUNDLE_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
           ANS104_UNBUNDLE_WORKERS=1
 
+          # Bundler / Optical Bridging
+          ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}
+
           # Envoy Peer EDS
           ENABLE_ARWEAVE_PEER_EDS=${{ vars.ENABLE_ARWEAVE_PEER_EDS || 'true' }}
 
@@ -192,6 +202,8 @@ jobs:
             cd ${{ env.DEPLOY_PATH }}
             # Pull gateway images only — sidecar is built locally
             docker compose -f docker-compose.yaml pull
+            # Pull bundler images (pre-built, not built locally)
+            docker compose -f docker-compose.bundler.yaml pull
           EOF
 
       - name: Build sidecar images
@@ -261,6 +273,7 @@ jobs:
             docker compose -f docker-compose.yaml \
               -f sidecar/docker-compose.sidecar.yaml \
               -f verify-sidecar/docker-compose.verify.yaml \
+              -f docker-compose.bundler.yaml \
               up -d
 
             # Force-recreate both proxies so nginx resolves the new sidecar IPs
@@ -269,6 +282,7 @@ jobs:
             docker compose -f docker-compose.yaml \
               -f sidecar/docker-compose.sidecar.yaml \
               -f verify-sidecar/docker-compose.verify.yaml \
+              -f docker-compose.bundler.yaml \
               up -d --force-recreate trusthash-proxy verify-proxy
           EOF
 
@@ -284,6 +298,7 @@ jobs:
             docker compose -f docker-compose.yaml \
               -f sidecar/docker-compose.sidecar.yaml \
               -f verify-sidecar/docker-compose.verify.yaml \
+              -f docker-compose.bundler.yaml \
               ps
 
             echo ""
@@ -293,6 +308,10 @@ jobs:
             echo ""
             echo "Verify sidecar health check:"
             curl -s http://localhost:4001/health || echo "Verify sidecar not responding yet (may still be starting)"
+
+            echo ""
+            echo "Bundler health check:"
+            curl -s http://localhost:3001/health || echo "Bundler not responding yet (may still be starting)"
           EOF
 
       - name: Deployment summary
