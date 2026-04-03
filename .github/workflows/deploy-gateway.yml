@@ -70,6 +70,12 @@ jobs:
           fi
           ssh-keyscan -H ${{ secrets.HETZNER_HOST }} >> ~/.ssh/known_hosts
 
+      - name: Validate optional secrets
+        run: |
+          if [ -z "${{ secrets.ADMIN_API_KEY }}" ]; then
+            echo "::warning::ADMIN_API_KEY secret is not set. Bundler optical bridging will not work."
+          fi
+
       - name: Create deployment directory
         run: |
           ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
