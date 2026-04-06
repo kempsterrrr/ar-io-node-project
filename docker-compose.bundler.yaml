@@ -21,8 +21,8 @@
 #
 # Prerequisite: bundler app images must be built locally before starting:
 #   git clone https://github.com/vilenarios/ar-io-bundler.git && cd ar-io-bundler
-#   docker build -t ar-io-bundler-upload:latest -f packages/upload-service/Dockerfile .
-#   docker build -t ar-io-bundler-payment:latest -f packages/payment-service/Dockerfile .
+#   docker build -t ar-io-bundler-upload:latest -f /path/to/ar-io-node-project/docker/bundler.Dockerfile .
+#   docker build -t ar-io-bundler-payment:latest -f /path/to/ar-io-node-project/docker/bundler.Dockerfile .
 # =============================================================================
 
 services:
@@ -65,7 +65,13 @@ services:
     networks:
       - ar-io-network
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:3001/health']
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('http').get('http://localhost:3001/health',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -96,7 +102,13 @@ services:
     networks:
       - ar-io-network
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:4001/health']
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('http').get('http://localhost:4001/health',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
