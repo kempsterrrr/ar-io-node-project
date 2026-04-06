@@ -238,13 +238,15 @@ jobs:
               git clone https://github.com/vilenarios/ar-io-bundler.git "\${BUNDLER_DIR}"
             fi
             cd "\${BUNDLER_DIR}"
-            git fetch --tags origin
-            git checkout --detach "origin/\${BUNDLER_REF}"
+            git fetch --tags origin "\${BUNDLER_REF}"
+            git checkout --detach FETCH_HEAD
             git clean -fd
             echo "Building bundler upload service..."
-            docker build -t ar-io-bundler-upload:latest -f packages/upload-service/Dockerfile .
+            docker build -t ar-io-bundler-upload:latest \
+              -f "\${REPO_DIR}/docker/bundler.Dockerfile" .
             echo "Building bundler payment service..."
-            docker build -t ar-io-bundler-payment:latest -f packages/payment-service/Dockerfile .
+            docker build -t ar-io-bundler-payment:latest \
+              -f "\${REPO_DIR}/docker/bundler.Dockerfile" .
           EOF
 
       - name: Write signing secrets to server
