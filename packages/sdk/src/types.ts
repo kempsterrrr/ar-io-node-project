@@ -1,5 +1,45 @@
 import type { Tag } from '@ar-io/c2pa-protocol';
 
+/** A gateway target for optimistic indexing fan-out. */
+export interface GatewayTarget {
+  /** Gateway base URL (e.g. 'https://gw2.example.com'). */
+  url: string;
+  /** ADMIN_API_KEY for this gateway's admin API. */
+  adminApiKey: string;
+}
+
+/** Per-gateway fan-out result. */
+export interface FanOutResult {
+  /** Gateway URL that was targeted. */
+  gateway: string;
+  /** Whether the fan-out succeeded. */
+  status: 'success' | 'error';
+  /** Error message if status is 'error'. */
+  message?: string;
+}
+
+/** Options for controlling fan-out behavior. */
+export interface FanOutOptions {
+  /** Timeout per gateway in milliseconds (default: 10000). */
+  timeoutMs?: number;
+  /** Number of retries per gateway on failure (default: 1). */
+  retries?: number;
+  /** Base delay between retries in milliseconds, doubled each attempt (default: 1000). */
+  retryDelayMs?: number;
+}
+
+/** Data item header fields sent to the gateway admin API. */
+export interface DataItemHeader {
+  id: string;
+  owner: string;
+  owner_address: string;
+  signature: string;
+  data_size: number;
+  tags?: { name: string; value: string }[];
+  target?: string;
+  anchor?: string;
+}
+
 /** Configuration for the AgenticWay SDK. */
 export interface AgenticWayConfig {
   /** Gateway base URL (e.g. 'https://ario.agenticway.io' or 'http://localhost:3000'). */
@@ -10,6 +50,8 @@ export interface AgenticWayConfig {
   turboWallet?: string;
   /** Request timeout in milliseconds (default: 15000). */
   timeoutMs?: number;
+  /** Gateways to receive data item headers after upload for optimistic indexing. */
+  optimisticIndexTargets?: GatewayTarget[];
 }
 
 /** Options for the store() operation. */
@@ -42,6 +84,8 @@ export interface StoreResult {
     /** base64url SHA-256 hash of the original asset. */
     assetHash: string;
   };
+  /** Per-gateway fan-out results (only present when optimisticIndexTargets configured). */
+  fanOutResults?: FanOutResult[];
 }
 
 /** Options for the retrieve() operation. */

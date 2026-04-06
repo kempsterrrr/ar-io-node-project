@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 import type { ResolvedConfig } from '../config.js';
-import type { StoreOptions, StoreResult } from '../types.js';
+import type { StoreOptions, StoreResult, FanOutResult } from '../types.js';
 import { GatewayClient } from '../clients/gateway.js';
 import { SigningOracleClient } from '../clients/signing-oracle.js';
 import { detectContentType } from '../c2pa/detect.js';
 import { uploadToArweave } from '../c2pa/upload.js';
+import { uploadAndFanOut } from '../fanout/upload-and-fanout.js';
 
 function sha256Base64Url(data: Buffer | Uint8Array): string {
   const hash = createHash('sha256').update(data).digest();
@@ -81,6 +82,22 @@ export async function executeStore(
         }
       }
 
+      if (config.optimisticIndexTargets.length > 0) {
+        const fanOutResult = await uploadAndFanOut({
+          data: result.signedBuffer,
+          tags: allTags,
+          ethPrivateKey: config.turboWallet,
+          gateways: config.optimisticIndexTargets,
+          gatewayUrl: config.gatewayUrl,
+        });
+        return {
+          txId: fanOutResult.txId,
+          viewUrl: fanOutResult.viewUrl,
+          provenance: { manifestId: result.manifestId, assetHash: result.assetHash },
+          fanOutResults: fanOutResult.fanOutResults,
+        };
+      }
+
       const uploadResult = await uploadToArweave({
         data: result.signedBuffer,
         tags: allTags,
@@ -110,6 +127,21 @@ export async function executeStore(
   }
 
   // Plain data upload (no C2PA)
+  if (config.optimisticIndexTargets.length > 0) {
+    const fanOutResult = await uploadAndFanOut({
+      data,
+      tags,
+      ethPrivateKey: config.turboWallet,
+      gateways: config.optimisticIndexTargets,
+      gatewayUrl: config.gatewayUrl,
+    });
+    return {
+      txId: fanOutResult.txId,
+      viewUrl: fanOutResult.viewUrl,
+      fanOutResults: fanOutResult.fanOutResults,
+    };
+  }
+
   const uploadResult = await uploadToArweave({
     data,
     tags,

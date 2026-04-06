@@ -27,7 +27,8 @@
   },
   "dependencies": {
     "@ar-io/c2pa-protocol": "workspace:*",
-    "@ardrive/turbo-sdk": "^1.41.0"
+    "@ardrive/turbo-sdk": "^1.41.0",
+    "@dha-team/arbundles": "^1.0.4"
   },
   "optionalDependencies": {
     "@contentauth/c2pa-node": "^0.5.4",

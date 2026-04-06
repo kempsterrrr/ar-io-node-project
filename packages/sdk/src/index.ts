@@ -27,6 +27,10 @@ export type {
   BatchAnchorOptions,
   BatchAnchorProof,
   BatchAnchorResult,
+  GatewayTarget,
+  FanOutResult,
+  FanOutOptions,
+  DataItemHeader,
 } from './types.js';
 
 // Clients (for advanced/direct use)
@@ -39,6 +43,10 @@ export { VerifyClient } from './clients/verify.js';
 export { detectContentType, SUPPORTED_CONTENT_TYPES } from './c2pa/detect.js';
 export { buildTags } from './c2pa/tags.js';
 export { uploadToArweave } from './c2pa/upload.js';
+
+// Fan-out (optimistic indexing)
+export { fanOutDataItem, uploadAndFanOut, createSignedDataItem } from './fanout/index.js';
+export type { UploadAndFanOutOptions, UploadAndFanOutResult } from './fanout/index.js';
 
 // Integrity primitives (Layer 1)
 export {

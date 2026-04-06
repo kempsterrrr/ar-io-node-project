@@ -1,4 +1,4 @@
-import type { AgenticWayConfig } from './types.js';
+import type { AgenticWayConfig, GatewayTarget } from './types.js';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
@@ -7,6 +7,7 @@ export interface ResolvedConfig {
   trusthashUrl: string | null;
   turboWallet: string | null;
   timeoutMs: number;
+  optimisticIndexTargets: GatewayTarget[];
 }
 
 export function resolveConfig(config: AgenticWayConfig): ResolvedConfig {
@@ -21,5 +22,6 @@ export function resolveConfig(config: AgenticWayConfig): ResolvedConfig {
     trusthashUrl: config.trusthashUrl?.replace(/\/+$/, '') ?? null,
     turboWallet: config.turboWallet ?? null,
     timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    optimisticIndexTargets: config.optimisticIndexTargets ?? [],
   };
 }
