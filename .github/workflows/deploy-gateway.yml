@@ -14,6 +14,7 @@
 #
 # Required Secrets (continued):
 #   - ARNS_ROOT_HOST: Your domain name for ArNS routing
+#   - ADMIN_API_KEY: Shared key for gateway admin API and bundler optical bridging
 #
 # Optional Variables:
 #   - GRAPHQL_HOST: GraphQL endpoint (default: arweave.net)
@@ -147,6 +148,9 @@ jobs:
           ANS104_INDEX_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
           ANS104_UNBUNDLE_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
           ANS104_UNBUNDLE_WORKERS=1
+
+          # Bundler / Optical Bridging
+          ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}
 
           # Envoy Peer EDS
           ENABLE_ARWEAVE_PEER_EDS=${{ vars.ENABLE_ARWEAVE_PEER_EDS || 'true' }}
