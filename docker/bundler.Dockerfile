@@ -1,7 +1,9 @@
 # Patched Dockerfile for ar-io-bundler services (upload-service, payment-service).
-# Based on upstream Dockerfiles with corepack fix for Yarn Berry compatibility.
+# Based on upstream Dockerfiles with corepack + workspace-tools fixes for Yarn Berry.
 # The upstream images use node:18 which ships Yarn Classic 1.x, but the bundler
 # requires Yarn >=3.0.0 ("packageManager": "yarn@3.6.0" in package.json).
+# Additionally, Yarn 3.x needs the workspace-tools plugin for `workspaces foreach`
+# and `workspaces focus` commands used by the build and production pruning steps.
 
 ARG NODE_VERSION=18.17.0
 ARG NODE_VERSION_SHORT=18
@@ -11,6 +13,7 @@ FROM node:${NODE_VERSION}-bullseye-slim AS builder
 WORKDIR /usr/src/app
 COPY . .
 RUN corepack enable
+RUN yarn plugin import workspace-tools
 RUN yarn && yarn build
 
 RUN rm -rf node_modules && yarn workspaces focus --production
