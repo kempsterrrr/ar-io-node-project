@@ -18,6 +18,11 @@
 # apps/gateway/nginx/ario-agenticway for the /bundler/ location block).
 #
 # Required env vars: ADMIN_API_KEY (shared with gateway for optical bridging)
+#
+# Prerequisite: bundler app images must be built locally before starting:
+#   git clone https://github.com/vilenarios/ar-io-bundler.git && cd ar-io-bundler
+#   docker build -t ar-io-bundler-upload:latest -f packages/upload-service/Dockerfile .
+#   docker build -t ar-io-bundler-payment:latest -f packages/payment-service/Dockerfile .
 # =============================================================================
 
 services:
