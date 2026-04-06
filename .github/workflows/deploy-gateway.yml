@@ -37,6 +37,7 @@ on:
       - 'packages/verify-sidecar/.env.docker'
       - 'packages/verify-sidecar/nginx.conf'
       - 'docker-compose.bundler.yaml'
+      - 'docker/bundler.Dockerfile'
       - '.github/workflows/deploy-gateway.yml'
   workflow_dispatch:
     inputs:
@@ -163,11 +164,8 @@ jobs:
           ANS104_UNBUNDLE_WORKERS=1
 
           # Bundler / Optical Bridging
-<<<<<<< HEAD
-=======
           BUNDLER_UPLOAD_IMAGE=ar-io-bundler-upload:latest
           BUNDLER_PAYMENT_IMAGE=ar-io-bundler-payment:latest
->>>>>>> origin/main
           ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}
 
           # Envoy Peer EDS
