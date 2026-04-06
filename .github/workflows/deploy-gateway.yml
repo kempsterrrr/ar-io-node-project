@@ -200,8 +200,10 @@ jobs:
         run: |
           ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
             cd ${{ env.DEPLOY_PATH }}
-            # Pull gateway images only — sidecar is built locally
-            docker compose -f docker-compose.yaml pull
+            # Pull gateway + bundler images (sidecars are built locally)
+            docker compose -f docker-compose.yaml \
+              -f docker-compose.bundler.yaml \
+              pull
           EOF
 
       - name: Build sidecar images
