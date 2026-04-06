@@ -26,7 +26,7 @@ services:
   # ---------------------------------------------------------------------------
   bundler-upload:
     image: ghcr.io/vilenarios/ar-io-bundler:${BUNDLER_IMAGE_TAG:-latest}
-    restart: 'no'
+    restart: unless-stopped
     ports:
       - '${BUNDLER_UPLOAD_PORT:-3001}:3001'
     environment:
@@ -71,7 +71,7 @@ services:
   # ---------------------------------------------------------------------------
   bundler-payment:
     image: ghcr.io/vilenarios/ar-io-bundler:${BUNDLER_IMAGE_TAG:-latest}
-    restart: 'no'
+    restart: unless-stopped
     ports:
       - '${BUNDLER_PAYMENT_PORT:-4002}:4001'
     environment:
@@ -102,7 +102,7 @@ services:
   # ---------------------------------------------------------------------------
   bundler-postgres:
     image: postgres:16-alpine
-    restart: 'no'
+    restart: unless-stopped
     environment:
       - POSTGRES_USER=${BUNDLER_POSTGRES_USER:-bundler}
       - POSTGRES_PASSWORD=${BUNDLER_POSTGRES_PASSWORD:-bundler}
@@ -122,7 +122,7 @@ services:
   # ---------------------------------------------------------------------------
   bundler-redis-cache:
     image: redis:7-alpine
-    restart: 'no'
+    restart: unless-stopped
     networks:
       - ar-io-network
     healthcheck:
@@ -136,7 +136,7 @@ services:
   # ---------------------------------------------------------------------------
   bundler-redis-queue:
     image: redis:7-alpine
-    restart: 'no'
+    restart: unless-stopped
     networks:
       - ar-io-network
     healthcheck:
@@ -152,7 +152,7 @@ services:
   # ---------------------------------------------------------------------------
   bundler-minio:
     image: minio/minio:latest
-    restart: 'no'
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     ports:
       - '${BUNDLER_MINIO_CONSOLE_PORT:-9001}:9001'
