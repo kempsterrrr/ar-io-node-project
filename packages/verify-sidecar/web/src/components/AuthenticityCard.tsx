@@ -93,7 +93,9 @@ export default function AuthenticityCard({ authenticity, owner }: Props) {
             <div>
               <p className="font-semibold text-ario-black/60">Not yet verified</p>
               <p className="text-xs text-ario-black/40">
-                The gateway is still indexing this data. Try re-verifying in a moment.
+                {authenticity.signatureSkipReason?.includes('too large')
+                  ? authenticity.signatureSkipReason
+                  : 'The gateway is still indexing this data. Try re-verifying in a moment.'}
               </p>
             </div>
           </div>

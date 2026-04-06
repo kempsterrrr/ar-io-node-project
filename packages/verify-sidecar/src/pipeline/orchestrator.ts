@@ -56,6 +56,7 @@ export async function runVerification(request: VerifyRequest): Promise<Verificat
     targetB64Url: metadataResult.target,
     rawTags: metadataResult.rawTags,
     rawDataBytes: integrityResult.rawDataBytes,
+    rawContentLength: integrityResult.rawContentLength,
     signatureType: integrityResult.ownerFromHeaders.signatureType,
     isL1Transaction,
     format: metadataResult.format,
@@ -138,6 +139,7 @@ interface SigVerifyInput {
   targetB64Url: string;
   rawTags: Array<{ name: string; value: string }>;
   rawDataBytes: Buffer | null;
+  rawContentLength: number | null;
   signatureType: number | null;
   isL1Transaction: boolean;
   format: number;
@@ -187,9 +189,13 @@ function attemptSignatureVerification(input: SigVerifyInput): {
   try {
     let valid: boolean;
 
+    const sizeSkipMsg = rawContentLength && rawContentLength > 100 * 1024 * 1024
+      ? `File too large for verification (${(rawContentLength / 1024 / 1024).toFixed(0)} MB). Maximum supported size is 100 MB.`
+      : null;
+
     if (isL1Transaction) {
       if (format === 1 && !rawDataBytes) {
-        return { signatureValid: null, signatureSkipReason: 'Format 1 requires raw data' };
+        return { signatureValid: null, signatureSkipReason: sizeSkipMsg ?? 'Raw data unavailable' };
       }
       valid = verifyTransactionSignature({
         format,
@@ -206,7 +212,7 @@ function attemptSignatureVerification(input: SigVerifyInput): {
       });
     } else {
       if (!rawDataBytes) {
-        return { signatureValid: null, signatureSkipReason: 'Raw data unavailable' };
+        return { signatureValid: null, signatureSkipReason: sizeSkipMsg ?? 'Raw data unavailable' };
       }
       const sigType = signatureType ?? 1;
       if (sigType !== 1) {

@@ -38,17 +38,33 @@ export default function VerifyReport() {
     }
   };
 
+  const isServiceDown = error && (error.includes('fetch') || error.includes('network') || error.includes('502') || error.includes('503') || error.includes('Failed'));
+
   if (error) {
     return (
-      <div className="mx-auto max-w-2xl">
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-8 shadow-sm">
-          <h2 className="font-heading text-lg font-extrabold tracking-tight text-red-800">
-            Verification Not Found
+      <div className="mx-auto max-w-2xl px-4 py-8">
+        <div className={`rounded-2xl border p-8 shadow-sm ${isServiceDown ? 'border-ario-border bg-ario-lavender/30' : 'border-red-200 bg-red-50'}`}>
+          <h2 className={`font-heading text-lg font-extrabold tracking-tight ${isServiceDown ? 'text-ario-black/70' : 'text-red-800'}`}>
+            {isServiceDown ? 'Service Unavailable' : 'Verification Not Found'}
           </h2>
-          <p className="mt-2 text-red-700">{error}</p>
-          <Link to="/" className="mt-4 inline-block text-ario-primary hover:underline">
-            Verify another transaction
-          </Link>
+          <p className={`mt-2 ${isServiceDown ? 'text-ario-black/50' : 'text-red-700'}`}>
+            {isServiceDown
+              ? 'The verification service is temporarily unavailable. Please try again in a moment.'
+              : error}
+          </p>
+          <div className="mt-4 flex gap-3">
+            {isServiceDown && (
+              <button
+                onClick={() => { setError(null); window.location.reload(); }}
+                className="rounded-full bg-ario-black px-4 py-2 text-xs font-semibold text-ario-card transition-opacity hover:opacity-90"
+              >
+                Retry
+              </button>
+            )}
+            <Link to="/" className="rounded-full border border-ario-border bg-white/70 px-4 py-2 text-xs font-semibold text-ario-black transition-colors hover:bg-white">
+              Verify another transaction
+            </Link>
+          </div>
         </div>
       </div>
     );

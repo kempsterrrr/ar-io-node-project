@@ -52,7 +52,12 @@ export default function VerifyInput() {
       const result = await verifyTransaction(id);
       navigate(`/report/${result.verificationId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed');
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('fetch') || msg.includes('network') || msg.includes('502') || msg.includes('503') || msg.includes('Failed')) {
+        setError('The verification service is temporarily unavailable. Please try again in a moment.');
+      } else {
+        setError(msg || 'Verification failed');
+      }
       setLoading(false);
     } finally {
       if (timerRef.current) clearInterval(timerRef.current);

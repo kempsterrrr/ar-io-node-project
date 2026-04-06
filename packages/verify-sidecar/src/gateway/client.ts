@@ -11,8 +11,8 @@ import type {
 const baseUrl = config.GATEWAY_URL.replace(/\/$/, '');
 const timeout = config.GATEWAY_TIMEOUT_MS;
 
-/** Max bytes to download for independent hash verification (10 MB) */
-const MAX_RAW_DOWNLOAD_BYTES = 10 * 1024 * 1024;
+/** Max bytes to download for verification (100 MB) */
+const MAX_RAW_DOWNLOAD_BYTES = 100 * 1024 * 1024;
 
 /** Retry config for waiting on gateway indexing — keep total under 60s for proxy timeouts */
 const INDEX_RETRY_DELAY_MS = 10_000;

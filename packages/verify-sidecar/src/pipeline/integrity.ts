@@ -137,8 +137,8 @@ export async function checkIntegrity(txId: string): Promise<IntegrityResult> {
       { txId, gatewayHash: headers.digest, independentHash, hasDigest },
       'Independent hash computed'
     );
-  } else if (headers.contentLength && headers.contentLength > 10 * 1024 * 1024) {
-    independentSkipReason = `Data too large (${(headers.contentLength / 1024 / 1024).toFixed(1)} MB, limit 10 MB)`;
+  } else if (headers.contentLength && headers.contentLength > 100 * 1024 * 1024) {
+    independentSkipReason = `File too large for verification (${(headers.contentLength / 1024 / 1024).toFixed(0)} MB). Maximum supported size is 100 MB.`;
   } else {
     independentSkipReason = 'Raw data unavailable for download';
   }
