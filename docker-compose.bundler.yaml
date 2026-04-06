@@ -18,6 +18,11 @@
 # apps/gateway/nginx/ario-agenticway for the /bundler/ location block).
 #
 # Required env vars: ADMIN_API_KEY (shared with gateway for optical bridging)
+#
+# Prerequisite: bundler app images must be built locally before starting:
+#   git clone https://github.com/vilenarios/ar-io-bundler.git && cd ar-io-bundler
+#   docker build -t ar-io-bundler-upload:latest -f /path/to/ar-io-node-project/docker/bundler.Dockerfile .
+#   docker build -t ar-io-bundler-payment:latest -f /path/to/ar-io-node-project/docker/bundler.Dockerfile .
 # =============================================================================
 
 services:
@@ -25,7 +30,7 @@ services:
   # ar-io-bundler upload service (receives data items)
   # ---------------------------------------------------------------------------
   bundler-upload:
-    image: ghcr.io/vilenarios/ar-io-bundler:${BUNDLER_IMAGE_TAG:-latest}
+    image: ${BUNDLER_UPLOAD_IMAGE:-ar-io-bundler-upload:latest}
     restart: unless-stopped
     ports:
       - '${BUNDLER_UPLOAD_PORT:-3001}:3001'
@@ -60,7 +65,13 @@ services:
     networks:
       - ar-io-network
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:3001/health']
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('http').get('http://localhost:3001/health',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -70,7 +81,7 @@ services:
   # ar-io-bundler payment service (pricing + x402)
   # ---------------------------------------------------------------------------
   bundler-payment:
-    image: ghcr.io/vilenarios/ar-io-bundler:${BUNDLER_IMAGE_TAG:-latest}
+    image: ${BUNDLER_PAYMENT_IMAGE:-ar-io-bundler-payment:latest}
     restart: unless-stopped
     ports:
       - '${BUNDLER_PAYMENT_PORT:-4002}:4001'
@@ -91,7 +102,13 @@ services:
     networks:
       - ar-io-network
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:4001/health']
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('http').get('http://localhost:4001/health',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
