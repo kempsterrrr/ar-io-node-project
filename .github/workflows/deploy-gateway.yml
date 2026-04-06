@@ -19,7 +19,7 @@
 # Optional Variables:
 #   - GRAPHQL_HOST: GraphQL endpoint (default: arweave.net)
 #   - START_HEIGHT: Starting block height for indexing
-#   - BUNDLER_REF: Git ref for ar-io-bundler builds (default: master)
+#   - BUNDLER_REF: Git ref for ar-io-bundler builds (default: 74fc589)
 # =============================================================================
 
 name: Deploy Gateway
@@ -238,13 +238,14 @@ jobs:
             docker build -t verify-sidecar:latest -f packages/verify-sidecar/Dockerfile .
 
             # Build bundler images from upstream repo
-            BUNDLER_REF="${{ vars.BUNDLER_REF || 'master' }}"
+            BUNDLER_REF="${{ vars.BUNDLER_REF || '74fc589' }}"
             BUNDLER_DIR="\${HOME}/ar-io-bundler"
             if [ ! -d "\${BUNDLER_DIR}/.git" ]; then
               echo "Cloning bundler repository..."
               git clone https://github.com/vilenarios/ar-io-bundler.git "\${BUNDLER_DIR}"
             fi
             cd "\${BUNDLER_DIR}"
+            git remote set-url origin https://github.com/vilenarios/ar-io-bundler.git
             git fetch --tags origin "\${BUNDLER_REF}"
             git checkout --detach FETCH_HEAD
             git clean -fd
