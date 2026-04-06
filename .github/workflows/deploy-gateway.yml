@@ -19,6 +19,7 @@
 # Optional Variables:
 #   - GRAPHQL_HOST: GraphQL endpoint (default: arweave.net)
 #   - START_HEIGHT: Starting block height for indexing
+#   - BUNDLER_REF: Git ref for ar-io-bundler builds (default: master)
 # =============================================================================
 
 name: Deploy Gateway
@@ -156,6 +157,8 @@ jobs:
           ANS104_UNBUNDLE_WORKERS=1
 
           # Bundler / Optical Bridging
+          BUNDLER_UPLOAD_IMAGE=ar-io-bundler-upload:latest
+          BUNDLER_PAYMENT_IMAGE=ar-io-bundler-payment:latest
           ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}
 
           # Envoy Peer EDS
@@ -200,10 +203,12 @@ jobs:
         run: |
           ssh ${{ secrets.HETZNER_USER }}@${{ secrets.HETZNER_HOST }} << 'EOF'
             cd ${{ env.DEPLOY_PATH }}
-            # Pull gateway images only — sidecar is built locally
+            # Pull gateway + bundler infrastructure images
+            # (sidecars and bundler app images are built locally)
             docker compose -f docker-compose.yaml pull
-            # Pull bundler images (pre-built, not built locally)
-            docker compose -f docker-compose.bundler.yaml pull
+            docker compose -f docker-compose.yaml \
+              -f docker-compose.bundler.yaml \
+              pull bundler-postgres bundler-redis-cache bundler-redis-queue bundler-minio
           EOF
 
       - name: Build sidecar images
@@ -224,6 +229,22 @@ jobs:
             docker build -t trusthash-sidecar:latest -f packages/trusthash-sidecar/Dockerfile .
             echo "Building verify sidecar..."
             docker build -t verify-sidecar:latest -f packages/verify-sidecar/Dockerfile .
+
+            # Build bundler images from upstream repo
+            BUNDLER_REF="${{ vars.BUNDLER_REF || 'master' }}"
+            BUNDLER_DIR="\${HOME}/ar-io-bundler"
+            if [ ! -d "\${BUNDLER_DIR}/.git" ]; then
+              echo "Cloning bundler repository..."
+              git clone https://github.com/vilenarios/ar-io-bundler.git "\${BUNDLER_DIR}"
+            fi
+            cd "\${BUNDLER_DIR}"
+            git fetch --tags origin
+            git checkout --detach "origin/\${BUNDLER_REF}"
+            git clean -fd
+            echo "Building bundler upload service..."
+            docker build -t ar-io-bundler-upload:latest -f packages/upload-service/Dockerfile .
+            echo "Building bundler payment service..."
+            docker build -t ar-io-bundler-payment:latest -f packages/payment-service/Dockerfile .
           EOF
 
       - name: Write signing secrets to server
@@ -269,6 +290,8 @@ jobs:
             export VERIFY_SIDECAR_ENV_FILE=./verify-sidecar/.env.docker
             export VERIFY_SIDECAR_DATA_DIR=./verify-sidecar/data
             export VERIFY_SIDECAR_NGINX_CONF=./verify-sidecar/nginx.conf
+            export BUNDLER_UPLOAD_IMAGE=ar-io-bundler-upload:latest
+            export BUNDLER_PAYMENT_IMAGE=ar-io-bundler-payment:latest
 
             docker compose -f docker-compose.yaml \
               -f sidecar/docker-compose.sidecar.yaml \
