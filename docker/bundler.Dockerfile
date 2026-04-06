@@ -11,6 +11,7 @@ FROM node:${NODE_VERSION}-bullseye-slim AS builder
 WORKDIR /usr/src/app
 COPY . .
 RUN corepack enable
+RUN yarn plugin import workspace-tools
 RUN yarn && yarn build
 
 RUN rm -rf node_modules && yarn workspaces focus --production
