@@ -154,6 +154,12 @@ jobs:
           # Production Settings
           LOG_LEVEL=${{ vars.LOG_LEVEL || 'info' }}
           TRUSTED_NODE_URL=${{ vars.TRUSTED_NODE_URL || 'https://arweave.net' }}
+
+          # Admin API (enables queue-data-item for optimistic indexing)
+          ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}
+
+          # Data Availability (fetch from Turbo cache + arweave.net on-demand)
+          TRUSTED_GATEWAYS_URLS={"https://turbo-gateway.com": 2, "https://arweave.net": 1}
           ENVFILE
           EOF
 
