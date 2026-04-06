@@ -55,10 +55,10 @@ export default function AuthenticityCard({ authenticity, owner }: Props) {
       ) : authenticity.status === 'hash_verified' ? (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <span className="text-xl text-blue-600">&#10003;</span>
+            <span className="text-xl text-ario-primary">&#10003;</span>
             <div>
-              <p className="font-semibold text-blue-700">Data fingerprint confirmed</p>
-              <p className="text-xs text-blue-600">
+              <p className="font-semibold text-ario-primary">Data fingerprint confirmed</p>
+              <p className="text-xs text-ario-primary/70">
                 The data fingerprint was independently computed. Signature could not be checked.
               </p>
             </div>
@@ -89,10 +89,10 @@ export default function AuthenticityCard({ authenticity, owner }: Props) {
       ) : (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <span className="text-xl text-amber-500">&#9888;</span>
+            <span className="text-xl text-ario-black/30">&#9675;</span>
             <div>
-              <p className="font-semibold text-amber-700">Not yet verified</p>
-              <p className="text-xs text-amber-600">
+              <p className="font-semibold text-ario-black/60">Not yet verified</p>
+              <p className="text-xs text-ario-black/40">
                 The gateway is still indexing this data. Try re-verifying in a moment.
               </p>
             </div>

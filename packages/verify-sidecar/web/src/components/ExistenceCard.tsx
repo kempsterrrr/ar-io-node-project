@@ -29,7 +29,7 @@ export default function ExistenceCard({ existence, txId }: Props) {
     existence.status === 'confirmed'
       ? 'text-green-600'
       : existence.status === 'pending'
-        ? 'text-amber-600'
+        ? 'text-ario-primary/70'
         : 'text-red-600';
 
   const statusIcon =

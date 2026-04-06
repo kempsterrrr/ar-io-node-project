@@ -22,7 +22,7 @@ const LEVEL_LABELS: Record<number, string> = {
 
 const LEVEL_COLORS: Record<number, ReturnType<typeof rgb>> = {
   3: rgb(0.0, 0.5, 0.0),
-  2: rgb(0.0, 0.4, 0.6),
+  2: rgb(0.33, 0.15, 0.78),
   1: rgb(0.7, 0.5, 0.0),
 };
 

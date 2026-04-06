@@ -45,9 +45,9 @@ function getChecks(r: VerificationResult): { label: string; status: Status }[] {
 
 const PILL_STYLES: Record<Status, string> = {
   pass: 'bg-white/80 text-green-700',
-  partial: 'bg-white/80 text-amber-700',
+  partial: 'bg-ario-primary/10 text-ario-primary',
   fail: 'bg-white/80 text-red-700',
-  unavailable: 'bg-white/40 text-ario-black/30',
+  unavailable: 'bg-ario-black/5 text-ario-black/25',
 };
 
 const PILL_ICONS: Record<Status, string> = {
@@ -87,22 +87,22 @@ export default function VerificationHero({ result, onReverify, reverifying }: Pr
       desc: 'This data is authentic and untampered. Digital signature confirmed.',
     },
     2: {
-      border: 'border-blue-200',
-      bg: 'bg-blue-50',
+      border: 'border-ario-primary/20',
+      bg: 'bg-ario-lavender/40',
       icon: '\u2713',
-      iconColor: 'text-blue-600',
-      headColor: 'text-blue-800',
-      textColor: 'text-blue-700',
+      iconColor: 'text-ario-primary',
+      headColor: 'text-ario-primary',
+      textColor: 'text-ario-primary/70',
       title: 'Partially Verified',
       desc: 'Data fingerprint confirmed, but the digital signature could not be checked.',
     },
     1: {
-      border: 'border-amber-200',
-      bg: 'bg-amber-50',
-      icon: '\u26A0',
-      iconColor: 'text-amber-500',
-      headColor: 'text-amber-800',
-      textColor: 'text-amber-700',
+      border: 'border-ario-border',
+      bg: 'bg-ario-lavender/30',
+      icon: '\u25CB',
+      iconColor: 'text-ario-black/40',
+      headColor: 'text-ario-black/70',
+      textColor: 'text-ario-black/50',
       title: 'Pending',
       desc: 'Data found on the network. Full verification will be available once the gateway finishes indexing.',
     },

@@ -83,13 +83,13 @@ function buildSteps(result: VerificationResult): Step[] {
 
 const STATUS_DOT: Record<Step['status'], string> = {
   complete: 'bg-ario-primary',
-  partial: 'bg-amber-400',
+  partial: 'bg-ario-primary/60',
   unavailable: 'bg-ario-black/20',
 };
 
 const STATUS_LINE: Record<Step['status'], string> = {
   complete: 'bg-ario-primary',
-  partial: 'bg-amber-300',
+  partial: 'bg-ario-primary/30',
   unavailable: 'bg-ario-black/10',
 };
 
