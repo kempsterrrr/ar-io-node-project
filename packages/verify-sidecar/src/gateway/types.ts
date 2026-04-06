@@ -61,6 +61,10 @@ export interface RawDataHeaders {
   signatureType: number | null;
   anchor: string | null;
 
+  // Tags parsed from x-arweave-tag-* headers (decoded name/value pairs)
+  tags: Array<{ name: string; value: string }>;
+  tagCount: number | null;
+
   // Gateway trust assessment headers
   arIoVerified: boolean | null;
   arIoStable: boolean | null;

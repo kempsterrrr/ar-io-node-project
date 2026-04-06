@@ -114,12 +114,39 @@ const EMPTY_HEADERS: RawDataHeaders = {
   ownerAddress: null,
   signatureType: null,
   anchor: null,
+  tags: [],
+  tagCount: null,
   arIoVerified: null,
   arIoStable: null,
   arIoTrusted: null,
   arIoHops: null,
   arIoDataId: null,
 };
+
+/**
+ * Parse x-arweave-tag-* headers into tag name/value pairs.
+ * Header format: x-arweave-tag-{lowercased-hyphenated-name}: {value}
+ * We reconstruct the original tag name by converting hyphens back to hyphens
+ * and title-casing each word (matching Arweave convention).
+ */
+function parseTagHeaders(headers: Headers): Array<{ name: string; value: string }> {
+  const tags: Array<{ name: string; value: string }> = [];
+  const prefix = 'x-arweave-tag-';
+
+  headers.forEach((value, key) => {
+    if (key.startsWith(prefix) && key !== 'x-arweave-tag-count') {
+      // Convert header key to tag name: x-arweave-tag-content-type → Content-Type
+      const rawName = key.slice(prefix.length);
+      const tagName = rawName
+        .split('-')
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join('-');
+      tags.push({ name: tagName, value });
+    }
+  });
+
+  return tags;
+}
 
 export async function headRawData(txId: string): Promise<RawDataHeaders | null> {
   try {
@@ -144,6 +171,9 @@ export async function headRawData(txId: string): Promise<RawDataHeaders | null> 
       ownerAddress: h.get('x-arweave-owner-address'),
       signatureType: parseIntHeader(h.get('x-arweave-signature-type')),
       anchor: h.get('x-arweave-anchor'),
+
+      tags: parseTagHeaders(h),
+      tagCount: parseIntHeader(h.get('x-arweave-tag-count')),
 
       arIoVerified: parseBoolHeader(h.get('x-ar-io-verified')),
       arIoStable: parseBoolHeader(h.get('x-ar-io-stable')),

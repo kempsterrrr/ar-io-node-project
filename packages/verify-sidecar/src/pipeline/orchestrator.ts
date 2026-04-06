@@ -1,6 +1,10 @@
 import { nanoid } from 'nanoid';
 import { logger } from '../utils/logger.js';
-import { verifyDataItemSignature, verifyTransactionSignature } from '../utils/crypto.js';
+import {
+  verifyDataItemSignature,
+  verifyTransactionSignature,
+  bufferToBase64Url,
+} from '../utils/crypto.js';
 import { fetchMetadata, fetchBlockInfo } from './metadata.js';
 import { checkIntegrity, type IntegrityResult } from './integrity.js';
 import type { VerificationResult, VerifyRequest } from '../types.js';
@@ -49,12 +53,22 @@ export async function runVerification(request: VerifyRequest): Promise<Verificat
   const isL1Transaction =
     metadataResult.format >= 1 && (metadataResult.reward !== '0' || metadataResult.dataRoot !== '');
 
+  // Use /tx/ tags if available, otherwise reconstruct from /raw/ headers.
+  // /tx/ tags are base64url-encoded raw bytes; header tags are decoded UTF-8 strings.
+  const rawTags =
+    metadataResult.rawTags.length > 0
+      ? metadataResult.rawTags
+      : integrityResult.tagsFromHeaders.map((t) => ({
+          name: bufferToBase64Url(Buffer.from(t.name, 'utf-8')),
+          value: bufferToBase64Url(Buffer.from(t.value, 'utf-8')),
+        }));
+
   const sigResult = attemptSignatureVerification({
     signatureB64Url: integrityResult.signatureB64Url ?? (metadataResult.signatureFromTx || null),
     ownerB64Url: integrityResult.ownerFromHeaders.publicKey ?? metadataResult.owner.publicKey,
     anchorB64Url: integrityResult.anchorB64Url ?? metadataResult.anchor,
     targetB64Url: metadataResult.target,
-    rawTags: metadataResult.rawTags,
+    rawTags,
     rawDataBytes: integrityResult.rawDataBytes,
     rawContentLength: integrityResult.rawContentLength,
     signatureType: integrityResult.ownerFromHeaders.signatureType,
@@ -159,6 +173,7 @@ function attemptSignatureVerification(input: SigVerifyInput): {
     signatureB64Url,
     ownerB64Url,
     rawDataBytes,
+    rawContentLength,
     signatureType,
     isL1Transaction,
     format,
@@ -257,11 +272,48 @@ function buildPartialResult(
   ir: IntegrityResult
 ): VerificationResult {
   const hashAvailable = ir.integrity.independentlyVerified;
+
+  // Attempt signature verification using header-derived tags
+  const headerTagsB64 = ir.tagsFromHeaders.map((t) => ({
+    name: bufferToBase64Url(Buffer.from(t.name, 'utf-8')),
+    value: bufferToBase64Url(Buffer.from(t.value, 'utf-8')),
+  }));
+
+  const sigResult =
+    ir.signatureB64Url && ir.ownerFromHeaders.publicKey && ir.rawDataBytes && headerTagsB64.length > 0
+      ? attemptSignatureVerification({
+          signatureB64Url: ir.signatureB64Url,
+          ownerB64Url: ir.ownerFromHeaders.publicKey,
+          anchorB64Url: ir.anchorB64Url ?? '',
+          targetB64Url: '',
+          rawTags: headerTagsB64,
+          rawDataBytes: ir.rawDataBytes,
+          rawContentLength: ir.rawContentLength,
+          signatureType: ir.ownerFromHeaders.signatureType,
+          isL1Transaction: false, // partial results are always data items
+          format: 1,
+          quantity: '0',
+          reward: '0',
+          dataRoot: '',
+          dataSize: '0',
+          txId,
+          verificationId,
+        })
+      : { signatureValid: null, signatureSkipReason: 'Metadata not yet indexed' };
+
+  const signaturePassed = sigResult.signatureValid === true;
+  const level: 1 | 2 | 3 = signaturePassed ? 3 : hashAvailable ? 2 : 1;
+  const authenticityStatus: VerificationResult['authenticity']['status'] = signaturePassed
+    ? 'signature_verified'
+    : hashAvailable
+      ? 'hash_verified'
+      : 'unverified';
+
   return {
     verificationId,
     timestamp,
     txId,
-    level: hashAvailable ? 2 : 1,
+    level,
     existence: {
       status: 'pending',
       blockHeight: null,
@@ -270,9 +322,9 @@ function buildPartialResult(
       confirmations: null,
     },
     authenticity: {
-      status: hashAvailable ? 'hash_verified' : 'unverified',
-      signatureValid: null,
-      signatureSkipReason: 'Metadata not yet indexed',
+      status: authenticityStatus,
+      signatureValid: sigResult.signatureValid,
+      signatureSkipReason: sigResult.signatureSkipReason,
       dataHash: ir.integrity.independentHash,
       gatewayHash: ir.integrity.hash,
       hashMatch: ir.integrity.match,
@@ -282,7 +334,7 @@ function buildPartialResult(
       publicKey: ir.ownerFromHeaders.publicKey,
       addressVerified: ir.ownerFromHeaders.addressVerified,
     },
-    metadata: { dataSize: ir.rawContentLength, contentType: ir.rawContentType, tags: [] },
+    metadata: { dataSize: ir.rawContentLength, contentType: ir.rawContentType, tags: ir.tagsFromHeaders },
     bundle: ir.bundle,
     gatewayAssessment: {
       verified: ir.gatewayAssessment.verified,

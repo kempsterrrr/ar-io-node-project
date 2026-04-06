@@ -24,6 +24,8 @@ export interface IntegrityResult {
   signatureB64Url: string | null;
   /** Anchor from gateway headers (base64url) */
   anchorB64Url: string | null;
+  /** Tags parsed from x-arweave-tag-* headers (decoded, not base64url) */
+  tagsFromHeaders: Array<{ name: string; value: string }>;
 }
 
 const EMPTY_OWNER = {
@@ -71,6 +73,7 @@ export async function checkIntegrity(txId: string): Promise<IntegrityResult> {
       rawDataBytes: null,
       signatureB64Url: null,
       anchorB64Url: null,
+      tagsFromHeaders: [],
     };
   }
 
@@ -170,5 +173,6 @@ export async function checkIntegrity(txId: string): Promise<IntegrityResult> {
     rawDataBytes: rawData,
     signatureB64Url: headers.signature,
     anchorB64Url: headers.anchor,
+    tagsFromHeaders: headers.tags,
   };
 }
