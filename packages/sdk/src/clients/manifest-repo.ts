@@ -1,3 +1,5 @@
+import { detectContentType } from '../c2pa/detect.js';
+
 /** Typed HTTP client for the trusthash sidecar manifest repository and search API. */
 export class ManifestRepoClient {
   constructor(
@@ -58,10 +60,12 @@ export class ManifestRepoClient {
     if (options?.maxResults !== undefined) params.set('maxResults', String(options.maxResults));
 
     const url = `/matches/byContent${params.toString() ? `?${params}` : ''}`;
+    const buf = Buffer.isBuffer(imageBuffer) ? imageBuffer : Buffer.from(imageBuffer);
+    const contentType = detectContentType(buf) ?? 'application/octet-stream';
     const res = await this.fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream' },
-      body: imageBuffer as unknown as BodyInit,
+      headers: { 'Content-Type': contentType },
+      body: buf as unknown as BodyInit,
     });
     return res.json() as Promise<{
       matches: Array<{ manifestId: string; similarityScore?: number }>;
