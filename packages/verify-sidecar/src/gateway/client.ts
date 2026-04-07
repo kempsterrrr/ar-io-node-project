@@ -116,6 +116,8 @@ const EMPTY_HEADERS: RawDataHeaders = {
   anchor: null,
   tags: [],
   tagCount: null,
+  dataItemOffset: null,
+  dataItemDataOffset: null,
   arIoVerified: null,
   arIoStable: null,
   arIoTrusted: null,
@@ -174,6 +176,8 @@ export async function headRawData(txId: string): Promise<RawDataHeaders | null> 
 
       tags: parseTagHeaders(h),
       tagCount: parseIntHeader(h.get('x-arweave-tag-count')),
+      dataItemOffset: parseIntHeader(h.get('x-ar-io-data-item-offset')),
+      dataItemDataOffset: parseIntHeader(h.get('x-ar-io-data-item-data-offset')),
 
       arIoVerified: parseBoolHeader(h.get('x-ar-io-verified')),
       arIoStable: parseBoolHeader(h.get('x-ar-io-stable')),
@@ -183,6 +187,45 @@ export async function headRawData(txId: string): Promise<RawDataHeaders | null> 
     };
   } catch (error) {
     logger.error({ error, txId }, 'Failed to HEAD raw data');
+    return null;
+  }
+}
+
+/**
+ * Fetch the ANS-104 data item header bytes via range request on the root bundle.
+ * The header contains: signature_type, signature, owner, target, anchor, and
+ * the exact Avro-serialized tag bytes in original order.
+ */
+export async function getDataItemHeader(
+  rootTxId: string,
+  dataItemOffset: number,
+  dataOffset: number
+): Promise<Buffer | null> {
+  const headerSize = dataOffset - dataItemOffset;
+  if (headerSize <= 0 || headerSize > 100_000) {
+    logger.warn({ rootTxId, headerSize }, 'Invalid data item header size');
+    return null;
+  }
+
+  try {
+    const rangeEnd = dataOffset - 1;
+    const res = await fetchWithTimeout(`${baseUrl}/raw/${rootTxId}`, timeout, {
+      headers: { Range: `bytes=${dataItemOffset}-${rangeEnd}` },
+    });
+
+    if (res.status === 206 || res.status === 200) {
+      const buf = Buffer.from(await res.arrayBuffer());
+      // Range response may return the full body if range not supported
+      if (buf.length >= headerSize) {
+        return buf.slice(0, headerSize);
+      }
+      return buf;
+    }
+
+    logger.warn({ status: res.status, rootTxId }, 'Range request failed');
+    return null;
+  } catch (error) {
+    logger.error({ error, rootTxId }, 'Failed to fetch data item header');
     return null;
   }
 }
@@ -220,6 +263,33 @@ export async function getRawData(
     return Buffer.from(arrayBuf);
   } catch (error) {
     logger.error({ error, txId }, 'Failed to download raw data');
+    return null;
+  }
+}
+
+/**
+ * Query GraphQL for transaction tags in their original order.
+ * This is the reliable source for tag ordering when /tx/ is unavailable.
+ */
+export async function getTransactionViaGraphQL(
+  txId: string
+): Promise<{ tags: Array<{ name: string; value: string }>; ownerKey: string | null } | null> {
+  try {
+    const query = `{ transaction(id: "${txId}") { tags { name value } owner { key } } }`;
+    const res = await fetchWithTimeout(`${baseUrl}/graphql`, timeout, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const tx = data?.data?.transaction;
+    if (!tx) return null;
+    return {
+      tags: tx.tags ?? [],
+      ownerKey: tx.owner?.key ?? null,
+    };
+  } catch {
     return null;
   }
 }

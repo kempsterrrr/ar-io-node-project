@@ -1,5 +1,6 @@
-import { headRawData, getRawData } from '../gateway/client.js';
+import { headRawData, getRawData, getDataItemHeader } from '../gateway/client.js';
 import { sha256B64Url, ownerToAddress } from '../utils/crypto.js';
+import { parseDataItemHeader, type ParsedDataItemHeader } from '../utils/ans104-parser.js';
 import { logger } from '../utils/logger.js';
 import type { VerificationResult } from '../types.js';
 
@@ -26,6 +27,8 @@ export interface IntegrityResult {
   anchorB64Url: string | null;
   /** Tags parsed from x-arweave-tag-* headers (decoded, not base64url) */
   tagsFromHeaders: Array<{ name: string; value: string }>;
+  /** Parsed ANS-104 data item header from binary (exact original bytes) */
+  parsedHeader: ParsedDataItemHeader | null;
 }
 
 const EMPTY_OWNER = {
@@ -74,7 +77,31 @@ export async function checkIntegrity(txId: string): Promise<IntegrityResult> {
       signatureB64Url: null,
       anchorB64Url: null,
       tagsFromHeaders: [],
+      parsedHeader: null,
     };
+  }
+
+  // Fetch the ANS-104 data item header if offset info is available
+  let parsedHeader: ParsedDataItemHeader | null = null;
+  if (
+    headers.rootTransactionId &&
+    headers.dataItemOffset !== null &&
+    headers.dataItemDataOffset !== null
+  ) {
+    const headerBuf = await getDataItemHeader(
+      headers.rootTransactionId,
+      headers.dataItemOffset,
+      headers.dataItemDataOffset
+    );
+    if (headerBuf) {
+      parsedHeader = parseDataItemHeader(headerBuf);
+      if (parsedHeader) {
+        logger.info(
+          { txId, sigType: parsedHeader.signatureType, tagCount: parsedHeader.tagCount },
+          'Parsed ANS-104 data item header from binary'
+        );
+      }
+    }
   }
 
   const hasDigest = !!headers.digest;
@@ -174,5 +201,6 @@ export async function checkIntegrity(txId: string): Promise<IntegrityResult> {
     signatureB64Url: headers.signature,
     anchorB64Url: headers.anchor,
     tagsFromHeaders: headers.tags,
+    parsedHeader,
   };
 }

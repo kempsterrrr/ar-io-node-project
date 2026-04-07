@@ -65,6 +65,10 @@ export interface RawDataHeaders {
   tags: Array<{ name: string; value: string }>;
   tagCount: number | null;
 
+  // Data item offset info (for fetching the binary header from the root bundle)
+  dataItemOffset: number | null;
+  dataItemDataOffset: number | null;
+
   // Gateway trust assessment headers
   arIoVerified: boolean | null;
   arIoStable: boolean | null;

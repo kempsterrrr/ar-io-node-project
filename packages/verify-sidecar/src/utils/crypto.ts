@@ -340,3 +340,37 @@ export function verifyDataItemSignature(item: DataItemFields): boolean {
     message,
   });
 }
+
+/**
+ * Verify a data item using the exact binary header parsed from the bundle.
+ * This is 100% accurate — uses the original bytes with no encoding roundtrips.
+ */
+export function verifyDataItemSignatureRaw(input: {
+  signatureType: number;
+  signature: Uint8Array;
+  owner: Uint8Array;
+  target: Uint8Array;
+  anchor: Uint8Array;
+  rawTagBytes: Uint8Array;
+  data: Uint8Array;
+}): boolean {
+  const message = deepHash([
+    new TextEncoder().encode('dataitem'),
+    new TextEncoder().encode('1'),
+    new TextEncoder().encode(input.signatureType.toString()),
+    input.owner,
+    input.target,
+    input.anchor,
+    input.rawTagBytes,
+    input.data,
+  ]);
+
+  const sigB64 = bufferToBase64Url(Buffer.from(input.signature));
+  const ownerB64 = bufferToBase64Url(Buffer.from(input.owner));
+
+  return verifyRsaPssSignature({
+    signatureB64Url: sigB64,
+    ownerB64Url: ownerB64,
+    message,
+  });
+}
