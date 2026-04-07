@@ -26,10 +26,20 @@ server {
         client_max_body_size 50M;
     }
 
+    # Trusthash sidecar health (at root, not under /v1)
+    location = /trusthash/health {
+        proxy_pass http://localhost:3003/health;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
     # Trusthash sidecar — C2PA manifest repository & SBR API on port 3003
-    # Trailing slash on proxy_pass strips the /trusthash prefix
+    # Trailing slash on proxy_pass rewrites /trusthash/* → /v1/*
     location /trusthash/ {
-        proxy_pass http://localhost:3003/;
+        proxy_pass http://localhost:3003/v1/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
