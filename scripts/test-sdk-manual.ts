@@ -474,6 +474,7 @@ async function main() {
       assert(!!result.fanOutResults, 'missing fanOutResults');
       assert(result.fanOutResults!.length > 0, 'empty fanOutResults');
       const ok = result.fanOutResults!.filter((r) => r.status === 'success').length;
+      assert(ok > 0, `fan-out failed for every gateway: ${JSON.stringify(result.fanOutResults)}`);
       console.log(
         `txId=${result.txId.slice(0, 20)}... fanOut=${ok}/${result.fanOutResults!.length} ok`
       );
