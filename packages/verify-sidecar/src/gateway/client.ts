@@ -14,53 +14,21 @@ const timeout = config.GATEWAY_TIMEOUT_MS;
 /** Max bytes to download for verification (100 MB) */
 const MAX_RAW_DOWNLOAD_BYTES = 100 * 1024 * 1024;
 
-/** Retry config for waiting on gateway indexing — keep total under 60s for proxy timeouts */
-const INDEX_RETRY_DELAY_MS = 10_000;
-const INDEX_MAX_RETRIES = 4;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 export async function getTransaction(txId: string): Promise<GatewayTransaction | null> {
-  for (let attempt = 0; attempt <= INDEX_MAX_RETRIES; attempt++) {
-    try {
-      const res = await fetchWithTimeout(`${baseUrl}/tx/${txId}`, timeout);
-      if (res.status === 404) {
-        if (attempt < INDEX_MAX_RETRIES) {
-          logger.info(
-            { txId, attempt: attempt + 1, maxRetries: INDEX_MAX_RETRIES },
-            'Transaction not found, waiting for gateway to index...'
-          );
-          await sleep(INDEX_RETRY_DELAY_MS);
-          continue;
-        }
-        return null;
-      }
-      if (!res.ok) {
-        logger.warn({ status: res.status, txId }, 'Unexpected response from GET /tx');
-        if (attempt < INDEX_MAX_RETRIES) {
-          await sleep(INDEX_RETRY_DELAY_MS);
-          continue;
-        }
-        return null;
-      }
-      return (await res.json()) as GatewayTransaction;
-    } catch (error) {
-      // Timeout or network error — also retry (gateway may be fetching from peers)
-      if (attempt < INDEX_MAX_RETRIES) {
-        logger.info(
-          { txId, attempt: attempt + 1, maxRetries: INDEX_MAX_RETRIES },
-          'Gateway request failed, retrying...'
-        );
-        await sleep(INDEX_RETRY_DELAY_MS);
-        continue;
-      }
-      logger.error({ error, txId }, 'Failed to fetch transaction after retries');
+  // No retries — /tx/ routes through Envoy to L1 peers, which return 404 immediately
+  // for bundled data items. The pipeline falls back to /raw/ headers + GraphQL.
+  try {
+    const res = await fetchWithTimeout(`${baseUrl}/tx/${txId}`, timeout);
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      logger.warn({ status: res.status, txId }, 'Unexpected response from GET /tx');
       return null;
     }
+    return (await res.json()) as GatewayTransaction;
+  } catch (error) {
+    logger.error({ error, txId }, 'Failed to fetch transaction');
+    return null;
   }
-  return null;
 }
 
 export async function getTransactionStatus(txId: string): Promise<GatewayTransactionStatus | null> {
