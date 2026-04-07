@@ -66,7 +66,8 @@ async function test(name: string, fn: TestFn) {
   } catch (e: unknown) {
     failed++;
     console.log('FAIL');
-    console.log(`         ${(e as Error).message.slice(0, 200)}`);
+    const msg = e instanceof Error ? e.message : String(e);
+    console.log(`         ${msg.slice(0, 200)}`);
   }
 }
 

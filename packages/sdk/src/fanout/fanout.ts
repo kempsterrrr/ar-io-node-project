@@ -66,6 +66,11 @@ export async function fanOutDataItem(
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const retries = options?.retries ?? DEFAULT_RETRIES;
   const retryDelayMs = options?.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
+  if (timeoutMs <= 0 || retries < 0 || retryDelayMs < 0) {
+    throw new Error(
+      'fanOutDataItem(): timeoutMs must be > 0 and retries/retryDelayMs must be >= 0'
+    );
+  }
 
   const results = await Promise.allSettled(
     gateways.map((gw) => fanOutToGateway(header, gw, timeoutMs, retries, retryDelayMs))
