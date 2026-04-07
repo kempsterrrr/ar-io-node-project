@@ -44,6 +44,9 @@ async function fanOutToGateway(
       }
 
       lastError = `HTTP ${res.status}: ${await res.text()}`;
+      if (res.status < 500 && res.status !== 408 && res.status !== 429) {
+        break;
+      }
     } catch (err: unknown) {
       lastError = err instanceof Error ? err.message : String(err);
     }
@@ -66,9 +69,16 @@ export async function fanOutDataItem(
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const retries = options?.retries ?? DEFAULT_RETRIES;
   const retryDelayMs = options?.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
-  if (timeoutMs <= 0 || retries < 0 || retryDelayMs < 0) {
+  if (
+    !Number.isFinite(timeoutMs) ||
+    !Number.isFinite(retryDelayMs) ||
+    !Number.isInteger(retries) ||
+    timeoutMs <= 0 ||
+    retries < 0 ||
+    retryDelayMs < 0
+  ) {
     throw new Error(
-      'fanOutDataItem(): timeoutMs must be > 0 and retries/retryDelayMs must be >= 0'
+      'fanOutDataItem(): timeoutMs must be > 0, retryDelayMs must be >= 0, and retries must be a non-negative integer'
     );
   }
 

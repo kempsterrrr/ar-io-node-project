@@ -330,7 +330,7 @@ async function main() {
         console.log(`valid=${result.valid} hash=${result.hash.slice(0, 16)}...`);
       } catch (e: unknown) {
         // Expected: GraphQL may not find optimistically-indexed tx yet
-        const msg = (e as Error).message;
+        const msg = e instanceof Error ? e.message : String(e);
         if (msg.includes('not found') || msg.includes('404') || msg.includes('null')) {
           console.log(`(expected) tx not in GraphQL yet — ${msg.slice(0, 60)}`);
         } else {
@@ -349,7 +349,7 @@ async function main() {
       const result = await sdk.verify('4jBV3ofWh41KhuTs2pFvj-KBZWUkbrbCYlJH0vLA6LM');
       console.log(`valid=${result.valid} tier=${result.tier} existence=${result.existence.status}`);
     } catch (e: unknown) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       if (msg.includes('404') || msg.includes('ECONNREFUSED') || msg.includes('fetch failed')) {
         console.log(`(expected) verify sidecar not running — ${msg.slice(0, 60)}`);
       } else {
@@ -368,7 +368,7 @@ async function main() {
       assert(!!result.txId, 'missing txId');
       console.log(`txId=${result.txId.slice(0, 20)}...`);
     } catch (e: unknown) {
-      const msg = (e as Error).message;
+      const msg = e instanceof Error ? e.message : String(e);
       // ArNS resolution may not work on all gateways
       if (msg.includes('404') || msg.includes('not found') || msg.includes('aborted')) {
         console.log(`(expected) ArNS not configured — ${msg.slice(0, 60)}`);

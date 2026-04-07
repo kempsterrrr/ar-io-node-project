@@ -13,7 +13,8 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "agentic:validate": "node scripts/agentic-validate.mjs --mode=validate",
     "agentic:check-drift": "node scripts/agentic-validate.mjs --mode=drift",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "test:production": "node scripts/test-production.mjs"
   },
   "devDependencies": {
     "@types/node": "^25.0.1",
