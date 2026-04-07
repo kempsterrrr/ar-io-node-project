@@ -5,12 +5,18 @@ import { logger } from '../utils/logger.js';
 import type { VerificationResult } from '../types.js';
 
 export interface IntegrityResult {
-  integrity: VerificationResult['integrity'];
+  integrity: {
+    status: 'verified' | 'unavailable';
+    hash: string | null;
+    independentHash: string | null;
+    match: boolean | null;
+    independentlyVerified: boolean;
+    independentSkipReason: string | null;
+  };
   bundle: VerificationResult['bundle'];
   ownerFromHeaders: {
     address: string | null;
     publicKey: string | null;
-    signaturePresent: boolean;
     signatureType: number | null;
     addressVerified: boolean | null;
   };
@@ -34,7 +40,6 @@ export interface IntegrityResult {
 const EMPTY_OWNER = {
   address: null,
   publicKey: null,
-  signaturePresent: false,
   signatureType: null,
   addressVerified: null,
 };
@@ -44,7 +49,6 @@ const EMPTY_ASSESSMENT: VerificationResult['gatewayAssessment'] = {
   stable: null,
   trusted: null,
   hops: null,
-  dataId: null,
 };
 
 /**
@@ -135,7 +139,6 @@ export async function checkIntegrity(txId: string): Promise<IntegrityResult> {
   const ownerFromHeaders = {
     address: ownerAddress,
     publicKey: headers.owner,
-    signaturePresent: !!headers.signature,
     signatureType: headers.signatureType,
     addressVerified,
   };
@@ -145,7 +148,6 @@ export async function checkIntegrity(txId: string): Promise<IntegrityResult> {
     stable: headers.arIoStable,
     trusted: headers.arIoTrusted,
     hops: headers.arIoHops,
-    dataId: headers.arIoDataId,
   };
 
   const bundle = {
