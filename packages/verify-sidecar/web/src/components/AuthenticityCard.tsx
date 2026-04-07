@@ -47,7 +47,7 @@ export default function AuthenticityCard({ authenticity, owner }: Props) {
                   Data fingerprint: <span className="font-mono">{authenticity.dataHash}</span>
                 </p>
                 {owner.addressVerified && <p>Address derived from public key (SHA-256)</p>}
-                <p>Verification method: RSA-PSS signature against deep hash</p>
+                <p>Verification: RSA-PSS digital signature</p>
               </div>
             </details>
           )}

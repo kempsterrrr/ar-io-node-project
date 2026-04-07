@@ -15,9 +15,9 @@ const EXAMPLES = [
 ];
 
 const FEATURES = [
-  { icon: '\uD83D\uDD12', label: 'RSA-PSS signature verification' },
-  { icon: '\uD83D\uDD17', label: 'Independent SHA-256 hash' },
-  { icon: '\uD83D\uDCC4', label: 'PDF attestation certificate' },
+  { icon: '\uD83D\uDD12', label: 'Signature verification' },
+  { icon: '\uD83D\uDD17', label: 'Data integrity check' },
+  { icon: '\uD83D\uDCC4', label: 'PDF certificate' },
 ];
 
 export default function VerifyInput() {
