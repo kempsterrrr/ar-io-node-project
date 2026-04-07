@@ -19,15 +19,7 @@ export default function BundleCard({ bundle }: Props) {
       </p>
       {bundle.rootTransactionId && (
         <div className="mt-2 text-xs">
-          <span className="text-ario-black/40">Root TX: </span>
-          <a
-            href={`https://viewblock.io/arweave/tx/${bundle.rootTransactionId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-ario-primary hover:underline"
-          >
-            <CopyHash value={bundle.rootTransactionId} />
-          </a>
+          <CopyHash value={bundle.rootTransactionId} label="Root TX:" href={`https://viewblock.io/arweave/tx/${bundle.rootTransactionId}`} />
         </div>
       )}
     </div>

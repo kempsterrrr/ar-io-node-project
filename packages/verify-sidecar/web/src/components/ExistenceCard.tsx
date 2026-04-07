@@ -81,14 +81,7 @@ export default function ExistenceCard({ existence, txId }: Props) {
         </p>
       )}
       <div className="mt-2 text-xs">
-        <a
-          href={`https://viewblock.io/arweave/tx/${txId}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-ario-primary hover:underline"
-        >
-          <CopyHash value={txId} />
-        </a>
+        <CopyHash value={txId} href={`https://viewblock.io/arweave/tx/${txId}`} />
       </div>
     </div>
   );
