@@ -236,14 +236,18 @@ export async function getRawData(
 }
 
 /**
- * Query GraphQL for transaction tags in their original order.
- * This is the reliable source for tag ordering when /tx/ is unavailable.
+ * Query GraphQL for transaction data including tags, owner, and block info.
+ * This is the reliable source for data items that /tx/ can't serve.
  */
-export async function getTransactionViaGraphQL(
-  txId: string
-): Promise<{ tags: Array<{ name: string; value: string }>; ownerKey: string | null } | null> {
+export async function getTransactionViaGraphQL(txId: string): Promise<{
+  tags: Array<{ name: string; value: string }>;
+  ownerKey: string | null;
+  ownerAddress: string | null;
+  blockHeight: number | null;
+  blockTimestamp: string | null;
+} | null> {
   try {
-    const query = `{ transaction(id: "${txId}") { tags { name value } owner { key } } }`;
+    const query = `{ transaction(id: "${txId}") { tags { name value } owner { address key } block { height timestamp } } }`;
     const res = await fetchWithTimeout(`${baseUrl}/graphql`, timeout, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -256,6 +260,11 @@ export async function getTransactionViaGraphQL(
     return {
       tags: tx.tags ?? [],
       ownerKey: tx.owner?.key ?? null,
+      ownerAddress: tx.owner?.address ?? null,
+      blockHeight: tx.block?.height ?? null,
+      blockTimestamp: tx.block?.timestamp
+        ? new Date(tx.block.timestamp * 1000).toISOString()
+        : null,
     };
   } catch {
     return null;
