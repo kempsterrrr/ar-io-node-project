@@ -50,6 +50,11 @@ const result = await uploadAndFanOut({
 });
 
 // Option 2: Fan out an already-uploaded item
+const data = Buffer.from('my payload');
+const tags = [{ name: 'Content-Type', value: 'text/plain' }];
+const ethPrivateKey = '0x...';
+const gateways = [{ url: 'https://gw2.example.com', adminApiKey: 'key' }];
+
 const { header } = await createSignedDataItem(data, tags, ethPrivateKey);
 const results = await fanOutDataItem(header, gateways, { timeoutMs: 10000, retries: 1 });
 ```
