@@ -68,6 +68,25 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
 
+  packages/audit-trail:
+    dependencies:
+      '@agenticway/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+    devDependencies:
+      prettier:
+        specifier: ^3.1.0
+        version: 3.8.1
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.8)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/debug@4.1.13)(@types/node@25.5.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3)
+
   packages/c2pa-protocol: {}
 
   packages/evidence-vault:
