@@ -164,6 +164,8 @@ jobs:
 
           # Data Availability (fetch from Turbo cache + arweave.net on-demand)
           TRUSTED_GATEWAYS_URLS=${{ vars.TRUSTED_GATEWAYS_URLS || '{"https://turbo-gateway.com":2,"https://arweave.net":1}' }}
+          TRUSTED_GATEWAYS_REQUEST_TIMEOUT_MS=${{ vars.TRUSTED_GATEWAYS_REQUEST_TIMEOUT_MS || '5000' }}
+          ON_DEMAND_RETRIEVAL_ORDER=${{ vars.ON_DEMAND_RETRIEVAL_ORDER || 'trusted-gateways,chunks,tx-data' }}
           ENVFILE
             chmod 600 ${{ env.DEPLOY_PATH }}/.env
           EOF

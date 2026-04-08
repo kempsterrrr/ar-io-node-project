@@ -8,9 +8,9 @@
 services:
   envoy:
     image: ghcr.io/ar-io/ar-io-envoy:${ENVOY_IMAGE_TAG:-latest}
-    restart: "no"
+    restart: 'no'
     ports:
-      - "${GATEWAY_PORT:-3000}:3000"
+      - '${GATEWAY_PORT:-3000}:3000'
     env_file:
       - ./apps/gateway/.env
     environment:
@@ -36,7 +36,7 @@ services:
 
   core:
     image: ghcr.io/ar-io/ar-io-core:${CORE_IMAGE_TAG:-latest}
-    restart: "no"
+    restart: 'no'
     env_file:
       - ./apps/gateway/.env
     environment:
@@ -48,7 +48,8 @@ services:
       - START_HEIGHT=${START_HEIGHT:-1400000}
       - ARNS_ROOT_HOST=${ARNS_ROOT_HOST:-}
       - AR_IO_WALLET=${AR_IO_WALLET:-}
-      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
+      # ADMIN_API_KEY loaded from env_file (apps/gateway/.env)
+      # To change it locally, edit apps/gateway/.env.
       - TRUSTED_NODE_URL=${TRUSTED_NODE_URL:-https://arweave.net}
       - RUN_OBSERVER=false
       - OBSERVER_WALLET=${OBSERVER_WALLET:-}
@@ -64,15 +65,18 @@ services:
     build:
       context: .
       dockerfile: packages/trusthash-sidecar/Dockerfile
-    restart: "no"
+    restart: 'no'
     expose:
       - '3003'
     env_file:
       - ./packages/trusthash-sidecar/.env.docker
+      - path: ./packages/trusthash-sidecar/.env
+        required: false
     environment:
       - NODE_ENV=development
       - PORT=3003
       - LOG_LEVEL=debug
+      - GATEWAY_URL=http://core:4000
       - DUCKDB_PATH=/app/data/provenance.duckdb
       - MAX_IMAGE_SIZE_MB=${MAX_IMAGE_SIZE_MB:-50}
       - REFERENCE_FETCH_TIMEOUT_MS=${REFERENCE_FETCH_TIMEOUT_MS:-10000}
@@ -89,7 +93,7 @@ services:
 
   trusthash-proxy:
     image: nginx:alpine
-    restart: "no"
+    restart: 'no'
     ports:
       - '${PROXY_PORT:-3003}:80'
     volumes:
