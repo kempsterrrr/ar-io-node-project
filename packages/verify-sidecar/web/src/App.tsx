@@ -4,14 +4,18 @@ import VerifyReport from './pages/VerifyReport';
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white px-6 py-4">
-        <a href="/" className="text-xl font-semibold text-gray-900">
-          Verify
-        </a>
-        <span className="ml-2 text-sm text-gray-500">Arweave Data Verification</span>
+    <div className="min-h-screen bg-gradient-to-b from-white via-white to-ario-lavender">
+      <header className="sticky top-0 z-50 border-b border-ario-border bg-white/85 px-6 py-3 backdrop-blur">
+        <div className="mx-auto flex max-w-4xl items-center gap-3">
+          <a href="/" className="flex items-center gap-2.5">
+            <img src="https://ar.io/brand/ario-full-black.svg" alt="ar.io" className="h-7" />
+            <span className="rounded-full bg-ario-primary/10 px-2.5 py-0.5 text-xs font-semibold text-ario-primary">
+              Verify
+            </span>
+          </a>
+        </div>
       </header>
-      <main className="mx-auto max-w-4xl px-4 py-8">
+      <main>
         <Routes>
           <Route path="/" element={<VerifyInput />} />
           <Route path="/report/:id" element={<VerifyReport />} />

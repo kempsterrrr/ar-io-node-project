@@ -2,7 +2,13 @@ export interface VerificationResult {
   verificationId: string;
   timestamp: string;
   txId: string;
-  tier: 'full' | 'basic';
+  /**
+   * Verification level based on the strongest proof achieved:
+   * 3 = Signature verified (data is authentic — signed by the stated key)
+   * 2 = Hash verified (data fingerprint confirmed, but no signature proof)
+   * 1 = Existence only (data found, but authenticity unverified)
+   */
+  level: 1 | 2 | 3;
 
   existence: {
     status: 'confirmed' | 'pending' | 'not_found';
@@ -12,18 +18,28 @@ export interface VerificationResult {
     confirmations: number | null;
   };
 
+  /** Authenticity — the primary proof. Signature first, hash as fallback. */
+  authenticity: {
+    /** Whether the data is proven authentic */
+    status: 'signature_verified' | 'hash_verified' | 'unverified';
+    /** RSA-PSS signature verified against deep hash of the data */
+    signatureValid: boolean | null;
+    /** Reason if signature verification was skipped */
+    signatureSkipReason: string | null;
+    /** SHA-256 fingerprint (independently computed from downloaded raw data) */
+    dataHash: string | null;
+    /** SHA-256 from gateway x-ar-io-digest header (for comparison) */
+    gatewayHash: string | null;
+    /** Whether our independent hash matches the gateway's digest */
+    hashMatch: boolean | null;
+  };
+
+  /** Owner / authorship information */
   owner: {
     address: string | null;
     publicKey: string | null;
-    signatureValid: boolean | null;
-  };
-
-  integrity: {
-    status: 'verified' | 'unavailable';
-    hash: string | null;
-    onChainDigest: string | null;
-    match: boolean | null;
-    deepVerification: boolean;
+    /** Whether SHA-256(publicKey) == address */
+    addressVerified: boolean | null;
   };
 
   metadata: {
@@ -37,37 +53,12 @@ export interface VerificationResult {
     rootTransactionId: string | null;
   };
 
-  fileComparisons: Array<{
-    filename: string;
-    fileHash: string;
-    onChainHash: string;
-    match: boolean;
-  }>;
-
-  receipt: {
-    provided: boolean;
-    signatureValid: boolean | null;
-    receiptTimestamp: string | null;
-    receiptOwner: string | null;
-    ownerMatchesOnChain: boolean | null;
-    receiptIdMatchesTxId: boolean | null;
-    timestampPredatesBlock: boolean | null;
-    turboStatus: string | null;
-  };
-
-  multiGateway: {
-    enabled: boolean;
-    totalQueried: number;
-    totalResponded: number;
-    totalAgreed: number;
-    consensusMet: boolean;
-    gateways: Array<{
-      host: string;
-      hash: string | null;
-      agrees: boolean | null;
-      operatorStake: number;
-      responseTimeMs: number;
-    }>;
+  /** Gateway's own trust assessment from response headers */
+  gatewayAssessment: {
+    verified: boolean | null;
+    stable: boolean | null;
+    trusted: boolean | null;
+    hops: number | null;
   };
 
   links: {
@@ -79,6 +70,4 @@ export interface VerificationResult {
 
 export interface VerifyRequest {
   txId: string;
-  deepVerification?: boolean;
-  multiGateway?: boolean;
 }

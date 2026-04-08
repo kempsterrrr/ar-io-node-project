@@ -1,3 +1,5 @@
+import CopyHash from './CopyHash';
+
 interface Props {
   bundle: {
     isBundled: boolean;
@@ -9,16 +11,16 @@ export default function BundleCard({ bundle }: Props) {
   if (!bundle.isBundled) return null;
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-5">
-      <h3 className="mb-3 text-sm font-medium text-gray-500">Is this data inside a bundle?</h3>
-      <p className="text-sm text-gray-700">
-        This data item is stored inside a bundle. Its integrity is verified independently, and it is
-        anchored to the blockchain through the root transaction shown below.
+    <div className="rounded-2xl border border-ario-border bg-ario-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+      <h3 className="mb-3 text-sm font-medium text-ario-black/50">Bundle</h3>
+      <p className="text-sm text-ario-black/70">
+        This is an ANS-104 bundled data item. Its signature and integrity are verified independently
+        from the bundle. The bundle anchors it to the blockchain.
       </p>
       {bundle.rootTransactionId && (
-        <p className="mt-2 break-all font-mono text-xs text-gray-500">
-          Root TX: {bundle.rootTransactionId}
-        </p>
+        <div className="mt-2 text-xs">
+          <CopyHash value={bundle.rootTransactionId} label="Root TX:" href={`https://viewblock.io/arweave/tx/${bundle.rootTransactionId}`} />
+        </div>
       )}
     </div>
   );

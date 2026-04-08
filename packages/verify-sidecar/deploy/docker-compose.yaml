@@ -1,0 +1,59 @@
+# Standalone verify-sidecar deployment
+# Connects to an existing AR.IO gateway on the ar-io-network Docker network.
+#
+# Usage:
+#   cp .env.example .env   # edit GATEWAY_URL if needed
+#   docker compose up -d
+#   curl http://localhost:4001/health
+#
+# The gateway must already be running and ar-io-network must exist.
+# Find the gateway envoy container name: docker ps --filter network=ar-io-network
+# Then set GATEWAY_URL=http://<envoy-container-name>:3000
+
+services:
+  verify-sidecar:
+    image: ${VERIFY_IMAGE:-verify-sidecar:local}
+    restart: unless-stopped
+    expose:
+      - '4001'
+    environment:
+      - GATEWAY_URL=${GATEWAY_URL:-http://ar-io-node-envoy-1:3000}
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=4001
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - SQLITE_PATH=/app/data/verify.db
+    volumes:
+      - verify-data:/app/data
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:4001/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  verify-proxy:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - '${VERIFY_PORT:-4001}:80'
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      verify-sidecar:
+        condition: service_healthy
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:80/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  verify-data:
+
+networks:
+  ar-io-network:
+    external: true

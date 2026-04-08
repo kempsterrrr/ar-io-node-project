@@ -3,9 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Verify - Arweave Data Verification</title>
+    <title>Verify — ar.io Data Verification</title>
+    <script>
+      // Dynamically set <base> so relative asset paths resolve correctly
+      // regardless of mount point (/verify/, /local/verify/, etc.)
+      var m = window.location.pathname.match(/(.*\/verify)(\/|$)/);
+      var base = m ? m[1] + '/' : '/verify/';
+      document.head.appendChild(Object.assign(document.createElement('base'), { href: base }));
+    </script>
+    <link rel="icon" type="image/png" href="https://ar.io/brand/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Besley:wght@800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
   </head>
-  <body class="bg-gray-50 text-gray-900 antialiased">
+  <body class="font-body text-ario-black antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

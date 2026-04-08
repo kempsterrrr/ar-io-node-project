@@ -32,9 +32,29 @@ apiRouter.get('/api', (_req, res) => {
       health: 'GET /health',
       verify: 'POST /api/v1/verify',
       result: 'GET /api/v1/verify/:id',
+      history: 'GET /api/v1/verify/tx/:txId',
       pdf: 'GET /api/v1/verify/:id/pdf',
     },
   });
+});
+
+// Proxy /raw/{txId} to the gateway for data preview (images, etc.)
+apiRouter.get('/raw/:txId', async (req, res) => {
+  try {
+    const gatewayUrl = config.GATEWAY_URL.replace(/\/$/, '');
+    const upstream = await fetch(`${gatewayUrl}/raw/${req.params.txId}`);
+    if (!upstream.ok) {
+      res.status(upstream.status).end();
+      return;
+    }
+    const ct = upstream.headers.get('content-type');
+    if (ct) res.setHeader('Content-Type', ct);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.send(buf);
+  } catch {
+    res.status(502).json({ error: 'Gateway proxy failed' });
+  }
 });
 
 app.use('/', apiRouter);

@@ -2,7 +2,8 @@ export interface VerificationResult {
   verificationId: string;
   timestamp: string;
   txId: string;
-  tier: 'full' | 'basic';
+  level: 1 | 2 | 3;
+
   existence: {
     status: 'confirmed' | 'pending' | 'not_found';
     blockHeight: number | null;
@@ -10,27 +11,40 @@ export interface VerificationResult {
     blockId: string | null;
     confirmations: number | null;
   };
+
+  authenticity: {
+    status: 'signature_verified' | 'hash_verified' | 'unverified';
+    signatureValid: boolean | null;
+    signatureSkipReason: string | null;
+    dataHash: string | null;
+    gatewayHash: string | null;
+    hashMatch: boolean | null;
+  };
+
   owner: {
     address: string | null;
     publicKey: string | null;
-    signatureValid: boolean | null;
+    addressVerified: boolean | null;
   };
-  integrity: {
-    status: 'verified' | 'unavailable';
-    hash: string | null;
-    onChainDigest: string | null;
-    match: boolean | null;
-    deepVerification: boolean;
-  };
+
   metadata: {
     dataSize: number | null;
     contentType: string | null;
     tags: Array<{ name: string; value: string }>;
   };
+
   bundle: {
     isBundled: boolean;
     rootTransactionId: string | null;
   };
+
+  gatewayAssessment: {
+    verified: boolean | null;
+    stable: boolean | null;
+    trusted: boolean | null;
+    hops: number | null;
+  };
+
   links: {
     dashboard: string | null;
     pdf: string | null;
@@ -38,7 +52,12 @@ export interface VerificationResult {
   };
 }
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+function getBase(): string {
+  const path = window.location.pathname;
+  const match = path.match(/(.*\/verify)(\/|$)/);
+  return match ? match[1] : '/verify';
+}
+const BASE = getBase();
 
 export async function verifyTransaction(txId: string): Promise<VerificationResult> {
   const res = await fetch(`${BASE}/api/v1/verify`, {
