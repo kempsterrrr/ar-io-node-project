@@ -8,9 +8,9 @@
 services:
   envoy:
     image: ghcr.io/ar-io/ar-io-envoy:${ENVOY_IMAGE_TAG:-latest}
-    restart: "no"
+    restart: 'no'
     ports:
-      - "${GATEWAY_PORT:-3000}:3000"
+      - '${GATEWAY_PORT:-3000}:3000'
     env_file:
       - ./apps/gateway/.env
     environment:
@@ -36,7 +36,7 @@ services:
 
   core:
     image: ghcr.io/ar-io/ar-io-core:${CORE_IMAGE_TAG:-latest}
-    restart: "no"
+    restart: 'no'
     env_file:
       - ./apps/gateway/.env
     environment:
@@ -49,7 +49,7 @@ services:
       - ARNS_ROOT_HOST=${ARNS_ROOT_HOST:-}
       - AR_IO_WALLET=${AR_IO_WALLET:-}
       # ADMIN_API_KEY loaded from env_file (apps/gateway/.env)
-      # Only override via shell: ADMIN_API_KEY=xxx docker compose ... up -d
+      # To change it locally, edit apps/gateway/.env.
       - TRUSTED_NODE_URL=${TRUSTED_NODE_URL:-https://arweave.net}
       - RUN_OBSERVER=false
       - OBSERVER_WALLET=${OBSERVER_WALLET:-}
@@ -65,7 +65,7 @@ services:
     build:
       context: .
       dockerfile: packages/trusthash-sidecar/Dockerfile
-    restart: "no"
+    restart: 'no'
     expose:
       - '3003'
     env_file:
@@ -93,7 +93,7 @@ services:
 
   trusthash-proxy:
     image: nginx:alpine
-    restart: "no"
+    restart: 'no'
     ports:
       - '${PROXY_PORT:-3003}:80'
     volumes:

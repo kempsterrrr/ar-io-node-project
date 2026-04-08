@@ -518,7 +518,7 @@ async function main() {
     });
 
     await test('GET /matches/byBinding — binding lookup with known pHash', async () => {
-      // First get the pHash for our test image via search-similar with wide threshold
+      // Get a known manifest with its pHash via search-similar (wide threshold)
       const searchRes = await fetch(
         `${trusthashUrl}/search-similar?phash=0000000000000000&threshold=64&limit=1`
       );
@@ -532,19 +532,24 @@ async function main() {
         return;
       }
 
-      // Use the first result's manifestId for a byBinding lookup
       const knownManifest = searchBody.data.results[0];
+      assert(!!knownManifest.phash, 'missing phash on known manifest');
+
+      // Look up by the actual pHash — should find the same manifest
       const res = await fetch(
-        `${trusthashUrl}/matches/byBinding?alg=org.ar-io.phash&value=0000000000000000&maxResults=5`
+        `${trusthashUrl}/matches/byBinding?alg=org.ar-io.phash&value=${encodeURIComponent(knownManifest.phash!)}&maxResults=5`
       );
       assert(res.ok, `HTTP ${res.status}`);
       const body = (await res.json()) as {
         matches: Array<{ manifestId: string }>;
       };
       assert(Array.isArray(body.matches), 'missing matches array');
-      console.log(
-        `${body.matches.length} match(es) for binding lookup (known manifest: ${knownManifest.manifestId})`
+      assert(body.matches.length > 0, 'expected at least 1 binding match');
+      assert(
+        body.matches.some((m) => m.manifestId === knownManifest.manifestId),
+        `expected ${knownManifest.manifestId} in byBinding results`
       );
+      console.log(`${body.matches.length} match(es), verified ${knownManifest.manifestId} found`);
     });
 
     if (provenanceManifestId) {
