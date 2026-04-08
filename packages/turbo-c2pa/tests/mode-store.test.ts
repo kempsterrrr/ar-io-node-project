@@ -10,7 +10,7 @@
  * - Images without manifests are rejected
  */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,7 +25,7 @@ import {
 import { storeAndPrepare } from '../src/mode-store.js';
 import { PROTOCOL_NAME } from '@ar-io/c2pa-protocol';
 
-const CERT_DIR = path.resolve(import.meta.dir, '../../trusthash-sidecar/.dev-certs');
+const CERT_DIR = path.resolve(import.meta.dirname, '../../trusthash-sidecar/.dev-certs');
 
 const hasCerts =
   fs.existsSync(path.join(CERT_DIR, 'leaf-cert.pem')) &&

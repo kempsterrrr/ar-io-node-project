@@ -18,6 +18,6 @@ export {
   TAG_SIGNER_ISSUER,
   ALG_PHASH,
   ALG_ISCC,
-} from './tags.js';
+} from './tags.ts';
 
-export type { StorageMode, Tag, C2PATagSet } from './types.js';
+export type { StorageMode, Tag, C2PATagSet } from './types.ts';

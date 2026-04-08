@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RemoteSigner } from '../src/signer.js';
 
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   (globalThis as { fetch: typeof fetch }).fetch = originalFetch;
-  mock.restore();
+  vi.restoreAllMocks();
 });
 
 describe('RemoteSigner', () => {

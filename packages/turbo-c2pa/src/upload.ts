@@ -1,5 +1,10 @@
 /**
- * Upload signed C2PA images to Arweave via Turbo SDK.
+ * Upload C2PA data items to Arweave via Turbo SDK.
+ *
+ * Supports all three storage modes:
+ * - full: signed image with embedded manifest
+ * - manifest: raw JUMBF manifest bytes
+ * - proof: JSON proof-locator record
  */
 
 import { TurboFactory } from '@ardrive/turbo-sdk';
@@ -7,8 +12,10 @@ import { Readable } from 'node:stream';
 import type { Tag } from '@ar-io/c2pa-protocol';
 
 export interface UploadOptions {
-  /** Signed image buffer (with embedded C2PA manifest). */
-  signedBuffer: Buffer;
+  /** Data buffer to upload (signed image, manifest bytes, or proof payload). */
+  dataBuffer?: Buffer;
+  /** @deprecated Use dataBuffer instead. Alias kept for backward compatibility. */
+  signedBuffer?: Buffer;
   /** ANS-104 tags from buildTags(). */
   tags: Tag[];
   /** Ethereum private key (hex string, with or without 0x prefix). */
@@ -36,16 +43,20 @@ export interface UploadResult {
 }
 
 /**
- * Upload a signed image to Arweave via Turbo SDK using an Ethereum wallet.
+ * Upload a C2PA data item to Arweave via Turbo SDK using an Ethereum wallet.
  */
 export async function uploadToArweave(options: UploadOptions): Promise<UploadResult> {
   const {
-    signedBuffer,
     tags,
     ethPrivateKey,
     gatewayUrl = 'https://turbo-gateway.com',
     uploadServiceUrl,
   } = options;
+
+  const signedBuffer = options.dataBuffer ?? options.signedBuffer;
+  if (!signedBuffer) {
+    throw new Error('Either dataBuffer or signedBuffer must be provided');
+  }
 
   // Normalize private key (ensure 0x prefix for Turbo SDK)
   const normalizedKey = ethPrivateKey.startsWith('0x') ? ethPrivateKey : `0x${ethPrivateKey}`;
