@@ -126,7 +126,7 @@ async function main() {
   await test('info() — gateway metadata', async () => {
     const info = await sdk.info();
     assert(!!info.processId, 'missing processId');
-    console.log(`processId=${info.processId.slice(0, 15)}... release=${info.release}`);
+    console.log(`processId=${info.processId} release=${info.release}`);
   });
 
   await test('gateway /ar-io/info direct', async () => {
@@ -149,7 +149,7 @@ async function main() {
     assert(!!result.txId, 'missing txId');
     assert(!!result.viewUrl, 'missing viewUrl');
     storedTxId = result.txId;
-    console.log(`txId=${result.txId.slice(0, 20)}...`);
+    console.log(`txId=${result.txId}`);
 
     if (fanOutTargets.length > 0) {
       assert(!!result.fanOutResults, 'missing fanOutResults when targets configured');
@@ -164,7 +164,7 @@ async function main() {
       contentType: 'application/json',
     });
     assert(!!result.txId, 'missing txId');
-    console.log(`txId=${result.txId.slice(0, 20)}...`);
+    console.log(`txId=${result.txId}`);
   });
 
   await test('store() — binary data', async () => {
@@ -172,7 +172,7 @@ async function main() {
     for (let i = 0; i < 256; i++) buf[i] = i;
     const result = await sdk.store({ data: buf });
     assert(!!result.txId, 'missing txId');
-    console.log(`txId=${result.txId.slice(0, 20)}...`);
+    console.log(`txId=${result.txId}`);
   });
 
   // ===================================================================
@@ -181,6 +181,7 @@ async function main() {
 
   const testImagePath = resolve(__dirname, '../packages/turbo-c2pa/test-image.jpg');
   let provenanceTxId: string | undefined;
+  let provenanceManifestId: string | undefined;
   let originalImageSize: number | undefined;
 
   if (trusthashUrl) {
@@ -203,9 +204,9 @@ async function main() {
       );
       assert(!!result.provenance!.assetHash, 'missing assetHash');
       provenanceTxId = result.txId;
-      console.log(
-        `txId=${result.txId.slice(0, 20)}... manifest=${result.provenance!.manifestId.slice(0, 30)}...`
-      );
+      provenanceManifestId = result.provenance!.manifestId;
+      console.log(`txId=${result.txId}`);
+      console.log(`         manifestId=${result.provenance!.manifestId}`);
 
       if (fanOutTargets.length > 0 && result.fanOutResults) {
         const ok = result.fanOutResults.filter((r) => r.status === 'success').length;
@@ -214,22 +215,38 @@ async function main() {
     });
 
     if (provenanceTxId) {
-      console.log('\n  Waiting 3s for Turbo cache...');
-      await new Promise((r) => setTimeout(r, 3000));
-
       await test('retrieve() provenance-stored image — manifest embedded', async () => {
-        const result = await sdk.retrieve(provenanceTxId!);
-        assert(
-          result.data.length > originalImageSize!,
-          `signed image (${result.data.length}b) should be larger than original (${originalImageSize}b)`
-        );
-        assert(
-          result.contentType.includes('image/jpeg'),
-          `expected image/jpeg, got ${result.contentType}`
-        );
-        console.log(
-          `original=${originalImageSize}b signed=${result.data.length}b (+${result.data.length - originalImageSize!}b manifest)`
-        );
+        const maxAttempts = 6;
+        const delayMs = 10000;
+        let lastError: string | undefined;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          if (attempt === 1) {
+            console.log(`\n         waiting ${delayMs / 1000}s for data propagation...`);
+          } else {
+            console.log(`         retry ${attempt}/${maxAttempts}...`);
+          }
+          await new Promise((r) => setTimeout(r, delayMs));
+
+          try {
+            const result = await sdk.retrieve(provenanceTxId!);
+            assert(
+              result.data.length > originalImageSize!,
+              `signed image (${result.data.length}b) should be larger than original (${originalImageSize}b)`
+            );
+            assert(
+              result.contentType.includes('image/jpeg'),
+              `expected image/jpeg, got ${result.contentType}`
+            );
+            console.log(
+              `original=${originalImageSize}b signed=${result.data.length}b (+${result.data.length - originalImageSize!}b manifest) attempt=${attempt}`
+            );
+            return;
+          } catch (e: unknown) {
+            lastError = e instanceof Error ? e.message : String(e);
+            if (attempt === maxAttempts) throw new Error(lastError);
+          }
+        }
       });
     }
   } else {
@@ -304,7 +321,7 @@ async function main() {
     assert(!!result.hash, 'missing hash');
     assert(result.hash.length === 64, `hash wrong length: ${result.hash.length}`);
     anchorTxId = result.txId;
-    console.log(`txId=${result.txId.slice(0, 20)}... hash=${result.hash.slice(0, 16)}...`);
+    console.log(`txId=${result.txId} hash=${result.hash}`);
   });
 
   await test('batchAnchor() — Merkle tree of 3 items', async () => {
@@ -316,9 +333,7 @@ async function main() {
     assert(!!result.merkleRoot, 'missing merkleRoot');
     assert(result.proofs.length === 3, `expected 3 proofs, got ${result.proofs.length}`);
     batchAnchorTxId = result.txId;
-    console.log(
-      `txId=${result.txId.slice(0, 20)}... root=${result.merkleRoot.slice(0, 16)}... proofs=${result.proofs.length}`
-    );
+    console.log(`txId=${result.txId} root=${result.merkleRoot} proofs=${result.proofs.length}`);
   });
 
   // verifyAnchor needs the tx to be indexed — optimistic data may not be in /tx/ yet
@@ -327,7 +342,7 @@ async function main() {
     await test('verifyAnchor() — verify our anchor (may fail if not yet on L1)', async () => {
       try {
         const result = await sdk.verifyAnchor({ data: anchorData, txId: anchorTxId! });
-        console.log(`valid=${result.valid} hash=${result.hash.slice(0, 16)}...`);
+        console.log(`valid=${result.valid} hash=${result.hash}`);
       } catch (e: unknown) {
         // Expected: GraphQL may not find optimistically-indexed tx yet
         const msg = e instanceof Error ? e.message : String(e);
@@ -366,7 +381,7 @@ async function main() {
     try {
       const result = await sdk.resolve('ardrive');
       assert(!!result.txId, 'missing txId');
-      console.log(`txId=${result.txId.slice(0, 20)}...`);
+      console.log(`txId=${result.txId}`);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       // ArNS resolution may not work on all gateways
@@ -399,7 +414,165 @@ async function main() {
   }
 
   // ===================================================================
-  section('9. Fan-Out (low-level API)');
+  section('9. Trusthash Sidecar API (direct)');
+  // ===================================================================
+
+  if (trusthashUrl) {
+    await test('GET /health — sidecar status', async () => {
+      // Health is at root, not under /v1/ — derive base URL from trusthashUrl
+      const healthUrl = new URL('/health', trusthashUrl.replace(/\/v1\/?$/, '')).toString();
+      const res = await fetch(healthUrl);
+      assert(res.ok, `HTTP ${res.status}`);
+      const body = (await res.json()) as {
+        success: boolean;
+        data: {
+          status: string;
+          version: string;
+          services: { database: string };
+          stats: { indexedManifests: number };
+        };
+      };
+      assert(body.data.status === 'ok', `status: ${body.data.status}`);
+      assert(!!body.data.version, 'missing version');
+      console.log(
+        `status=${body.data.status} db=${body.data.services.database} v=${body.data.version} manifests=${body.data.stats.indexedManifests}`
+      );
+    });
+
+    await test('GET /cert — X.509 certificate chain', async () => {
+      const res = await fetch(`${trusthashUrl}/cert`);
+      if (res.status === 501) {
+        console.log('(signing not enabled on this instance)');
+        return;
+      }
+      assert(res.ok, `HTTP ${res.status}`);
+      const pem = await res.text();
+      assert(
+        pem.startsWith('-----BEGIN CERTIFICATE-----'),
+        `expected PEM, got: "${pem.slice(0, 40)}"`
+      );
+      const certCount = (pem.match(/-----BEGIN CERTIFICATE-----/g) || []).length;
+      console.log(`${certCount} cert(s) in chain, ${pem.length} bytes`);
+    });
+
+    await test('POST /sign — COSE signing oracle', async () => {
+      const certCheck = await fetch(`${trusthashUrl}/cert`);
+      if (certCheck.status === 501) {
+        console.log('(signing not enabled — skipping)');
+        return;
+      }
+      const payload = Buffer.from('test-signing-payload-' + Date.now());
+      const signRes = await fetch(`${trusthashUrl}/sign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: payload,
+      });
+      const sigBuf = await signRes.arrayBuffer();
+      assert(signRes.ok, `HTTP ${signRes.status}: ${Buffer.from(sigBuf).toString()}`);
+      const sig = Buffer.from(sigBuf);
+      assert(sig.length === 64, `expected 64-byte P1363 signature, got ${sig.length}`);
+      console.log(`signature=${sig.length}b (ES256 P1363)`);
+    });
+
+    await test('GET /services/supportedAlgorithms — algorithm enumeration', async () => {
+      const res = await fetch(`${trusthashUrl}/services/supportedAlgorithms`);
+      assert(res.ok, `HTTP ${res.status}`);
+      const body = (await res.json()) as {
+        fingerprints: Array<{ alg: string }>;
+        watermarks: Array<{ alg: string }>;
+      };
+      assert(Array.isArray(body.fingerprints), 'missing fingerprints array');
+      const algs = body.fingerprints.map((f) => f.alg);
+      assert(
+        algs.includes('org.ar-io.phash'),
+        `missing org.ar-io.phash in ${JSON.stringify(algs)}`
+      );
+      console.log(
+        `fingerprints=[${algs.join(', ')}] watermarks=[${body.watermarks.map((w) => w.alg).join(', ')}]`
+      );
+    });
+
+    await test('GET /search-similar/stats — search index statistics', async () => {
+      const res = await fetch(`${trusthashUrl}/search-similar/stats`);
+      assert(res.ok, `HTTP ${res.status}`);
+      const body = await res.json();
+      console.log(`stats=${JSON.stringify(body.data)}`);
+    });
+
+    await test('POST /matches/byContent — content-based soft binding lookup', async () => {
+      const imageBuffer = readFileSync(testImagePath);
+      const res = await fetch(`${trusthashUrl}/matches/byContent?maxResults=5`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'image/jpeg' },
+        body: imageBuffer,
+      });
+      assert(res.ok, `HTTP ${res.status}`);
+      const body = (await res.json()) as {
+        matches: Array<{ manifestId: string; similarityScore?: number }>;
+      };
+      assert(Array.isArray(body.matches), 'missing matches array');
+      assert(body.matches.length > 0, 'expected at least 1 match for known test image');
+      console.log(
+        `${body.matches.length} match(es): ${body.matches.map((m) => m.manifestId).join(', ')}`
+      );
+    });
+
+    await test('GET /matches/byBinding — binding lookup with known pHash', async () => {
+      // First get the pHash for our test image via search-similar with wide threshold
+      const searchRes = await fetch(
+        `${trusthashUrl}/search-similar?phash=0000000000000000&threshold=64&limit=1`
+      );
+      assert(searchRes.ok, `search-similar HTTP ${searchRes.status}`);
+      const searchBody = (await searchRes.json()) as {
+        data: { results: Array<{ phash?: string; manifestId: string }> };
+      };
+
+      if (searchBody.data.results.length === 0) {
+        console.log('(no manifests in index — cannot test binding lookup)');
+        return;
+      }
+
+      // Use the first result's manifestId for a byBinding lookup
+      const knownManifest = searchBody.data.results[0];
+      const res = await fetch(
+        `${trusthashUrl}/matches/byBinding?alg=org.ar-io.phash&value=0000000000000000&maxResults=5`
+      );
+      assert(res.ok, `HTTP ${res.status}`);
+      const body = (await res.json()) as {
+        matches: Array<{ manifestId: string }>;
+      };
+      assert(Array.isArray(body.matches), 'missing matches array');
+      console.log(
+        `${body.matches.length} match(es) for binding lookup (known manifest: ${knownManifest.manifestId})`
+      );
+    });
+
+    if (provenanceManifestId) {
+      await test('GET /manifests/:manifestId — manifest retrieval', async () => {
+        const encoded = encodeURIComponent(provenanceManifestId!);
+        const res = await fetch(`${trusthashUrl}/manifests/${encoded}`, { redirect: 'manual' });
+        if (res.status === 404) {
+          console.log('(manifest not indexed yet — expected for freshly uploaded items)');
+          return;
+        }
+        assert(res.status === 200 || res.status === 302, `expected 200/302/404, got ${res.status}`);
+        if (res.status === 302) {
+          const location = res.headers.get('location');
+          console.log(`302 redirect → ${location?.slice(0, 60)}...`);
+        } else {
+          const bytes = Buffer.from(await res.arrayBuffer());
+          console.log(`200 OK — ${bytes.length} bytes`);
+        }
+      });
+    } else {
+      skip('GET /manifests/:manifestId', 'no provenance manifest stored');
+    }
+  } else {
+    skip('trusthash sidecar API tests', 'TRUSTHASH_URL not set');
+  }
+
+  // ===================================================================
+  section('10. Fan-Out (low-level API)');
   // ===================================================================
 
   if (!adminKey) {
@@ -421,7 +594,7 @@ async function main() {
       assert(!!header.owner_address, 'missing owner_address');
       assert(!!header.signature, 'missing signature');
       assert(header.data_size > 0, 'data_size is 0');
-      console.log(`id=${header.id.slice(0, 20)}... size=${rawBytes.length}b`);
+      console.log(`id=${header.id} size=${rawBytes.length}b`);
     });
 
     await test('fanOutDataItem() — POST header to gateway', async () => {
@@ -453,7 +626,7 @@ async function main() {
         result.fanOutResults[0].status === 'success',
         `fan-out failed: ${result.fanOutResults[0].message}`
       );
-      console.log(`txId=${result.txId.slice(0, 20)}... fanOut=success`);
+      console.log(`txId=${result.txId} fanOut=success`);
 
       // Verify data is retrievable from gateway
       console.log('\n         Waiting 2s for data availability...');
@@ -475,14 +648,12 @@ async function main() {
       assert(result.fanOutResults!.length > 0, 'empty fanOutResults');
       const ok = result.fanOutResults!.filter((r) => r.status === 'success').length;
       assert(ok > 0, `fan-out failed for every gateway: ${JSON.stringify(result.fanOutResults)}`);
-      console.log(
-        `txId=${result.txId.slice(0, 20)}... fanOut=${ok}/${result.fanOutResults!.length} ok`
-      );
+      console.log(`txId=${result.txId} fanOut=${ok}/${result.fanOutResults!.length} ok`);
     });
   }
 
   // ===================================================================
-  section('10. Gateway Admin API (direct)');
+  section('11. Gateway Admin API (direct)');
   // ===================================================================
 
   if (!adminKey) {

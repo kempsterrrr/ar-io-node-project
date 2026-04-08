@@ -48,7 +48,8 @@ services:
       - START_HEIGHT=${START_HEIGHT:-1400000}
       - ARNS_ROOT_HOST=${ARNS_ROOT_HOST:-}
       - AR_IO_WALLET=${AR_IO_WALLET:-}
-      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
+      # ADMIN_API_KEY loaded from env_file (apps/gateway/.env)
+      # Only override via shell: ADMIN_API_KEY=xxx docker compose ... up -d
       - TRUSTED_NODE_URL=${TRUSTED_NODE_URL:-https://arweave.net}
       - RUN_OBSERVER=false
       - OBSERVER_WALLET=${OBSERVER_WALLET:-}
@@ -69,10 +70,13 @@ services:
       - '3003'
     env_file:
       - ./packages/trusthash-sidecar/.env.docker
+      - path: ./packages/trusthash-sidecar/.env
+        required: false
     environment:
       - NODE_ENV=development
       - PORT=3003
       - LOG_LEVEL=debug
+      - GATEWAY_URL=http://core:4000
       - DUCKDB_PATH=/app/data/provenance.duckdb
       - MAX_IMAGE_SIZE_MB=${MAX_IMAGE_SIZE_MB:-50}
       - REFERENCE_FETCH_TIMEOUT_MS=${REFERENCE_FETCH_TIMEOUT_MS:-10000}
