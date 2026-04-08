@@ -29,6 +29,7 @@ import {
   uploadAndFanOut,
 } from '../packages/sdk/src/fanout/index.js';
 import type { GatewayTarget } from '../packages/sdk/src/types.js';
+import { computePHash } from '../packages/turbo-c2pa/src/phash.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -419,9 +420,9 @@ async function main() {
 
   if (trusthashUrl) {
     await test('GET /health — sidecar status', async () => {
-      // Health is at root, not under /v1/ — derive base URL from trusthashUrl
-      const healthUrl = new URL('/health', trusthashUrl.replace(/\/v1\/?$/, '')).toString();
-      const res = await fetch(healthUrl);
+      // Health is at root, not under /v1/ — strip /v1 suffix for local, keep /trusthash for prod
+      const baseUrl = trusthashUrl.replace(/\/v1\/?$/, '');
+      const res = await fetch(`${baseUrl}/health`);
       assert(res.ok, `HTTP ${res.status}`);
       const body = (await res.json()) as {
         success: boolean;
@@ -517,39 +518,22 @@ async function main() {
       );
     });
 
-    await test('GET /matches/byBinding — binding lookup with known pHash', async () => {
-      // Get a known manifest with its pHash via search-similar (wide threshold)
-      const searchRes = await fetch(
-        `${trusthashUrl}/search-similar?phash=0000000000000000&threshold=64&limit=1`
-      );
-      assert(searchRes.ok, `search-similar HTTP ${searchRes.status}`);
-      const searchBody = (await searchRes.json()) as {
-        data: { results: Array<{ phash?: string; manifestId: string }> };
-      };
+    await test('GET /matches/byBinding — binding lookup with computed pHash', async () => {
+      // Compute the pHash of our test image locally (same as the SDK does at upload)
+      const imageBuffer = readFileSync(testImagePath);
+      const { base64: bindingValue, hex: pHashHex } = await computePHash(imageBuffer);
 
-      if (searchBody.data.results.length === 0) {
-        console.log('(no manifests in index — cannot test binding lookup)');
-        return;
-      }
-
-      const knownManifest = searchBody.data.results[0];
-      assert(!!knownManifest.phash, 'missing phash on known manifest');
-
-      // Look up by the actual pHash — should find the same manifest
+      // Query byBinding with the computed soft binding value (base64-encoded per C2PA SBR spec)
       const res = await fetch(
-        `${trusthashUrl}/matches/byBinding?alg=org.ar-io.phash&value=${encodeURIComponent(knownManifest.phash!)}&maxResults=5`
+        `${trusthashUrl}/matches/byBinding?alg=org.ar-io.phash&value=${encodeURIComponent(bindingValue)}&maxResults=5`
       );
       assert(res.ok, `HTTP ${res.status}`);
       const body = (await res.json()) as {
         matches: Array<{ manifestId: string }>;
       };
       assert(Array.isArray(body.matches), 'missing matches array');
-      assert(body.matches.length > 0, 'expected at least 1 binding match');
-      assert(
-        body.matches.some((m) => m.manifestId === knownManifest.manifestId),
-        `expected ${knownManifest.manifestId} in byBinding results`
-      );
-      console.log(`${body.matches.length} match(es), verified ${knownManifest.manifestId} found`);
+      assert(body.matches.length > 0, `expected at least 1 match for pHash ${pHashHex}`);
+      console.log(`${body.matches.length} match(es) for pHash=${pHashHex}`);
     });
 
     if (provenanceManifestId) {
