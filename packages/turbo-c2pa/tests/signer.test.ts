@@ -9,7 +9,7 @@ afterEach(() => {
 });
 
 describe('RemoteSigner', () => {
-  it('fetches certificate from /v1/cert', async () => {
+  it('fetches certificate from /cert', async () => {
     const certPem = '-----BEGIN CERTIFICATE-----\nTESTDATA\n-----END CERTIFICATE-----';
     (globalThis as { fetch: typeof fetch }).fetch = (async () =>
       new Response(certPem, {
@@ -17,7 +17,7 @@ describe('RemoteSigner', () => {
         headers: { 'Content-Type': 'application/x-pem-file' },
       })) as typeof fetch;
 
-    const signer = new RemoteSigner('http://localhost:3003');
+    const signer = new RemoteSigner('http://localhost:3003/v1');
     const cert = await signer.getCertificateChain();
 
     expect(cert).toBe(certPem);
@@ -33,7 +33,7 @@ describe('RemoteSigner', () => {
       });
     }) as typeof fetch;
 
-    const signer = new RemoteSigner('http://localhost:3003');
+    const signer = new RemoteSigner('http://localhost:3003/v1');
     await signer.getCertificateChain();
     await signer.getCertificateChain();
 
@@ -49,7 +49,7 @@ describe('RemoteSigner', () => {
       });
     }) as typeof fetch;
 
-    const signer = new RemoteSigner('http://localhost:3003');
+    const signer = new RemoteSigner('http://localhost:3003/v1');
     await signer.getCertificateChain();
     signer.clearCache();
     await signer.getCertificateChain();
@@ -57,7 +57,7 @@ describe('RemoteSigner', () => {
     expect(callCount).toBe(2);
   });
 
-  it('signs payload via /v1/sign', async () => {
+  it('signs payload via /sign', async () => {
     const fakeSig = new Uint8Array(64).fill(0xab);
     (globalThis as { fetch: typeof fetch }).fetch = (async () =>
       new Response(fakeSig, {
@@ -65,7 +65,7 @@ describe('RemoteSigner', () => {
         headers: { 'Content-Type': 'application/octet-stream' },
       })) as typeof fetch;
 
-    const signer = new RemoteSigner('http://localhost:3003');
+    const signer = new RemoteSigner('http://localhost:3003/v1');
     const result = await signer.sign(new Uint8Array([1, 2, 3]));
 
     expect(result.signature.length).toBe(64);
@@ -76,7 +76,7 @@ describe('RemoteSigner', () => {
     (globalThis as { fetch: typeof fetch }).fetch = (async () =>
       new Response('', { status: 501 })) as typeof fetch;
 
-    const signer = new RemoteSigner('http://localhost:3003');
+    const signer = new RemoteSigner('http://localhost:3003/v1');
 
     await expect(signer.sign(new Uint8Array([1]))).rejects.toThrow('not enabled');
   });
@@ -85,7 +85,7 @@ describe('RemoteSigner', () => {
     (globalThis as { fetch: typeof fetch }).fetch = (async () =>
       new Response('', { status: 500 })) as typeof fetch;
 
-    const signer = new RemoteSigner('http://localhost:3003');
+    const signer = new RemoteSigner('http://localhost:3003/v1');
 
     await expect(signer.getCertificateChain()).rejects.toThrow('failed');
   });

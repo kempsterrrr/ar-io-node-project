@@ -202,7 +202,7 @@ async function signWithIdentity(options: {
       directCoseHandling: true,
     },
     async (data: Buffer) => {
-      const response = await fetch(`${remoteSigner.endpoint}/v1/sign?format=der`, {
+      const response = await fetch(`${remoteSigner.endpoint}/sign?format=der`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/octet-stream' },
         body: data,
@@ -222,7 +222,7 @@ async function signWithIdentity(options: {
 
       // Send to sidecar for signing with wallet verification
       const endpoint = remoteSigner['endpoint']; // Access private field
-      const response = await fetch(`${endpoint}/v1/identity/sign`, {
+      const response = await fetch(`${endpoint}/identity/sign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

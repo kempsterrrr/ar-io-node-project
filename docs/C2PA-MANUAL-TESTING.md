@@ -259,7 +259,106 @@ Follow the same steps as 4.2-4.5 using the TX ID and Manifest ID from the store 
 
 ---
 
-## 6. Verify Sidecar
+## 6. End-to-End Upload Test (Manifest Mode)
+
+Manifest mode signs an image but uploads only the raw JUMBF manifest bytes to Arweave (not the image). Requires the sidecar's signing oracle.
+
+### 6.1 Upload Manifest Only
+
+```bash
+cd packages/turbo-c2pa
+
+export ETH_PRIVATE_KEY="<your-eth-private-key>"
+export SIDECAR_URL="https://ario.agenticway.io/trusthash"
+export GATEWAY_URL="https://turbo-gateway.com"
+export MANIFEST_REPO_URL="https://ario.agenticway.io/trusthash"
+
+pnpm exec tsx scripts/demo-upload.ts /path/to/image.jpg --manifest --source-type digitalCapture
+```
+
+Expected output:
+
+- Content-Type: `application/c2pa`
+- C2PA-Asset-Content-Type: `image/jpeg`
+- C2PA-Storage-Mode: `manifest`
+- Arweave TX ID and Manifest ID printed
+
+### 6.2 Verify Indexing
+
+After gateway unbundles (10-60 min), verify the sidecar indexed it as a `manifest-store` artifact:
+
+```bash
+# By binding
+curl -s "https://ario.agenticway.io/trusthash/matches/byBinding?alg=org.ar-io.phash&value=<PHASH_B64>" | jq .
+
+# By manifest ID
+curl -sI "https://ario.agenticway.io/trusthash/manifests/<MANIFEST_ID>"
+```
+
+Expected: Manifest appears in binding query. Manifest endpoint returns 302 redirect or 200 with `application/c2pa` bytes.
+
+---
+
+## 7. End-to-End Upload Test (Proof Mode)
+
+Proof mode creates a lightweight proof-locator on Arweave pointing to a remote manifest (e.g. Adobe's repository). No signing required.
+
+### 7.1 Upload Proof-Locator (Auto-detect URL from XMP)
+
+Use an image with `dcterms:provenance` in its XMP metadata (e.g. `cloud.jpg` from Adobe):
+
+```bash
+cd packages/turbo-c2pa
+
+export ETH_PRIVATE_KEY="<your-eth-private-key>"
+export GATEWAY_URL="https://turbo-gateway.com"
+export MANIFEST_REPO_URL="https://ario.agenticway.io/trusthash"
+
+pnpm exec tsx scripts/demo-upload.ts tests/fixtures/cloud.jpg --proof \
+  --manifest-id "adobe:urn:uuid:5f37e182-3687-462e-a7fb-573462780391"
+```
+
+The SDK auto-detects the manifest URL from the image's XMP `dcterms:provenance` field. You can also provide it explicitly:
+
+```bash
+pnpm exec tsx scripts/demo-upload.ts tests/fixtures/cloud.jpg --proof \
+  --manifest-id "adobe:urn:uuid:5f37e182-3687-462e-a7fb-573462780391" \
+  --manifest-fetch-url "https://cai-manifests.adobe.com/manifests/adobe-urn-uuid-5f37e182-3687-462e-a7fb-573462780391"
+```
+
+Expected output:
+
+- Content-Type: `application/json`
+- C2PA-Storage-Mode: `proof`
+- C2PA-Manifest-Fetch-URL: Adobe manifest URL
+- Arweave TX ID printed
+
+### 7.2 Verify the Remote Manifest is Reachable
+
+```bash
+curl -sI "https://cai-manifests.adobe.com/manifests/adobe-urn-uuid-5f37e182-3687-462e-a7fb-573462780391" -w "\n%{http_code}" | tail -1
+```
+
+Expected: `200`
+
+### 7.3 Verify Indexing and Fetch-Through
+
+After gateway unbundles (10-60 min), verify the sidecar indexed it as a `proof-locator` artifact:
+
+```bash
+# By binding
+curl -s "https://ario.agenticway.io/trusthash/matches/byBinding?alg=org.ar-io.phash&value=<PHASH_B64>" | jq .
+
+# By manifest ID — sidecar should fetch-through to Adobe's repo
+curl -s "https://ario.agenticway.io/trusthash/manifests/<MANIFEST_ID>" \
+  -o /dev/null -w "status: %{http_code}\nresolution: %{header:x-manifest-resolution}\n"
+```
+
+Expected: Status 200, `X-Manifest-Resolution: proof-remote-fetch` (or `proof-remote-cache` on subsequent requests).
+
+---
+
+## 8. Verify Sidecar
 
 ### 6.1 Verify a Transaction
 

@@ -30,6 +30,10 @@ import {
 } from '../packages/sdk/src/fanout/index.js';
 import type { GatewayTarget } from '../packages/sdk/src/types.js';
 import { computePHash } from '../packages/turbo-c2pa/src/phash.js';
+import { proofAndPrepare } from '../packages/turbo-c2pa/src/mode-proof.js';
+import { signManifestAndPrepare } from '../packages/turbo-c2pa/src/mode-manifest.js';
+import { extractProvenanceUrl } from '../packages/turbo-c2pa/src/xmp.js';
+import { RemoteSigner } from '../packages/turbo-c2pa/src/signer.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -253,6 +257,186 @@ async function main() {
   } else {
     skip('store() with provenance', 'TRUSTHASH_URL not set');
     skip('retrieve() provenance-stored image', 'TRUSTHASH_URL not set');
+  }
+
+  // ===================================================================
+  section('2c. Proof Mode (C2PA proof-locator with fan-out)');
+  // ===================================================================
+
+  const cloudJpgPath = resolve(__dirname, '../packages/turbo-c2pa/tests/fixtures/cloud.jpg');
+  let proofModeTxId: string | undefined;
+  let proofModeManifestId: string | undefined;
+  let proofModePHashB64: string | undefined;
+
+  if (trusthashUrl && adminKey && !skipFanout) {
+    const cloudImage = readFileSync(cloudJpgPath);
+    const provenanceUrl = extractProvenanceUrl(cloudImage);
+
+    if (provenanceUrl) {
+      await test('proofAndPrepare() + uploadAndFanOut() — proof-locator with XMP auto-detect', async () => {
+        proofModeManifestId = 'adobe:urn:uuid:5f37e182-3687-462e-a7fb-573462780391';
+
+        const proofResult = await proofAndPrepare({
+          imageBuffer: cloudImage,
+          manifestFetchUrl: provenanceUrl,
+          manifestId: proofModeManifestId,
+          manifestRepoUrl: trusthashUrl!,
+          claimGenerator: 'sdk-e2e-test/0.1.0',
+        });
+
+        proofModePHashB64 = proofResult.tags.find(
+          (t) => t.name === 'C2PA-Soft-Binding-Value'
+        )?.value;
+        assert(proofResult.tags.length === 13, `expected 13 tags, got ${proofResult.tags.length}`);
+        assert(
+          proofResult.contentType === 'application/json',
+          `wrong content type: ${proofResult.contentType}`
+        );
+
+        const targets: GatewayTarget[] = [{ url: gatewayUrl, adminApiKey: adminKey! }];
+        const uploadResult = await uploadAndFanOut({
+          data: proofResult.proofPayload,
+          tags: proofResult.tags,
+          ethPrivateKey: ethKey!,
+          gateways: targets,
+          gatewayUrl,
+        });
+
+        proofModeTxId = uploadResult.txId;
+        assert(!!uploadResult.txId, 'missing txId');
+        const fanOk = uploadResult.fanOutResults.every((r) => r.status === 'success');
+        assert(fanOk, `fan-out failed: ${JSON.stringify(uploadResult.fanOutResults)}`);
+        console.log(`txId=${uploadResult.txId} fanOut=success`);
+        console.log(`         manifestFetchUrl=${provenanceUrl}`);
+        console.log(`         pHash=${proofResult.pHashHex}`);
+      });
+
+      if (proofModeTxId) {
+        await test('proof-locator indexed — byBinding lookup', async () => {
+          assert(!!proofModePHashB64, 'missing pHash from proof upload');
+          const maxAttempts = 15;
+          const delayMs = 2000;
+          let found = false;
+
+          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            if (attempt > 1) process.stdout.write(`         retry ${attempt}/${maxAttempts}... `);
+            else console.log(`\n         waiting for sidecar indexing...`);
+            await new Promise((r) => setTimeout(r, delayMs));
+
+            try {
+              const res = await fetch(
+                `${trusthashUrl}/matches/byBinding?alg=org.ar-io.phash&value=${encodeURIComponent(proofModePHashB64!)}&maxResults=10`
+              );
+              if (res.ok) {
+                const body = (await res.json()) as { matches: Array<{ manifestId: string }> };
+                if (body.matches?.some((m) => m.manifestId === proofModeManifestId)) {
+                  found = true;
+                  console.log(`FOUND after ${(attempt * delayMs) / 1000}s`);
+                  break;
+                }
+              }
+              if (attempt > 1) console.log('not yet');
+            } catch {
+              if (attempt > 1) console.log('error');
+            }
+          }
+
+          assert(found, `proof-locator not indexed within ${(maxAttempts * delayMs) / 1000}s`);
+        });
+
+        await test('proof-locator manifest fetch-through — retrieves from Adobe repo', async () => {
+          const manifestUrl = `${trusthashUrl}/manifests/${encodeURIComponent(proofModeManifestId!)}`;
+          const res = await fetch(manifestUrl);
+          assert(res.ok, `HTTP ${res.status}: ${await res.text()}`);
+
+          const resolution = res.headers.get('x-manifest-resolution');
+          const bodyBytes = await res.arrayBuffer();
+          assert(bodyBytes.byteLength > 0, 'empty manifest body');
+          console.log(`resolution=${resolution} size=${bodyBytes.byteLength}b`);
+
+          if (resolution?.startsWith('proof-remote')) {
+            console.log('         SUCCESS: fetched through to Adobe manifest repository');
+          }
+        });
+      }
+    } else {
+      skip('proof mode tests', 'cloud.jpg missing dcterms:provenance in XMP');
+    }
+  } else {
+    skip(
+      'proof mode tests',
+      !trusthashUrl
+        ? 'TRUSTHASH_URL not set'
+        : !adminKey
+          ? 'ADMIN_API_KEY not set'
+          : 'SKIP_FANOUT=true'
+    );
+  }
+
+  // ===================================================================
+  section('2d. Manifest Mode (C2PA manifest-only with fan-out)');
+  // ===================================================================
+
+  let manifestModeTxId: string | undefined;
+  let manifestModeManifestId: string | undefined;
+
+  if (trusthashUrl && adminKey && !skipFanout) {
+    const certCheck = await fetch(`${trusthashUrl}/cert`);
+
+    if (certCheck.status !== 501) {
+      await test('signManifestAndPrepare() + uploadAndFanOut() — manifest-only upload', async () => {
+        const imageBuffer = readFileSync(testImagePath);
+        const remoteSigner = new RemoteSigner(trusthashUrl!);
+
+        const manifestResult = await signManifestAndPrepare({
+          imageBuffer,
+          remoteSigner,
+          manifestRepoUrl: trusthashUrl!,
+          claimGenerator: 'sdk-e2e-test/0.1.0',
+          digitalSourceType: 'http://cv.iptc.org/newscodes/digitalsourcetype/digitalCapture',
+        });
+
+        manifestModeManifestId = manifestResult.manifestId;
+        assert(
+          manifestResult.tags.length === 12,
+          `expected 12 tags, got ${manifestResult.tags.length}`
+        );
+        assert(
+          manifestResult.contentType === 'application/c2pa',
+          `wrong content type: ${manifestResult.contentType}`
+        );
+        assert(manifestResult.manifestBytes.length > 0, 'empty manifest bytes');
+
+        const targets: GatewayTarget[] = [{ url: gatewayUrl, adminApiKey: adminKey! }];
+        const uploadResult = await uploadAndFanOut({
+          data: manifestResult.manifestBytes,
+          tags: manifestResult.tags,
+          ethPrivateKey: ethKey!,
+          gateways: targets,
+          gatewayUrl,
+        });
+
+        manifestModeTxId = uploadResult.txId;
+        assert(!!uploadResult.txId, 'missing txId');
+        const fanOk = uploadResult.fanOutResults.every((r) => r.status === 'success');
+        assert(fanOk, `fan-out failed: ${JSON.stringify(uploadResult.fanOutResults)}`);
+        console.log(`txId=${uploadResult.txId} fanOut=success`);
+        console.log(`         manifestId=${manifestResult.manifestId}`);
+        console.log(`         manifestBytes=${manifestResult.manifestBytes.length}b`);
+        console.log(`         assetContentType=${manifestResult.assetContentType}`);
+      });
+    } else {
+      skip('manifest mode tests', 'signing not enabled on sidecar');
+    }
+  } else {
+    skip(
+      'manifest mode tests',
+      !trusthashUrl
+        ? 'TRUSTHASH_URL not set'
+        : !adminKey
+          ? 'ADMIN_API_KEY not set'
+          : 'SKIP_FANOUT=true'
+    );
   }
 
   // ===================================================================

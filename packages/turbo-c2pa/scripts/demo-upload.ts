@@ -249,7 +249,7 @@ async function main() {
       console.log('  WARNING: No --source-type provided. digitalSourceType will be omitted.');
     }
 
-    const remoteSigner = new RemoteSigner(sidecarUrl);
+    const remoteSigner = new RemoteSigner(manifestRepoUrl);
 
     const manifestResult = await signManifestAndPrepare({
       imageBuffer,
@@ -336,7 +336,7 @@ async function main() {
       );
     }
 
-    const remoteSigner = new RemoteSigner(sidecarUrl);
+    const remoteSigner = new RemoteSigner(manifestRepoUrl);
 
     const signResult = await signAndPrepare({
       imageBuffer,
