@@ -686,19 +686,35 @@ async function main() {
 
     await test('POST /matches/byContent — content-based soft binding lookup', async () => {
       const imageBuffer = readFileSync(testImagePath);
-      const res = await fetch(`${trusthashUrl}/matches/byContent?maxResults=5`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'image/jpeg' },
-        body: imageBuffer,
-      });
-      assert(res.ok, `HTTP ${res.status}`);
-      const body = (await res.json()) as {
-        matches: Array<{ manifestId: string; similarityScore?: number }>;
-      };
-      assert(Array.isArray(body.matches), 'missing matches array');
-      assert(body.matches.length > 0, 'expected at least 1 match for known test image');
-      console.log(
-        `${body.matches.length} match(es): ${body.matches.map((m) => m.manifestId).join(', ')}`
+      const maxAttempts = 15;
+      const delayMs = 2000;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (attempt > 1) process.stdout.write(`         retry ${attempt}/${maxAttempts}... `);
+        else console.log(`\n         waiting for pHash indexing...`);
+        await new Promise((r) => setTimeout(r, delayMs));
+
+        const res = await fetch(`${trusthashUrl}/matches/byContent?maxResults=5`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'image/jpeg' },
+          body: imageBuffer,
+        });
+        assert(res.ok, `HTTP ${res.status}`);
+        const body = (await res.json()) as {
+          matches: Array<{ manifestId: string; similarityScore?: number }>;
+        };
+        assert(Array.isArray(body.matches), 'missing matches array');
+
+        if (body.matches.length > 0) {
+          console.log(
+            `${body.matches.length} match(es) after ${(attempt * delayMs) / 1000}s: ${body.matches.map((m) => m.manifestId).join(', ')}`
+          );
+          return;
+        }
+        if (attempt > 1) console.log('not yet');
+      }
+      throw new Error(
+        `expected at least 1 match for known test image after ${(maxAttempts * delayMs) / 1000}s`
       );
     });
 
