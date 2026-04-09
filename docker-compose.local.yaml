@@ -53,6 +53,9 @@ services:
       - TRUSTED_NODE_URL=${TRUSTED_NODE_URL:-https://arweave.net}
       - RUN_OBSERVER=false
       - OBSERVER_WALLET=${OBSERVER_WALLET:-}
+      # C2PA: notify sidecar when C2PA data items are indexed
+      - WEBHOOK_TARGET_SERVERS=${WEBHOOK_TARGET_SERVERS:-http://trusthash-sidecar:3003/webhook}
+      - WEBHOOK_INDEX_FILTER=${WEBHOOK_INDEX_FILTER:-{"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}}
     volumes:
       - ${DATA_PATH:-./apps/gateway/data}:/app/data
       - ./apps/gateway/wallets:/app/wallets:ro

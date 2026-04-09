@@ -1,4 +1,10 @@
 services:
+  # Inject webhook config into the gateway core so it notifies the sidecar
+  core:
+    environment:
+      - WEBHOOK_TARGET_SERVERS=${WEBHOOK_TARGET_SERVERS:-http://trusthash-sidecar:3003/webhook}
+      - WEBHOOK_INDEX_FILTER=${WEBHOOK_INDEX_FILTER:-{"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}}
+
   trusthash-sidecar:
     image: ${TRUSTHASH_SIDECAR_IMAGE:-ghcr.io/ar-io/trusthash-sidecar:${TRUSTHASH_SIDECAR_TAG:-latest}}
     restart: unless-stopped

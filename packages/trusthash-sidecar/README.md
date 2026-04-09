@@ -140,19 +140,27 @@ Optional tags:
 
 ## Gateway Configuration
 
-Configure the gateway to send webhooks for C2PA sidecar transactions:
+The sidecar compose overlay (`docker-compose.sidecar.yaml`) automatically injects webhook defaults into the gateway core service. When you run:
 
 ```bash
-WEBHOOK_INDEX_FILTER='{"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}'
-WEBHOOK_TARGET_SERVERS="http://trusthash-sidecar:3003/webhook"
+docker compose -f docker-compose.yaml -f sidecar/docker-compose.sidecar.yaml up -d
 ```
 
-The filter is intentionally broad - the sidecar validates all required fields (storage mode, manifest ID, soft binding) and gracefully skips any incomplete payloads.
+The gateway will automatically send webhooks to the sidecar for C2PA transactions. No manual `.env` changes needed.
+
+To override the defaults, set these in your gateway `.env`:
+
+```bash
+WEBHOOK_TARGET_SERVERS=http://trusthash-sidecar:3003/webhook
+WEBHOOK_INDEX_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
+```
+
+The filter is intentionally broad — the sidecar validates all required fields (storage mode, manifest ID, soft binding) and gracefully skips any incomplete payloads.
 
 If you also want the gateway to index these transactions for GraphQL queries:
 
 ```bash
-ANS104_INDEX_FILTER='{"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}'
+ANS104_INDEX_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
 ```
 
 ## API Endpoints
