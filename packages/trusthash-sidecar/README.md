@@ -116,34 +116,27 @@ Keep the sidecar data directory separate from the gateway `./data` volume to avo
 
 ## Tag Contract (Gateway Indexing)
 
-The sidecar **only indexes transactions that include the required tag set**. It does not parse JUMBF to recover missing data.
+The sidecar **only indexes transactions that include the required tag set**. It does not parse JUMBF to recover missing data. Tags are defined in `@ar-io/c2pa-protocol`.
 
-Required tags (`manifest-store` artifact):
+Required tags (all modes):
 
-- `Content-Type=application/c2pa`
-- `Manifest-Type=sidecar`
-- `C2PA-Manifest-Id` or `C2PA-Manifest-ID` (URN, e.g. `urn:uuid:...`)
-- `C2PA-SoftBinding-Alg` or `C2PA-Soft-Binding-Alg` (one per binding)
-- `C2PA-SoftBinding-Value` or `C2PA-Soft-Binding-Value` (one per binding, base64-encoded CBOR bstr)
-- `pHash` (16-char hex or 64-bit binary string, used for similarity search)
+- `Protocol` = `C2PA-Manifest-Proof`
+- `C2PA-Storage-Mode` = `full`, `manifest`, or `proof`
+- `C2PA-Manifest-ID` (URN, e.g. `urn:c2pa:...` or `adobe:urn:uuid:...`)
+- `C2PA-Soft-Binding-Alg` (e.g. `org.ar-io.phash`)
+- `C2PA-Soft-Binding-Value` (base64-encoded algorithm-specific value)
 
-Required tags (`proof-locator` artifact):
+Additional required tags for `proof` mode:
 
-- `Manifest-Type=proof`
-- `C2PA-Manifest-Id` or `C2PA-Manifest-ID`
-- `C2PA-Manifest-Remote-URL`
-- `C2PA-Manifest-Digest-Alg`
-- `C2PA-Manifest-Digest-Value`
-- `C2PA-SoftBinding-Alg` or `C2PA-Soft-Binding-Alg`
-- `C2PA-SoftBinding-Value` or `C2PA-Soft-Binding-Value`
+- `C2PA-Manifest-Fetch-URL` (remote URL where manifest can be fetched)
+- `C2PA-Manifest-Store-Hash` (base64url SHA-256 of remote manifest, for digest verification)
 
-Recommended tags:
+Optional tags:
 
-- `Original-Content-Type` (e.g. `image/jpeg`)
-- `App-Name` (stored as claim generator)
-- `C2PA-SoftBinding-Scope` or `C2PA-Soft-Binding-Scope` (optional, one per binding, JSON string or scalar)
-
-The sidecar requires `C2PA-SoftBinding-Alg` and `C2PA-SoftBinding-Value` to have matching counts.
+- `C2PA-Asset-Content-Type` (original media MIME type, required for manifest/proof modes)
+- `C2PA-Manifest-Repo-URL` (SBR API base URL, used for redirect resolution)
+- `C2PA-Claim-Generator` (tool name/version)
+- `C2PA-Asset-Hash` (base64url SHA-256 of original asset)
 
 ## Gateway Configuration
 
