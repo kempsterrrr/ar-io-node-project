@@ -155,7 +155,7 @@ manifests.get('/:manifestId', async (c) => {
         );
         return redirectResponse(locator.fetchUrl, 'fetch-url');
       }
-      if (locator?.repoUrl) {
+      if (locator?.repoUrl && locator?.artifactKind !== 'proof-locator') {
         const repoManifestUrl = buildRepoManifestUrl(locator.repoUrl, manifestId);
         logger.info(
           {
@@ -204,7 +204,7 @@ manifests.get('/:manifestId', async (c) => {
       );
       return redirectResponse(localRecord.fetchUrl, 'fetch-url');
     }
-    if (localRecord?.repoUrl) {
+    if (localRecord?.repoUrl && localRecord?.artifactKind !== 'proof-locator') {
       const repoManifestUrl = buildRepoManifestUrl(localRecord.repoUrl, manifestId);
       logger.info(
         {

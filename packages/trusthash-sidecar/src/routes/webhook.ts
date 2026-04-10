@@ -36,7 +36,12 @@ const webhook = new Hono();
  */
 webhook.post('/', async (c) => {
   try {
-    const body = await c.req.json();
+    let body = await c.req.json();
+
+    // The gateway wraps webhook payloads in { event, data } — unwrap if present
+    if (body && typeof body === 'object' && !Array.isArray(body) && body.event && body.data) {
+      body = body.data;
+    }
 
     // Handle both single and batch payloads
     if (Array.isArray(body)) {

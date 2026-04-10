@@ -93,6 +93,39 @@ function assert(condition: boolean, msg: string) {
 // Main
 // ---------------------------------------------------------------------------
 
+/**
+ * Post a webhook directly to the sidecar to seed DuckDB.
+ * The gateway only sends webhooks from L1 unbundling, not from admin API fan-out.
+ * This mirrors what the gateway would eventually send after L1 confirmation.
+ */
+async function seedSidecarWebhook(
+  sidecarBaseUrl: string,
+  txId: string,
+  tags: { name: string; value: string }[],
+  owner: string
+): Promise<boolean> {
+  // Strip /v1 suffix to reach the webhook endpoint at the root
+  const webhookUrl = sidecarBaseUrl.replace(/\/v1\/?$/, '') + '/webhook';
+  try {
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tx_id: txId,
+        tags,
+        owner,
+        block_height: null, // optimistic — no L1 confirmation yet
+        block_timestamp: null,
+      }),
+    });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { data?: { action?: string } };
+    return body.data?.action === 'indexed';
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
   console.log('AgenticWay SDK — Manual Integration Tests');
   console.log(`  Gateway:    ${gatewayUrl}`);
@@ -217,6 +250,28 @@ async function main() {
         const ok = result.fanOutResults.filter((r) => r.status === 'success').length;
         console.log(` fanOut=${ok}/${result.fanOutResults.length} ok`);
       }
+
+      // Seed the sidecar webhook directly since the gateway only sends
+      // webhooks from L1 unbundling, not from admin API fan-out.
+      const { base64: bindingValue } = await computePHash(imageBuffer);
+      const seeded = await seedSidecarWebhook(
+        trusthashUrl!,
+        result.txId,
+        [
+          { name: 'Content-Type', value: 'image/jpeg' },
+          { name: 'Protocol', value: 'C2PA-Manifest-Proof' },
+          { name: 'C2PA-Storage-Mode', value: 'full' },
+          { name: 'C2PA-Manifest-ID', value: result.provenance!.manifestId },
+          { name: 'C2PA-Asset-Hash', value: result.provenance!.assetHash },
+          { name: 'C2PA-Manifest-Store-Hash', value: result.provenance!.assetHash },
+          { name: 'C2PA-Manifest-Repo-URL', value: trusthashUrl! },
+          { name: 'C2PA-Soft-Binding-Alg', value: 'org.ar-io.phash' },
+          { name: 'C2PA-Soft-Binding-Value', value: bindingValue },
+          { name: 'C2PA-Claim-Generator', value: 'sdk-integration-test/0.1.0' },
+        ],
+        'test-owner'
+      );
+      console.log(`         webhook seed: ${seeded ? 'indexed' : 'failed'}`);
     });
 
     if (provenanceTxId) {
@@ -347,11 +402,11 @@ async function main() {
         await test('proof-locator manifest fetch-through — retrieves from Adobe repo', async () => {
           const manifestUrl = `${trusthashUrl}/manifests/${encodeURIComponent(proofModeManifestId!)}`;
           const res = await fetch(manifestUrl);
-          assert(res.ok, `HTTP ${res.status}: ${await res.text()}`);
+          const bodyBytes = await res.arrayBuffer();
+          assert(res.ok, `HTTP ${res.status}: ${Buffer.from(bodyBytes).toString().slice(0, 200)}`);
+          assert(bodyBytes.byteLength > 0, 'empty manifest body');
 
           const resolution = res.headers.get('x-manifest-resolution');
-          const bodyBytes = await res.arrayBuffer();
-          assert(bodyBytes.byteLength > 0, 'empty manifest body');
           console.log(`resolution=${resolution} size=${bodyBytes.byteLength}b`);
 
           if (resolution?.startsWith('proof-remote')) {
