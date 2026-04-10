@@ -100,7 +100,7 @@ If any are missing, the pipeline won't work. Without the unbundle filter in part
 ### 2.1 Retrieve Certificate Chain
 
 ```bash
-curl -s https://ario.agenticway.io/trusthash/v1/cert
+curl -s https://ario.agenticway.io/trusthash/cert
 ```
 
 Expected: PEM-encoded X.509 certificate chain. If signing is disabled, returns 501.
@@ -111,7 +111,7 @@ Expected: PEM-encoded X.509 certificate chain. If signing is disabled, returns 5
 echo -n "test-payload" | curl -s -X POST \
   -H "Content-Type: application/octet-stream" \
   --data-binary @- \
-  https://ario.agenticway.io/trusthash/v1/sign | wc -c
+  https://ario.agenticway.io/trusthash/sign | wc -c
 ```
 
 Expected: 64 bytes (ES256/P-256 IEEE P1363 signature format).
@@ -123,7 +123,7 @@ Expected: 64 bytes (ES256/P-256 IEEE P1363 signature format).
 ### 3.1 Supported Algorithms
 
 ```bash
-curl -s https://ario.agenticway.io/trusthash/v1/services/supportedAlgorithms | jq .
+curl -s https://ario.agenticway.io/trusthash/services/supportedAlgorithms | jq .
 ```
 
 Expected: List including `org.ar-io.phash` and `io.iscc.v0`.
@@ -131,7 +131,7 @@ Expected: List including `org.ar-io.phash` and `io.iscc.v0`.
 ### 3.2 Query by Binding
 
 ```bash
-curl -s "https://ario.agenticway.io/trusthash/v1/matches/byBinding?alg=org.ar-io.phash&value=<BASE64_PHASH>" | jq .
+curl -s "https://ario.agenticway.io/trusthash/matches/byBinding?alg=org.ar-io.phash&value=<BASE64_PHASH>" | jq .
 ```
 
 Expected: `matches` array with any manifests matching the given pHash value.
@@ -139,7 +139,7 @@ Expected: `matches` array with any manifests matching the given pHash value.
 ### 3.3 Content-Based Lookup (Image Upload)
 
 ```bash
-curl -s -X POST https://ario.agenticway.io/trusthash/v1/matches/byContent \
+curl -s -X POST https://ario.agenticway.io/trusthash/matches/byContent \
   -F "file=@/path/to/test-image.jpg" | jq .
 ```
 
@@ -149,7 +149,7 @@ Expected: `matches` array with manifests that have a similar pHash to the upload
 
 ```bash
 # Use a manifest ID from a previously indexed transaction
-curl -s https://ario.agenticway.io/trusthash/v1/manifests/<MANIFEST_ID> -o /dev/null -w "%{http_code}\n"
+curl -s https://ario.agenticway.io/trusthash/manifests/<MANIFEST_ID> -o /dev/null -w "%{http_code}\n"
 ```
 
 Expected: 200 (with `application/c2pa` bytes) or 302 redirect to the manifest source.
@@ -214,10 +214,10 @@ Expected: Log entry showing `Manifest indexed from webhook` with the transaction
 
 ```bash
 # By manifest ID
-curl -s "https://ario.agenticway.io/trusthash/v1/manifests/<MANIFEST_ID>" | head -c 200
+curl -s "https://ario.agenticway.io/trusthash/manifests/<MANIFEST_ID>" | head -c 200
 
 # By soft binding (use the pHash from the upload output)
-curl -s "https://ario.agenticway.io/trusthash/v1/matches/byBinding?alg=org.ar-io.phash&value=<PHASH_B64>" | jq .
+curl -s "https://ario.agenticway.io/trusthash/matches/byBinding?alg=org.ar-io.phash&value=<PHASH_B64>" | jq .
 ```
 
 Expected: Manifest bytes returned, and the manifest appears in the binding query results.
@@ -227,7 +227,7 @@ Expected: Manifest bytes returned, and the manifest appears in the binding query
 Upload the same image to find it via content matching:
 
 ```bash
-curl -s -X POST https://ario.agenticway.io/trusthash/v1/matches/byContent \
+curl -s -X POST https://ario.agenticway.io/trusthash/matches/byContent \
   -F "file=@/path/to/same-image.jpg" | jq .
 ```
 
