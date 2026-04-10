@@ -50,6 +50,7 @@ import { signManifestAndPrepare } from '../src/mode-manifest.js';
 import { proofAndPrepare } from '../src/mode-proof.js';
 import { extractProvenanceUrl } from '../src/xmp.js';
 import { uploadToArweave } from '../src/upload.js';
+import { uploadAndFanOut } from '../../sdk/src/fanout/upload-and-fanout.js';
 
 /** IPTC digital source type shorthand → full URI mapping. */
 const SOURCE_TYPE_MAP: Record<string, string> = {
@@ -141,6 +142,7 @@ async function main() {
   const sidecarUrl = process.env.SIDECAR_URL || 'http://localhost:3003';
   const gatewayUrl = process.env.GATEWAY_URL || 'https://turbo-gateway.com';
   const uploadServiceUrl = process.env.UPLOAD_SERVICE_URL;
+  const adminApiKey = process.env.ADMIN_API_KEY;
   const manifestRepoUrl = process.env.MANIFEST_REPO_URL || `${sidecarUrl}/v1`;
 
   const isStoreMode = process.argv.includes('--store');
@@ -373,21 +375,44 @@ async function main() {
     console.log(`  Saved locally:  ${signedPath}`);
   }
 
-  // 4. Upload to Arweave
-  log('4/5', 'Uploading to Arweave via Turbo SDK');
+  // 4. Upload to Arweave (with fan-out if ADMIN_API_KEY is set)
+  const useFanOut = !!adminApiKey;
+  log('4/5', `Uploading to Arweave via Turbo SDK${useFanOut ? ' + fan-out' : ''}`);
   console.log(`  Tags: ${tags.length} ANS-104 tags`);
 
-  const uploadResult = await uploadToArweave({
-    dataBuffer: uploadBuffer,
-    tags,
-    ethPrivateKey,
-    gatewayUrl,
-    uploadServiceUrl,
-  });
+  let txId: string;
+  let viewUrl: string;
+  let owner: string;
 
-  console.log(`  TX ID:    ${uploadResult.txId}`);
-  console.log(`  View URL: ${uploadResult.viewUrl}`);
-  console.log(`  Owner:    ${uploadResult.owner}`);
+  if (useFanOut) {
+    const fanOutResult = await uploadAndFanOut({
+      data: uploadBuffer,
+      tags,
+      ethPrivateKey,
+      gateways: [{ url: gatewayUrl, adminApiKey: adminApiKey! }],
+      gatewayUrl,
+    });
+    txId = fanOutResult.txId;
+    viewUrl = fanOutResult.viewUrl;
+    owner = fanOutResult.owner;
+    const fanOk = fanOutResult.fanOutResults.filter((r) => r.status === 'success').length;
+    console.log(`  Fan-out:  ${fanOk}/${fanOutResult.fanOutResults.length} gateways`);
+  } else {
+    const uploadResult = await uploadToArweave({
+      dataBuffer: uploadBuffer,
+      tags,
+      ethPrivateKey,
+      gatewayUrl,
+      uploadServiceUrl,
+    });
+    txId = txId;
+    viewUrl = viewUrl;
+    owner = uploadResult.owner;
+  }
+
+  console.log(`  TX ID:    ${txId}`);
+  console.log(`  View URL: ${viewUrl}`);
+  console.log(`  Owner:    ${owner}`);
 
   // 5. Summary
   log('5/5', 'Done!');
@@ -401,13 +426,13 @@ async function main() {
   The image has been ${modeMessages[mode]} to Arweave.
 
   View the image:
-    ${uploadResult.viewUrl}
+    ${viewUrl}
 
   Verify C2PA credentials:
     https://contentcredentials.org/verify
     (download the image from the gateway URL and upload it to verify)
 
-  Arweave TX ID: ${uploadResult.txId}
+  Arweave TX ID: ${txId}
   Manifest ID:   ${manifestId}
 
   Tags uploaded:
