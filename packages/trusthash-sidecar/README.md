@@ -133,7 +133,7 @@ Additional required tags for `proof` mode:
 
 Optional tags:
 
-- `C2PA-Asset-Content-Type` (original media MIME type, required for manifest/proof modes)
+- `C2PA-Asset-Content-Type` (original media MIME type)
 - `C2PA-Manifest-Repo-URL` (SBR API base URL, used for redirect resolution)
 - `C2PA-Claim-Generator` (tool name/version)
 - `C2PA-Asset-Hash` (base64url SHA-256 of original asset)

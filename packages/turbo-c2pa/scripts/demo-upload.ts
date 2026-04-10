@@ -148,6 +148,9 @@ async function main() {
   const isStoreMode = process.argv.includes('--store');
   const isManifestMode = process.argv.includes('--manifest');
   const isProofMode = process.argv.includes('--proof');
+  if ([isStoreMode, isManifestMode, isProofMode].filter(Boolean).length > 1) {
+    fail('Choose only one of --store, --manifest, or --proof');
+  }
   const includeIdentity = process.argv.includes('--identity');
   const allowInvalid = process.argv.includes('--allow-invalid');
   const sourceTypeArg = getArgValue('--source-type') || process.env.DIGITAL_SOURCE_TYPE;

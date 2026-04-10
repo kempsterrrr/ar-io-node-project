@@ -407,11 +407,12 @@ async function main() {
           assert(bodyBytes.byteLength > 0, 'empty manifest body');
 
           const resolution = res.headers.get('x-manifest-resolution');
+          assert(
+            resolution?.startsWith('proof-remote'),
+            `expected proof-remote resolution, got ${resolution ?? 'missing header'}`
+          );
           console.log(`resolution=${resolution} size=${bodyBytes.byteLength}b`);
-
-          if (resolution?.startsWith('proof-remote')) {
-            console.log('         SUCCESS: fetched through to Adobe manifest repository');
-          }
+          console.log('         SUCCESS: fetched through to Adobe manifest repository');
         });
       }
     } else {

@@ -20,6 +20,15 @@ export function extractProvenanceUrl(imageBuffer: Buffer): string | null {
   // XMP is plaintext XML typically in the first ~1MB of the file
   const searchLimit = Math.min(imageBuffer.length, 1_000_000);
   const searchRegion = imageBuffer.toString('utf-8', 0, searchLimit);
-  const match = searchRegion.match(/dcterms:provenance="([^"]+)"/);
-  return match ? match[1] : null;
+  // Match attribute form (double or single quotes) and element form
+  const patterns = [
+    /dcterms:provenance\s*=\s*"([^"]+)"/i,
+    /dcterms:provenance\s*=\s*'([^']+)'/i,
+    /<dcterms:provenance>\s*([^<]+?)\s*<\/dcterms:provenance>/i,
+  ];
+  for (const pattern of patterns) {
+    const match = searchRegion.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+  return null;
 }
