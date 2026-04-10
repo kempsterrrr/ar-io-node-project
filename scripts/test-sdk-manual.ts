@@ -30,6 +30,10 @@ import {
 } from '../packages/sdk/src/fanout/index.js';
 import type { GatewayTarget } from '../packages/sdk/src/types.js';
 import { computePHash } from '../packages/turbo-c2pa/src/phash.js';
+import { proofAndPrepare } from '../packages/turbo-c2pa/src/mode-proof.js';
+import { signManifestAndPrepare } from '../packages/turbo-c2pa/src/mode-manifest.js';
+import { extractProvenanceUrl } from '../packages/turbo-c2pa/src/xmp.js';
+import { RemoteSigner } from '../packages/turbo-c2pa/src/signer.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -88,6 +92,39 @@ function assert(condition: boolean, msg: string) {
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
+
+/**
+ * Post a webhook directly to the sidecar to seed DuckDB.
+ * The gateway only sends webhooks from L1 unbundling, not from admin API fan-out.
+ * This mirrors what the gateway would eventually send after L1 confirmation.
+ */
+async function seedSidecarWebhook(
+  sidecarBaseUrl: string,
+  txId: string,
+  tags: { name: string; value: string }[],
+  owner: string
+): Promise<boolean> {
+  // Strip /v1 suffix to reach the webhook endpoint at the root
+  const webhookUrl = sidecarBaseUrl.replace(/\/v1\/?$/, '') + '/webhook';
+  try {
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tx_id: txId,
+        tags,
+        owner,
+        block_height: null, // optimistic — no L1 confirmation yet
+        block_timestamp: null,
+      }),
+    });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { data?: { action?: string } };
+    return body.data?.action === 'indexed';
+  } catch {
+    return false;
+  }
+}
 
 async function main() {
   console.log('AgenticWay SDK — Manual Integration Tests');
@@ -213,6 +250,28 @@ async function main() {
         const ok = result.fanOutResults.filter((r) => r.status === 'success').length;
         console.log(` fanOut=${ok}/${result.fanOutResults.length} ok`);
       }
+
+      // Seed the sidecar webhook directly since the gateway only sends
+      // webhooks from L1 unbundling, not from admin API fan-out.
+      const { base64: bindingValue } = await computePHash(imageBuffer);
+      const seeded = await seedSidecarWebhook(
+        trusthashUrl!,
+        result.txId,
+        [
+          { name: 'Content-Type', value: 'image/jpeg' },
+          { name: 'Protocol', value: 'C2PA-Manifest-Proof' },
+          { name: 'C2PA-Storage-Mode', value: 'full' },
+          { name: 'C2PA-Manifest-ID', value: result.provenance!.manifestId },
+          { name: 'C2PA-Asset-Hash', value: result.provenance!.assetHash },
+          { name: 'C2PA-Manifest-Store-Hash', value: result.provenance!.assetHash },
+          { name: 'C2PA-Manifest-Repo-URL', value: trusthashUrl! },
+          { name: 'C2PA-Soft-Binding-Alg', value: 'org.ar-io.phash' },
+          { name: 'C2PA-Soft-Binding-Value', value: bindingValue },
+          { name: 'C2PA-Claim-Generator', value: 'sdk-integration-test/0.1.0' },
+        ],
+        'test-owner'
+      );
+      console.log(`         webhook seed: ${seeded ? 'indexed' : 'failed'}`);
     });
 
     if (provenanceTxId) {
@@ -253,6 +312,187 @@ async function main() {
   } else {
     skip('store() with provenance', 'TRUSTHASH_URL not set');
     skip('retrieve() provenance-stored image', 'TRUSTHASH_URL not set');
+  }
+
+  // ===================================================================
+  section('2c. Proof Mode (C2PA proof-locator with fan-out)');
+  // ===================================================================
+
+  const cloudJpgPath = resolve(__dirname, '../packages/turbo-c2pa/tests/fixtures/cloud.jpg');
+  let proofModeTxId: string | undefined;
+  let proofModeManifestId: string | undefined;
+  let proofModePHashB64: string | undefined;
+
+  if (trusthashUrl && adminKey && !skipFanout) {
+    const cloudImage = readFileSync(cloudJpgPath);
+    const provenanceUrl = extractProvenanceUrl(cloudImage);
+
+    if (provenanceUrl) {
+      await test('proofAndPrepare() + uploadAndFanOut() — proof-locator with XMP auto-detect', async () => {
+        proofModeManifestId = 'adobe:urn:uuid:5f37e182-3687-462e-a7fb-573462780391';
+
+        const proofResult = await proofAndPrepare({
+          imageBuffer: cloudImage,
+          manifestFetchUrl: provenanceUrl,
+          manifestId: proofModeManifestId,
+          manifestRepoUrl: trusthashUrl!,
+          claimGenerator: 'sdk-e2e-test/0.1.0',
+        });
+
+        proofModePHashB64 = proofResult.tags.find(
+          (t) => t.name === 'C2PA-Soft-Binding-Value'
+        )?.value;
+        assert(proofResult.tags.length === 13, `expected 13 tags, got ${proofResult.tags.length}`);
+        assert(
+          proofResult.contentType === 'application/json',
+          `wrong content type: ${proofResult.contentType}`
+        );
+
+        const targets: GatewayTarget[] = [{ url: gatewayUrl, adminApiKey: adminKey! }];
+        const uploadResult = await uploadAndFanOut({
+          data: proofResult.proofPayload,
+          tags: proofResult.tags,
+          ethPrivateKey: ethKey!,
+          gateways: targets,
+          gatewayUrl,
+        });
+
+        proofModeTxId = uploadResult.txId;
+        assert(!!uploadResult.txId, 'missing txId');
+        const fanOk = uploadResult.fanOutResults.every((r) => r.status === 'success');
+        assert(fanOk, `fan-out failed: ${JSON.stringify(uploadResult.fanOutResults)}`);
+        console.log(`txId=${uploadResult.txId} fanOut=success`);
+        console.log(`         manifestFetchUrl=${provenanceUrl}`);
+        console.log(`         pHash=${proofResult.pHashHex}`);
+      });
+
+      if (proofModeTxId) {
+        await test('proof-locator indexed — byBinding lookup', async () => {
+          assert(!!proofModePHashB64, 'missing pHash from proof upload');
+          const maxAttempts = 15;
+          const delayMs = 2000;
+          let found = false;
+
+          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            if (attempt > 1) process.stdout.write(`         retry ${attempt}/${maxAttempts}... `);
+            else console.log(`\n         waiting for sidecar indexing...`);
+            await new Promise((r) => setTimeout(r, delayMs));
+
+            try {
+              const res = await fetch(
+                `${trusthashUrl}/matches/byBinding?alg=org.ar-io.phash&value=${encodeURIComponent(proofModePHashB64!)}&maxResults=10`
+              );
+              if (res.ok) {
+                const body = (await res.json()) as { matches: Array<{ manifestId: string }> };
+                if (body.matches?.some((m) => m.manifestId === proofModeManifestId)) {
+                  found = true;
+                  console.log(`FOUND after ${(attempt * delayMs) / 1000}s`);
+                  break;
+                }
+              }
+              if (attempt > 1) console.log('not yet');
+            } catch {
+              if (attempt > 1) console.log('error');
+            }
+          }
+
+          assert(found, `proof-locator not indexed within ${(maxAttempts * delayMs) / 1000}s`);
+        });
+
+        await test('proof-locator manifest fetch-through — retrieves from Adobe repo', async () => {
+          const manifestUrl = `${trusthashUrl}/manifests/${encodeURIComponent(proofModeManifestId!)}`;
+          const res = await fetch(manifestUrl);
+          const bodyBytes = await res.arrayBuffer();
+          assert(res.ok, `HTTP ${res.status}: ${Buffer.from(bodyBytes).toString().slice(0, 200)}`);
+          assert(bodyBytes.byteLength > 0, 'empty manifest body');
+
+          const resolution = res.headers.get('x-manifest-resolution');
+          assert(
+            resolution?.startsWith('proof-remote'),
+            `expected proof-remote resolution, got ${resolution ?? 'missing header'}`
+          );
+          console.log(`resolution=${resolution} size=${bodyBytes.byteLength}b`);
+          console.log('         SUCCESS: fetched through to Adobe manifest repository');
+        });
+      }
+    } else {
+      skip('proof mode tests', 'cloud.jpg missing dcterms:provenance in XMP');
+    }
+  } else {
+    skip(
+      'proof mode tests',
+      !trusthashUrl
+        ? 'TRUSTHASH_URL not set'
+        : !adminKey
+          ? 'ADMIN_API_KEY not set'
+          : 'SKIP_FANOUT=true'
+    );
+  }
+
+  // ===================================================================
+  section('2d. Manifest Mode (C2PA manifest-only with fan-out)');
+  // ===================================================================
+
+  let manifestModeTxId: string | undefined;
+  let manifestModeManifestId: string | undefined;
+
+  if (trusthashUrl && adminKey && !skipFanout) {
+    const certCheck = await fetch(`${trusthashUrl}/cert`);
+
+    if (certCheck.status !== 501) {
+      await test('signManifestAndPrepare() + uploadAndFanOut() — manifest-only upload', async () => {
+        const imageBuffer = readFileSync(testImagePath);
+        const remoteSigner = new RemoteSigner(trusthashUrl!);
+
+        const manifestResult = await signManifestAndPrepare({
+          imageBuffer,
+          remoteSigner,
+          manifestRepoUrl: trusthashUrl!,
+          claimGenerator: 'sdk-e2e-test/0.1.0',
+          digitalSourceType: 'http://cv.iptc.org/newscodes/digitalsourcetype/digitalCapture',
+        });
+
+        manifestModeManifestId = manifestResult.manifestId;
+        assert(
+          manifestResult.tags.length === 12,
+          `expected 12 tags, got ${manifestResult.tags.length}`
+        );
+        assert(
+          manifestResult.contentType === 'application/c2pa',
+          `wrong content type: ${manifestResult.contentType}`
+        );
+        assert(manifestResult.manifestBytes.length > 0, 'empty manifest bytes');
+
+        const targets: GatewayTarget[] = [{ url: gatewayUrl, adminApiKey: adminKey! }];
+        const uploadResult = await uploadAndFanOut({
+          data: manifestResult.manifestBytes,
+          tags: manifestResult.tags,
+          ethPrivateKey: ethKey!,
+          gateways: targets,
+          gatewayUrl,
+        });
+
+        manifestModeTxId = uploadResult.txId;
+        assert(!!uploadResult.txId, 'missing txId');
+        const fanOk = uploadResult.fanOutResults.every((r) => r.status === 'success');
+        assert(fanOk, `fan-out failed: ${JSON.stringify(uploadResult.fanOutResults)}`);
+        console.log(`txId=${uploadResult.txId} fanOut=success`);
+        console.log(`         manifestId=${manifestResult.manifestId}`);
+        console.log(`         manifestBytes=${manifestResult.manifestBytes.length}b`);
+        console.log(`         assetContentType=${manifestResult.assetContentType}`);
+      });
+    } else {
+      skip('manifest mode tests', 'signing not enabled on sidecar');
+    }
+  } else {
+    skip(
+      'manifest mode tests',
+      !trusthashUrl
+        ? 'TRUSTHASH_URL not set'
+        : !adminKey
+          ? 'ADMIN_API_KEY not set'
+          : 'SKIP_FANOUT=true'
+    );
   }
 
   // ===================================================================
@@ -502,19 +742,35 @@ async function main() {
 
     await test('POST /matches/byContent — content-based soft binding lookup', async () => {
       const imageBuffer = readFileSync(testImagePath);
-      const res = await fetch(`${trusthashUrl}/matches/byContent?maxResults=5`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'image/jpeg' },
-        body: imageBuffer,
-      });
-      assert(res.ok, `HTTP ${res.status}`);
-      const body = (await res.json()) as {
-        matches: Array<{ manifestId: string; similarityScore?: number }>;
-      };
-      assert(Array.isArray(body.matches), 'missing matches array');
-      assert(body.matches.length > 0, 'expected at least 1 match for known test image');
-      console.log(
-        `${body.matches.length} match(es): ${body.matches.map((m) => m.manifestId).join(', ')}`
+      const maxAttempts = 15;
+      const delayMs = 2000;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (attempt > 1) process.stdout.write(`         retry ${attempt}/${maxAttempts}... `);
+        else console.log(`\n         waiting for pHash indexing...`);
+        await new Promise((r) => setTimeout(r, delayMs));
+
+        const res = await fetch(`${trusthashUrl}/matches/byContent?maxResults=5`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'image/jpeg' },
+          body: imageBuffer,
+        });
+        assert(res.ok, `HTTP ${res.status}`);
+        const body = (await res.json()) as {
+          matches: Array<{ manifestId: string; similarityScore?: number }>;
+        };
+        assert(Array.isArray(body.matches), 'missing matches array');
+
+        if (body.matches.length > 0) {
+          console.log(
+            `${body.matches.length} match(es) after ${(attempt * delayMs) / 1000}s: ${body.matches.map((m) => m.manifestId).join(', ')}`
+          );
+          return;
+        }
+        if (attempt > 1) console.log('not yet');
+      }
+      throw new Error(
+        `expected at least 1 match for known test image after ${(maxAttempts * delayMs) / 1000}s`
       );
     });
 

@@ -1,24 +1,33 @@
-#!/usr/bin/env bun
+#!/usr/bin/env tsx
 /**
  * C2PA Sign + Upload Demo
  *
- * Two modes:
+ * Four modes:
  *   1. Sign mode (default): Signs an image with C2PA credentials via the sidecar,
  *      then uploads to Arweave.
  *   2. Store mode (--store): Preserves an image's existing C2PA manifest and
  *      uploads to Arweave for durable storage and SBR discovery.
+ *   3. Manifest mode (--manifest): Signs an image but uploads only the manifest
+ *      bytes to Arweave (not the image itself).
+ *   4. Proof mode (--proof): Creates a proof-locator record pointing to a remote
+ *      manifest URL (e.g. Adobe's repository).
  *
  * Prerequisites:
- *   1. For sign mode: Sidecar running with signing enabled
+ *   1. For sign/manifest mode: Sidecar running with signing enabled
  *   2. ETH_PRIVATE_KEY set in .env (Ethereum wallet with Turbo credits)
- *   3. For sign mode: Dev certs generated (run generate-dev-cert.sh in trusthash-sidecar)
+ *   3. For sign/manifest mode: Dev certs generated (run generate-dev-cert.sh in trusthash-sidecar)
  *
  * Usage:
- *   bun run scripts/demo-upload.ts <image-path> [options]
+ *   pnpm exec tsx scripts/demo-upload.ts <image-path> [options]
  *
  * Options:
  *   --store                   Store mode — preserve existing C2PA manifest
- *   --source-type <type>      Digital source type for sign mode (e.g. digitalCapture)
+ *   --manifest                Manifest mode — upload only the manifest bytes
+ *   --proof                   Proof mode — create proof-locator to remote manifest
+ *   --manifest-fetch-url <u>  Remote manifest URL (required for --proof)
+ *   --manifest-id <id>        Manifest URN (required for --proof)
+ *   --manifest-store-hash <h> SHA-256 of remote manifest (optional for --proof; auto-fetched if omitted)
+ *   --source-type <type>      Digital source type for sign/manifest mode (e.g. digitalCapture)
  *   --identity                Include cawg.identity assertion (EXPERIMENTAL)
  *   --allow-invalid           Store mode — allow manifests that fail validation
  *
@@ -37,7 +46,11 @@ import path from 'node:path';
 import { RemoteSigner } from '../src/signer.js';
 import { signAndPrepare } from '../src/mode-full.js';
 import { storeAndPrepare } from '../src/mode-store.js';
+import { signManifestAndPrepare } from '../src/mode-manifest.js';
+import { proofAndPrepare } from '../src/mode-proof.js';
+import { extractProvenanceUrl } from '../src/xmp.js';
 import { uploadToArweave } from '../src/upload.js';
+import { uploadAndFanOut } from '../../sdk/src/fanout/upload-and-fanout.js';
 
 /** IPTC digital source type shorthand → full URI mapping. */
 const SOURCE_TYPE_MAP: Record<string, string> = {
@@ -78,15 +91,24 @@ async function main() {
   if (!imagePath || imagePath.startsWith('--')) {
     console.log('C2PA Sign + Upload Demo');
     console.log('');
-    console.log('Usage: bun run scripts/demo-upload.ts <image-path> [options]');
+    console.log('Usage: pnpm exec tsx scripts/demo-upload.ts <image-path> [options]');
     console.log('');
     console.log('Modes:');
     console.log('  (default)    Sign mode — create new C2PA manifest and upload');
     console.log('  --store      Store mode — preserve existing C2PA manifest and upload');
+    console.log('  --manifest   Manifest mode — sign image, upload only manifest bytes');
+    console.log('  --proof      Proof mode — create proof-locator to remote manifest');
     console.log('');
-    console.log('Sign mode options:');
+    console.log('Sign/Manifest mode options:');
     console.log('  --source-type <type>  Digital source type (e.g. digitalCapture)');
     console.log('  --identity            Include cawg.identity assertion (EXPERIMENTAL)');
+    console.log('');
+    console.log('Proof mode options:');
+    console.log('  --manifest-fetch-url <url>  Remote manifest URL (required)');
+    console.log('  --manifest-id <id>          Manifest URN (required)');
+    console.log(
+      '  --manifest-store-hash <h>   SHA-256 of remote manifest (auto-fetched if omitted)'
+    );
     console.log('');
     console.log('Store mode options:');
     console.log('  --allow-invalid       Allow manifests that fail signature validation');
@@ -104,8 +126,8 @@ async function main() {
     console.log('  GATEWAY_URL           default: https://turbo-gateway.com');
     console.log('  UPLOAD_SERVICE_URL    custom bundler (e.g. https://ario.agenticway.io/bundler)');
     console.log('  MANIFEST_REPO_URL     default: SIDECAR_URL/v1');
-    console.log('  C2PA_TRUST_ANCHOR_PEM Base64 CA cert (sign mode only)');
-    console.log('  DIGITAL_SOURCE_TYPE   Default source type (sign mode)');
+    console.log('  C2PA_TRUST_ANCHOR_PEM Base64 CA cert (sign/manifest mode only)');
+    console.log('  DIGITAL_SOURCE_TYPE   Default source type (sign/manifest mode)');
     process.exit(1);
   }
 
@@ -120,20 +142,33 @@ async function main() {
   const sidecarUrl = process.env.SIDECAR_URL || 'http://localhost:3003';
   const gatewayUrl = process.env.GATEWAY_URL || 'https://turbo-gateway.com';
   const uploadServiceUrl = process.env.UPLOAD_SERVICE_URL;
+  const adminApiKey = process.env.ADMIN_API_KEY;
   const manifestRepoUrl = process.env.MANIFEST_REPO_URL || `${sidecarUrl}/v1`;
 
   const isStoreMode = process.argv.includes('--store');
+  const isManifestMode = process.argv.includes('--manifest');
+  const isProofMode = process.argv.includes('--proof');
+  if ([isStoreMode, isManifestMode, isProofMode].filter(Boolean).length > 1) {
+    fail('Choose only one of --store, --manifest, or --proof');
+  }
   const includeIdentity = process.argv.includes('--identity');
   const allowInvalid = process.argv.includes('--allow-invalid');
   const sourceTypeArg = getArgValue('--source-type') || process.env.DIGITAL_SOURCE_TYPE;
+  const manifestFetchUrlArg = getArgValue('--manifest-fetch-url');
+  const manifestIdArg = getArgValue('--manifest-id');
+  const manifestStoreHashArg = getArgValue('--manifest-store-hash');
 
-  const mode = isStoreMode ? 'STORE' : 'SIGN';
+  const mode = isProofMode ? 'PROOF' : isManifestMode ? 'MANIFEST' : isStoreMode ? 'STORE' : 'SIGN';
+  const modeDescriptions: Record<string, string> = {
+    SIGN: 'Sign (create new manifest and upload image)',
+    STORE: 'Store (preserve existing manifest)',
+    MANIFEST: 'Manifest (sign image, upload manifest only)',
+    PROOF: 'Proof (create proof-locator to remote manifest)',
+  };
   console.log(`C2PA ${mode} + Upload Demo`);
   console.log(`  Image:    ${imagePath}`);
-  console.log(
-    `  Mode:     ${isStoreMode ? 'Store (preserve existing manifest)' : 'Sign (create new manifest)'}`
-  );
-  if (!isStoreMode) console.log(`  Sidecar:  ${sidecarUrl}`);
+  console.log(`  Mode:     ${modeDescriptions[mode]}`);
+  if (!isStoreMode && !isProofMode) console.log(`  Sidecar:  ${sidecarUrl}`);
   console.log(`  Gateway:  ${gatewayUrl}`);
   if (uploadServiceUrl) console.log(`  Bundler:  ${uploadServiceUrl} (ar-io-bundler)`);
 
@@ -144,7 +179,7 @@ async function main() {
   const imageBuffer = Buffer.from(fs.readFileSync(resolvedPath));
   console.log(`  Size: ${imageBuffer.length.toLocaleString()} bytes`);
 
-  let signedOrOriginalBuffer: Buffer;
+  let uploadBuffer: Buffer;
   let tags: { name: string; value: string }[];
   let manifestId: string;
   let assetHash: string;
@@ -152,7 +187,102 @@ async function main() {
   let contentType: string;
   let pHashHex: string;
 
-  if (isStoreMode) {
+  if (isProofMode) {
+    // ===== PROOF MODE =====
+    if (!manifestIdArg) fail('--manifest-id is required for proof mode');
+
+    // Auto-detect manifest fetch URL from XMP if not provided
+    let resolvedFetchUrl = manifestFetchUrlArg;
+    if (!resolvedFetchUrl) {
+      const xmpUrl = extractProvenanceUrl(imageBuffer);
+      if (xmpUrl) {
+        resolvedFetchUrl = xmpUrl;
+        console.log(`  Auto-detected manifest URL from XMP: ${xmpUrl}`);
+      } else {
+        fail('--manifest-fetch-url is required (or use an image with dcterms:provenance in XMP)');
+      }
+    }
+
+    log('2/5', 'Creating proof-locator record');
+    console.log(`  Fetch URL: ${resolvedFetchUrl}`);
+    console.log(`  Manifest ID: ${manifestIdArg}`);
+
+    const proofResult = await proofAndPrepare({
+      imageBuffer,
+      manifestFetchUrl: resolvedFetchUrl,
+      manifestId: manifestIdArg,
+      manifestRepoUrl,
+      manifestStoreHash: manifestStoreHashArg,
+      fetchAndVerifyManifest: !manifestStoreHashArg,
+      claimGenerator: 'turbo-c2pa-demo/0.1.0',
+    });
+
+    uploadBuffer = proofResult.proofPayload;
+    tags = proofResult.tags;
+    manifestId = proofResult.manifestId;
+    assetHash = proofResult.assetHash;
+    manifestStoreHash = proofResult.manifestStoreHash;
+    contentType = proofResult.contentType;
+    pHashHex = proofResult.pHashHex;
+
+    console.log(`  Content type:     ${contentType}`);
+    console.log(`  Asset content:    ${proofResult.assetContentType}`);
+    console.log(`  Manifest ID:      ${manifestId}`);
+    console.log(`  Fetch URL:        ${proofResult.manifestFetchUrl}`);
+    console.log(`  Store hash:       ${manifestStoreHash.slice(0, 20)}...`);
+    console.log(`  pHash:            ${pHashHex}`);
+    console.log(`  Payload size:     ${uploadBuffer.length} bytes`);
+
+    log('3/5', 'Skipping signing — proof-locator points to remote manifest');
+  } else if (isManifestMode) {
+    // ===== MANIFEST MODE =====
+    log('2/5', 'Connecting to sidecar');
+    try {
+      const healthRes = await fetch(`${sidecarUrl}/health`);
+      if (!healthRes.ok) fail(`Sidecar health check failed: ${healthRes.status}`);
+      console.log(`  Sidecar healthy at ${sidecarUrl}`);
+    } catch (err) {
+      fail(`Cannot reach sidecar at ${sidecarUrl}: ${(err as Error).message}`);
+    }
+
+    const digitalSourceType = sourceTypeArg ? resolveSourceType(sourceTypeArg) : undefined;
+
+    log('3/5', 'Signing image and extracting manifest bytes');
+    if (digitalSourceType) {
+      console.log(`  Source type: ${digitalSourceType}`);
+    } else {
+      console.log('  WARNING: No --source-type provided. digitalSourceType will be omitted.');
+    }
+
+    const remoteSigner = new RemoteSigner(manifestRepoUrl);
+
+    const manifestResult = await signManifestAndPrepare({
+      imageBuffer,
+      remoteSigner,
+      manifestRepoUrl,
+      claimGenerator: 'turbo-c2pa-demo/0.1.0',
+      trustAnchorPem,
+      ethPrivateKey,
+      includeIdentity,
+      digitalSourceType,
+    });
+
+    uploadBuffer = manifestResult.manifestBytes;
+    tags = manifestResult.tags;
+    manifestId = manifestResult.manifestId;
+    assetHash = manifestResult.assetHash;
+    manifestStoreHash = manifestResult.manifestStoreHash;
+    contentType = manifestResult.contentType;
+    pHashHex = manifestResult.pHashHex;
+
+    console.log(`  Content type:     ${contentType}`);
+    console.log(`  Asset content:    ${manifestResult.assetContentType}`);
+    console.log(`  Manifest ID:      ${manifestId}`);
+    console.log(`  Asset hash:       ${assetHash.slice(0, 20)}...`);
+    console.log(`  Store hash:       ${manifestStoreHash.slice(0, 20)}...`);
+    console.log(`  pHash:            ${pHashHex}`);
+    console.log(`  Manifest size:    ${uploadBuffer.length.toLocaleString()} bytes`);
+  } else if (isStoreMode) {
     // ===== STORE MODE =====
     log('2/5', 'Validating existing C2PA manifest');
 
@@ -166,7 +296,7 @@ async function main() {
       trustAnchorPem,
     });
 
-    signedOrOriginalBuffer = storeResult.imageBuffer;
+    uploadBuffer = storeResult.imageBuffer;
     tags = storeResult.tags;
     manifestId = storeResult.manifestId;
     assetHash = storeResult.assetHash;
@@ -211,7 +341,7 @@ async function main() {
       );
     }
 
-    const remoteSigner = new RemoteSigner(sidecarUrl);
+    const remoteSigner = new RemoteSigner(manifestRepoUrl);
 
     const signResult = await signAndPrepare({
       imageBuffer,
@@ -224,7 +354,7 @@ async function main() {
       digitalSourceType,
     });
 
-    signedOrOriginalBuffer = signResult.signedBuffer;
+    uploadBuffer = signResult.signedBuffer;
     tags = signResult.tags;
     manifestId = signResult.manifestId;
     assetHash = signResult.assetHash;
@@ -237,46 +367,75 @@ async function main() {
     console.log(`  Asset hash:     ${assetHash.slice(0, 20)}...`);
     console.log(`  Store hash:     ${manifestStoreHash.slice(0, 20)}...`);
     console.log(`  pHash:          ${pHashHex}`);
-    console.log(`  Signed size:    ${signedOrOriginalBuffer.length.toLocaleString()} bytes`);
+    console.log(`  Signed size:    ${uploadBuffer.length.toLocaleString()} bytes`);
     console.log(
-      `  Size increase:  +${(signedOrOriginalBuffer.length - imageBuffer.length).toLocaleString()} bytes (manifest)`
+      `  Size increase:  +${(uploadBuffer.length - imageBuffer.length).toLocaleString()} bytes (manifest)`
     );
 
     // Save signed image locally
     const signedPath = resolvedPath.replace(/(\.\w+)$/, '.signed$1');
-    fs.writeFileSync(signedPath, signedOrOriginalBuffer);
+    fs.writeFileSync(signedPath, uploadBuffer);
     console.log(`  Saved locally:  ${signedPath}`);
   }
 
-  // 4. Upload to Arweave
-  log('4/5', 'Uploading to Arweave via Turbo SDK');
+  // 4. Upload to Arweave (with fan-out if ADMIN_API_KEY is set)
+  const useFanOut = !!adminApiKey;
+  log('4/5', `Uploading to Arweave via Turbo SDK${useFanOut ? ' + fan-out' : ''}`);
   console.log(`  Tags: ${tags.length} ANS-104 tags`);
 
-  const uploadResult = await uploadToArweave({
-    signedBuffer: signedOrOriginalBuffer,
-    tags,
-    ethPrivateKey,
-    gatewayUrl,
-    uploadServiceUrl,
-  });
+  let txId: string;
+  let viewUrl: string;
+  let owner: string;
 
-  console.log(`  TX ID:    ${uploadResult.txId}`);
-  console.log(`  View URL: ${uploadResult.viewUrl}`);
-  console.log(`  Owner:    ${uploadResult.owner}`);
+  if (useFanOut) {
+    const fanOutResult = await uploadAndFanOut({
+      data: uploadBuffer,
+      tags,
+      ethPrivateKey,
+      gateways: [{ url: gatewayUrl, adminApiKey: adminApiKey! }],
+      gatewayUrl,
+    });
+    txId = fanOutResult.txId;
+    viewUrl = fanOutResult.viewUrl;
+    owner = fanOutResult.owner;
+    const fanOk = fanOutResult.fanOutResults.filter((r) => r.status === 'success').length;
+    console.log(`  Fan-out:  ${fanOk}/${fanOutResult.fanOutResults.length} gateways`);
+  } else {
+    const uploadResult = await uploadToArweave({
+      dataBuffer: uploadBuffer,
+      tags,
+      ethPrivateKey,
+      gatewayUrl,
+      uploadServiceUrl,
+    });
+    txId = txId;
+    viewUrl = viewUrl;
+    owner = uploadResult.owner;
+  }
+
+  console.log(`  TX ID:    ${txId}`);
+  console.log(`  View URL: ${viewUrl}`);
+  console.log(`  Owner:    ${owner}`);
 
   // 5. Summary
   log('5/5', 'Done!');
+  const modeMessages: Record<string, string> = {
+    SIGN: 'signed with C2PA credentials and uploaded',
+    STORE: 'stored with its existing C2PA manifest',
+    MANIFEST: 'signed and its manifest uploaded separately',
+    PROOF: 'registered as a proof-locator pointing to a remote manifest',
+  };
   console.log(`
-  The image has been ${isStoreMode ? 'stored with its existing C2PA manifest' : 'signed with C2PA credentials'} and uploaded to Arweave.
+  The image has been ${modeMessages[mode]} to Arweave.
 
   View the image:
-    ${uploadResult.viewUrl}
+    ${viewUrl}
 
   Verify C2PA credentials:
     https://contentcredentials.org/verify
     (download the image from the gateway URL and upload it to verify)
 
-  Arweave TX ID: ${uploadResult.txId}
+  Arweave TX ID: ${txId}
   Manifest ID:   ${manifestId}
 
   Tags uploaded:

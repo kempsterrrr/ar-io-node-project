@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import { buildTags } from '../src/tags.js';
 import {
   PROTOCOL_NAME,
@@ -107,6 +107,41 @@ describe('buildTags', () => {
       claimGenerator: 'test/1.0',
     });
     // 8 required + 2 asset + 2 binding + 1 generator = 13
+    expect(tags.length).toBe(13);
+  });
+
+  it('has correct tag count for manifest mode (12 tags)', () => {
+    const { tags } = buildTags({
+      contentType: 'application/c2pa',
+      manifestId: 'urn:c2pa:test-manifest',
+      storageMode: 'manifest',
+      assetHash: 'dGVzdGhhc2g',
+      manifestStoreHash: 'c3RvcmVoYXNo',
+      manifestRepoUrl: 'https://example.com/v1',
+      assetContentType: 'image/jpeg',
+      softBindingAlg: ALG_PHASH,
+      softBindingValue: 'cGhhc2h2YWx1ZQ==',
+      claimGenerator: 'turbo-c2pa/0.1.0',
+    });
+    // 8 required + assetContentType + 2 binding + 1 generator = 12
+    expect(tags.length).toBe(12);
+  });
+
+  it('has correct tag count for proof mode (13 tags)', () => {
+    const { tags } = buildTags({
+      contentType: 'application/json',
+      manifestId: 'urn:c2pa:test-proof',
+      storageMode: 'proof',
+      assetHash: 'dGVzdGhhc2g',
+      manifestStoreHash: 'c3RvcmVoYXNo',
+      manifestRepoUrl: 'https://example.com/v1',
+      assetContentType: 'image/jpeg',
+      manifestFetchUrl: 'https://example.com/manifest',
+      softBindingAlg: ALG_PHASH,
+      softBindingValue: 'cGhhc2h2YWx1ZQ==',
+      claimGenerator: 'turbo-c2pa/0.1.0',
+    });
+    // 8 required + assetContentType + manifestFetchUrl + 2 binding + 1 generator = 13
     expect(tags.length).toBe(13);
   });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it } from 'vitest';
 import { detectContentType, SUPPORTED_CONTENT_TYPES } from '../src/detect.js';
 
 describe('detectContentType', () => {

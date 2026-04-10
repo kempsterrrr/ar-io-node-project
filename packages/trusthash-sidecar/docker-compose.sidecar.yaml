@@ -1,4 +1,14 @@
 services:
+  # Inject webhook config into the gateway core so it notifies the sidecar.
+  # depends_on ensures the sidecar is ready to accept webhooks before core starts.
+  core:
+    depends_on:
+      trusthash-sidecar:
+        condition: service_healthy
+    environment:
+      - WEBHOOK_TARGET_SERVERS=http://trusthash-sidecar:3003/webhook
+      - WEBHOOK_INDEX_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
+
   trusthash-sidecar:
     image: ${TRUSTHASH_SIDECAR_IMAGE:-ghcr.io/ar-io/trusthash-sidecar:${TRUSTHASH_SIDECAR_TAG:-latest}}
     restart: unless-stopped

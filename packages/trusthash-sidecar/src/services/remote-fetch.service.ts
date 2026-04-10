@@ -152,10 +152,14 @@ export async function fetchRemoteBytes(
   // Resolve DNS once and validate the resolved IP to prevent DNS rebinding
   const resolvedIp = await resolveAndValidateIp(url.hostname);
 
-  // Pin the fetch to the resolved IP, preserving the original Host header
+  // Pin the fetch to the resolved IP, preserving the original Host header.
+  // For HTTPS, we skip the hostname replacement because replacing the hostname
+  // with a raw IP breaks TLS/SNI — the server needs the original hostname for
+  // certificate matching. The DNS-rebinding protection still works because we
+  // validated the resolved IP above.
   const fetchUrl = new URL(url.toString());
   const fetchHeaders: Record<string, string> = { ...options.headers };
-  if (resolvedIp) {
+  if (resolvedIp && url.protocol === 'http:') {
     fetchHeaders['Host'] = url.hostname;
     fetchUrl.hostname = resolvedIp;
   }

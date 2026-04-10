@@ -36,7 +36,15 @@ async function fanOutToGateway(
           'Content-Type': 'application/json',
           Authorization: `Bearer ${gateway.adminApiKey}`,
         },
-        body: JSON.stringify([header]),
+        body: JSON.stringify([
+          {
+            ...header,
+            tags: header.tags?.map((t) => ({
+              name: Buffer.from(t.name, 'utf-8').toString('base64url'),
+              value: Buffer.from(t.value, 'utf-8').toString('base64url'),
+            })),
+          },
+        ]),
       });
 
       if (res.ok) {

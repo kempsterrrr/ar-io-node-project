@@ -335,4 +335,168 @@ describeIntegration('integration', () => {
     const body = JSON.parse(await response.text()) as { error?: string };
     expect(body.error).toContain('not supported');
   });
+
+  // --- Mode 2: manifest-only round-trip ---
+
+  it('indexes manifest-mode webhook and resolves via SBR byBinding', async () => {
+    const manifestModeTxId = `manifest-mode-${Date.now()}`;
+    const manifestModeId = `urn:c2pa:manifest-mode-${Date.now()}`;
+
+    // 1. Post webhook with storageMode=manifest
+    const webhookRes = await fetch(`${baseUrl}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tx_id: manifestModeTxId,
+        tags: [
+          { name: 'Content-Type', value: 'application/c2pa' },
+          { name: 'Protocol', value: 'C2PA-Manifest-Proof' },
+          { name: 'C2PA-Storage-Mode', value: 'manifest' },
+          { name: 'C2PA-Manifest-ID', value: manifestModeId },
+          { name: 'C2PA-Asset-Content-Type', value: 'image/jpeg' },
+          { name: 'C2PA-Asset-Hash', value: 'dGVzdGhhc2g' },
+          { name: 'C2PA-Manifest-Store-Hash', value: 'c3RvcmVoYXNo' },
+          { name: 'C2PA-Manifest-Repo-URL', value: `${baseUrl}/v1` },
+          { name: 'C2PA-Soft-Binding-Alg', value: 'org.ar-io.phash' },
+          { name: 'C2PA-Soft-Binding-Value', value: sampleBinding.valueB64 },
+          { name: 'C2PA-Claim-Generator', value: 'turbo-c2pa/0.1.0' },
+        ],
+        owner: 'integration-manifest-mode',
+        block_height: 100,
+        block_timestamp: 1700000100,
+      }),
+    });
+    expect(webhookRes.status).toBe(200);
+    const webhookBody = JSON.parse(await webhookRes.text()) as {
+      success: boolean;
+      data?: { action?: string };
+    };
+    expect(webhookBody.success).toBe(true);
+    expect(webhookBody.data?.action).toBe('indexed');
+
+    // 2. Verify it's discoverable via byBinding
+    const url = new URL(`${baseUrl}/v1/matches/byBinding`);
+    url.searchParams.set('alg', 'org.ar-io.phash');
+    url.searchParams.set('value', sampleBinding.valueB64);
+    url.searchParams.set('maxResults', '50');
+    const bindingRes = await fetch(url.toString());
+    expect(bindingRes.status).toBe(200);
+    const bindingBody = JSON.parse(await bindingRes.text()) as {
+      matches: Array<{ manifestId: string }>;
+    };
+    expect(bindingBody.matches.some((m) => m.manifestId === manifestModeId)).toBe(true);
+  });
+
+  // --- Mode 3: proof-locator round-trip ---
+
+  it('indexes proof-mode webhook and resolves manifest via fetch-through', async () => {
+    const proofTxId = `proof-mode-${Date.now()}`;
+    const proofManifestId = `urn:c2pa:proof-mode-${Date.now()}`;
+    // Point to the gateway-stub fixture so fetch-through works
+    const fetchUrl = `http://gateway-stub/${seededManifestTxId}`;
+    // SHA-256 of the fixture file (base64url)
+    const fixtureStoreHash = 'VqJd1gSdwu78kPfb_eof6ezrmAcMQZH0OojNbANpOgQ';
+
+    // 1. Post webhook with storageMode=proof
+    const webhookRes = await fetch(`${baseUrl}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tx_id: proofTxId,
+        tags: [
+          { name: 'Content-Type', value: 'application/json' },
+          { name: 'Protocol', value: 'C2PA-Manifest-Proof' },
+          { name: 'C2PA-Storage-Mode', value: 'proof' },
+          { name: 'C2PA-Manifest-ID', value: proofManifestId },
+          { name: 'C2PA-Asset-Content-Type', value: 'image/jpeg' },
+          { name: 'C2PA-Asset-Hash', value: 'dGVzdGhhc2g' },
+          { name: 'C2PA-Manifest-Store-Hash', value: fixtureStoreHash },
+          { name: 'C2PA-Manifest-Repo-URL', value: `${baseUrl}/v1` },
+          { name: 'C2PA-Manifest-Fetch-URL', value: fetchUrl },
+          { name: 'C2PA-Soft-Binding-Alg', value: 'org.ar-io.phash' },
+          { name: 'C2PA-Soft-Binding-Value', value: sampleBinding.valueB64 },
+        ],
+        owner: 'integration-proof-mode',
+        block_height: 101,
+        block_timestamp: 1700000101,
+      }),
+    });
+    expect(webhookRes.status).toBe(200);
+    const webhookBody = JSON.parse(await webhookRes.text()) as {
+      success: boolean;
+      data?: { action?: string };
+    };
+    expect(webhookBody.success).toBe(true);
+    expect(webhookBody.data?.action).toBe('indexed');
+
+    // 2. Retrieve manifest — sidecar should fetch-through to gateway-stub
+    const manifestRes = await fetch(
+      `${baseUrl}/v1/manifests/${encodeURIComponent(proofManifestId)}`
+    );
+    expect(manifestRes.status).toBe(200);
+    const resolution = manifestRes.headers.get('x-manifest-resolution');
+    expect(resolution).toMatch(/^proof-remote-(fetch|cache)$/);
+
+    // 3. Returned bytes should match the fixture
+    const manifestBytes = Buffer.from(await manifestRes.arrayBuffer());
+    expect(manifestBytes.length).toBeGreaterThan(0);
+  });
+
+  it('rejects proof-mode webhook missing C2PA-Manifest-Fetch-URL', async () => {
+    const response = await fetch(`${baseUrl}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tx_id: `proof-no-url-${Date.now()}`,
+        tags: [
+          { name: 'Content-Type', value: 'application/json' },
+          { name: 'Protocol', value: 'C2PA-Manifest-Proof' },
+          { name: 'C2PA-Storage-Mode', value: 'proof' },
+          { name: 'C2PA-Manifest-ID', value: `urn:c2pa:no-url-${Date.now()}` },
+          { name: 'C2PA-Manifest-Store-Hash', value: 'dGVzdA' },
+          { name: 'C2PA-Soft-Binding-Alg', value: 'org.ar-io.phash' },
+          { name: 'C2PA-Soft-Binding-Value', value: sampleBinding.valueB64 },
+        ],
+        owner: 'integration-proof-no-url',
+        block_height: 102,
+        block_timestamp: 1700000102,
+      }),
+    });
+    expect(response.status).toBe(200);
+    const body = JSON.parse(await response.text()) as {
+      success: boolean;
+      data?: { action?: string; reason?: string };
+    };
+    expect(body.success).toBe(true);
+    expect(body.data?.action).toBe('skipped');
+  });
+
+  it('rejects proof-mode webhook missing C2PA-Manifest-Store-Hash', async () => {
+    const response = await fetch(`${baseUrl}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tx_id: `proof-no-hash-${Date.now()}`,
+        tags: [
+          { name: 'Content-Type', value: 'application/json' },
+          { name: 'Protocol', value: 'C2PA-Manifest-Proof' },
+          { name: 'C2PA-Storage-Mode', value: 'proof' },
+          { name: 'C2PA-Manifest-ID', value: `urn:c2pa:no-hash-${Date.now()}` },
+          { name: 'C2PA-Manifest-Fetch-URL', value: 'http://gateway-stub/test-tx-0001' },
+          { name: 'C2PA-Soft-Binding-Alg', value: 'org.ar-io.phash' },
+          { name: 'C2PA-Soft-Binding-Value', value: sampleBinding.valueB64 },
+        ],
+        owner: 'integration-proof-no-hash',
+        block_height: 103,
+        block_timestamp: 1700000103,
+      }),
+    });
+    expect(response.status).toBe(200);
+    const body = JSON.parse(await response.text()) as {
+      success: boolean;
+      data?: { action?: string; reason?: string };
+    };
+    expect(body.success).toBe(true);
+    expect(body.data?.action).toBe('skipped');
+  });
 });

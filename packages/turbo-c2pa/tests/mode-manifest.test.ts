@@ -1,11 +1,11 @@
 /**
- * Integration test for Mode 1 (full embed) flow.
+ * Integration test for Mode 2 (manifest-only) flow.
  *
- * Tests the complete pipeline: detect → hash → phash → sign → tags
+ * Tests the complete pipeline: detect → hash → phash → sign → manifest bytes → tags
  * using c2pa-node with a dev CA cert chain.
  *
  * This test signs locally (no sidecar required) to verify the SDK
- * components work together.
+ * components work together for manifest-only uploads.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -28,6 +28,10 @@ import {
   TAG_PROTOCOL,
   TAG_MANIFEST_ID,
   TAG_STORAGE_MODE,
+  TAG_ASSET_CONTENT_TYPE,
+  TAG_MANIFEST_STORE_HASH,
+  TAG_CLAIM_GENERATOR,
+  TAG_SOFT_BINDING_ALG,
   PROTOCOL_NAME,
 } from '@ar-io/c2pa-protocol';
 
@@ -40,7 +44,7 @@ const hasCerts =
 
 const describeWithCerts = hasCerts ? describe : describe.skip;
 
-describeWithCerts('Mode 1: full embed (local signing)', () => {
+describeWithCerts('Mode 2: manifest-only (local signing)', () => {
   let testImage: Buffer;
   let leafCert: Buffer;
   let caCert: Buffer;
@@ -60,18 +64,7 @@ describeWithCerts('Mode 1: full embed (local signing)', () => {
     expect(testImage.length).toBeGreaterThan(100);
   });
 
-  it('detects content type from image buffer', () => {
-    const ct = detectContentType(new Uint8Array(testImage));
-    expect(ct).toBe('image/jpeg');
-  });
-
-  it('computes pHash from image buffer', async () => {
-    const result = await computePHash(testImage);
-    expect(result.hex).toHaveLength(16);
-    expect(result.base64.length).toBeGreaterThan(0);
-  });
-
-  it('signs image with c2pa-node and embeds manifest', async () => {
+  it('signs image and returns manifest bytes separate from signed buffer', async () => {
     const settings = mergeSettings(
       createTrustSettings({ verifyTrustList: false, trustAnchors: caCert.toString() }),
       createVerifySettings({ verifyAfterSign: false, verifyTrust: false })
@@ -82,13 +75,6 @@ describeWithCerts('Mode 1: full embed (local signing)', () => {
       settingsToJson(settings)
     );
 
-    const signerConfig = {
-      alg: 'es256' as const,
-      certs: [leafCert, caCert],
-      reserveSize: 20480,
-      directCoseHandling: false,
-    };
-
     const input = { buffer: testImage, mimeType: 'image/jpeg' };
     const output: { buffer: Buffer | null } = { buffer: null };
 
@@ -98,43 +84,39 @@ describeWithCerts('Mode 1: full embed (local signing)', () => {
           crypto.sign('SHA-256', data, { key: leafKey, dsaEncoding: 'ieee-p1363' })
         );
       },
-      signerConfig,
+      {
+        alg: 'es256' as const,
+        certs: [leafCert, caCert],
+        reserveSize: 20480,
+        directCoseHandling: false,
+      },
       input,
       output
     );
 
-    expect(output.buffer).not.toBeNull();
-    expect(output.buffer!.length).toBeGreaterThan(testImage.length);
+    // manifestBytes is the raw JUMBF — distinct from the signed image
     expect(manifestBytes.length).toBeGreaterThan(0);
+    expect(output.buffer).not.toBeNull();
+    expect(manifestBytes.length).not.toBe(output.buffer!.length);
 
-    // Compute manifest store hash
-    const hash = crypto.createHash('sha256').update(manifestBytes).digest();
-    const manifestStoreHash = hash
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    expect(manifestStoreHash.length).toBeGreaterThan(0);
+    // Manifest store hash is SHA-256 of manifest bytes, NOT the asset
+    const manifestStoreHash = crypto.createHash('sha256').update(manifestBytes).digest('base64url');
+    const assetHash = crypto.createHash('sha256').update(testImage).digest('base64url');
+    expect(manifestStoreHash).not.toBe(assetHash);
   });
 
-  it('builds correct ANS-104 tags for Mode 1', async () => {
+  it('builds correct ANS-104 tags for manifest mode', async () => {
     const phash = await computePHash(testImage);
-    const assetHash = crypto
-      .createHash('sha256')
-      .update(testImage)
-      .digest('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
+    const assetHash = crypto.createHash('sha256').update(testImage).digest('base64url');
 
     const { tags } = buildTags({
-      contentType: 'image/jpeg',
-      manifestId: 'urn:c2pa:test-123',
-      storageMode: 'full',
+      contentType: 'application/c2pa',
+      manifestId: 'urn:c2pa:manifest-test-123',
+      storageMode: 'manifest',
       assetHash,
-      manifestStoreHash: 'dGVzdGhhc2g',
+      manifestStoreHash: 'c3RvcmVoYXNo',
       manifestRepoUrl: 'https://example.com/v1',
+      assetContentType: 'image/jpeg',
       softBindingAlg: ALG_PHASH,
       softBindingValue: phash.base64,
       claimGenerator: 'turbo-c2pa-test/0.1.0',
@@ -142,16 +124,48 @@ describeWithCerts('Mode 1: full embed (local signing)', () => {
 
     const findTag = (name: string) => tags.find((t) => t.name === name)?.value;
 
+    // Verify manifest mode specifics
     expect(findTag(TAG_PROTOCOL)).toBe(PROTOCOL_NAME);
-    expect(findTag(TAG_STORAGE_MODE)).toBe('full');
-    expect(findTag(TAG_MANIFEST_ID)).toBe('urn:c2pa:test-123');
-    expect(findTag('Content-Type')).toBe('image/jpeg');
+    expect(findTag(TAG_STORAGE_MODE)).toBe('manifest');
+    expect(findTag('Content-Type')).toBe('application/c2pa');
+    expect(findTag(TAG_ASSET_CONTENT_TYPE)).toBe('image/jpeg');
+    expect(findTag(TAG_MANIFEST_ID)).toBe('urn:c2pa:manifest-test-123');
+    expect(findTag(TAG_MANIFEST_STORE_HASH)).toBe('c3RvcmVoYXNo');
+    expect(findTag(TAG_SOFT_BINDING_ALG)).toBe(ALG_PHASH);
+    expect(findTag(TAG_CLAIM_GENERATOR)).toBe('turbo-c2pa-test/0.1.0');
   });
 
-  it('end-to-end: detect → hash → phash → sign → tags', async () => {
+  it('has correct tag count for manifest mode (12 tags)', async () => {
+    const phash = await computePHash(testImage);
+    const assetHash = crypto.createHash('sha256').update(testImage).digest('base64url');
+
+    const { tags } = buildTags({
+      contentType: 'application/c2pa',
+      manifestId: 'urn:c2pa:test',
+      storageMode: 'manifest',
+      assetHash,
+      manifestStoreHash: 'c3RvcmVoYXNo',
+      manifestRepoUrl: 'https://example.com/v1',
+      assetContentType: 'image/jpeg',
+      softBindingAlg: ALG_PHASH,
+      softBindingValue: phash.base64,
+      claimGenerator: 'turbo-c2pa/0.1.0',
+    });
+
+    // 8 required + assetContentType + 2 softBinding + claimGenerator = 12
+    expect(tags.length).toBe(12);
+  });
+
+  it('pHash is computed from original image', async () => {
+    const phash = await computePHash(testImage);
+    expect(phash.hex).toHaveLength(16);
+    expect(phash.base64.length).toBeGreaterThan(0);
+  });
+
+  it('end-to-end: detect → hash → phash → sign → manifest bytes → tags', async () => {
     // 1. Detect
-    const contentType = detectContentType(new Uint8Array(testImage));
-    expect(contentType).toBe('image/jpeg');
+    const assetContentType = detectContentType(new Uint8Array(testImage));
+    expect(assetContentType).toBe('image/jpeg');
 
     // 2. Asset hash
     const assetHash = crypto.createHash('sha256').update(testImage).digest('base64url');
@@ -159,7 +173,7 @@ describeWithCerts('Mode 1: full embed (local signing)', () => {
     // 3. pHash
     const phash = await computePHash(testImage);
 
-    // 4. Sign
+    // 4. Sign (produces both signed buffer and manifest bytes)
     const settings = mergeSettings(
       createTrustSettings({ verifyTrustList: false, trustAnchors: caCert.toString() }),
       createVerifySettings({ verifyAfterSign: false, verifyTrust: false })
@@ -186,29 +200,35 @@ describeWithCerts('Mode 1: full embed (local signing)', () => {
 
     const manifestStoreHash = crypto.createHash('sha256').update(manifestBytes).digest('base64url');
 
-    // 5. Tags
+    // 5. Tags (manifest mode)
     const manifestId = `urn:c2pa:${crypto.randomUUID()}`;
     const { tags } = buildTags({
-      contentType: contentType!,
+      contentType: 'application/c2pa',
       manifestId,
-      storageMode: 'full',
+      storageMode: 'manifest',
       assetHash,
       manifestStoreHash,
       manifestRepoUrl: 'https://example.com/v1',
+      assetContentType: assetContentType!,
       softBindingAlg: ALG_PHASH,
       softBindingValue: phash.base64,
       claimGenerator: 'turbo-c2pa/0.1.0',
     });
 
-    // Verify
-    expect(output.buffer!.length).toBeGreaterThan(testImage.length);
-    expect(tags.length).toBe(11); // 8 required + 2 binding + 1 claim generator
+    // Verify manifest mode output
+    expect(manifestBytes.length).toBeGreaterThan(0);
+    expect(tags.length).toBe(12); // 8 required + assetContentType + 2 binding + 1 generator
     expect(manifestId).toMatch(/^urn:c2pa:/);
 
-    // The signed image should still be valid JPEG
-    const signedMeta = await sharp(output.buffer!).metadata();
-    expect(signedMeta.format).toBe('jpeg');
-    expect(signedMeta.width).toBe(200);
-    expect(signedMeta.height).toBe(200);
+    // manifestStoreHash should be hash of manifest, NOT asset
+    expect(manifestStoreHash).not.toBe(assetHash);
+
+    // Content-Type is application/c2pa (not image/jpeg)
+    const contentTypeTag = tags.find((t) => t.name === 'Content-Type');
+    expect(contentTypeTag?.value).toBe('application/c2pa');
+
+    // Asset content type is preserved
+    const assetCtTag = tags.find((t) => t.name === TAG_ASSET_CONTENT_TYPE);
+    expect(assetCtTag?.value).toBe('image/jpeg');
   });
 });

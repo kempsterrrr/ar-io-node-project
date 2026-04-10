@@ -170,7 +170,10 @@ async function resolveByBinding(options: {
 softbinding.get('/byBinding', async (c) => {
   try {
     const alg = c.req.query('alg');
-    const value = c.req.query('value');
+    // Defensively restore + from space in base64 values. In URL query strings,
+    // + is decoded as space (form encoding convention). Since spaces are not
+    // valid in base64, a space always means a corrupted +.
+    const value = c.req.query('value')?.replace(/ /g, '+');
     const maxResults = parseMaxResults(c.req.query('maxResults'));
 
     if (!alg || !value) {

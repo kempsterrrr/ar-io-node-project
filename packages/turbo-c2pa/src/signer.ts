@@ -30,7 +30,7 @@ export class RemoteSigner {
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      const response = await fetch(`${this.endpoint}/v1/cert`, {
+      const response = await fetch(`${this.endpoint}/cert`, {
         signal: controller.signal,
       });
 
@@ -62,7 +62,7 @@ export class RemoteSigner {
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
 
     try {
-      const response = await fetch(`${this.endpoint}/v1/sign`, {
+      const response = await fetch(`${this.endpoint}/sign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/octet-stream' },
         body: payload,

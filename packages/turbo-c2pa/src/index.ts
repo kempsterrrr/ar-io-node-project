@@ -5,6 +5,9 @@ export { computePHash } from './phash.js';
 export { signManifest } from './manifest.js';
 export { signAndPrepare } from './mode-full.js';
 export { storeAndPrepare } from './mode-store.js';
+export { signManifestAndPrepare } from './mode-manifest.js';
+export { proofAndPrepare } from './mode-proof.js';
+export { extractProvenanceUrl } from './xmp.js';
 export { uploadToArweave } from './upload.js';
 export type { TurboC2PAConfig, SignResult, TagBuildResult, TagBuildOptions } from './types.js';
 export type { PHashResult } from './phash.js';
@@ -15,4 +18,9 @@ export type {
   StoreAndPrepareResult,
   ManifestValidation,
 } from './mode-store.js';
+export type {
+  SignManifestAndPrepareOptions,
+  SignManifestAndPrepareResult,
+} from './mode-manifest.js';
+export type { ProofAndPrepareOptions, ProofAndPrepareResult } from './mode-proof.js';
 export type { UploadOptions, UploadResult } from './upload.js';

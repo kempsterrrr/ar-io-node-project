@@ -33,6 +33,41 @@ interface WebhookTag {
 }
 
 /**
+ * Check if a string is base64url-encoded (no +, /, = characters).
+ * The ar-io gateway sends tag names/values as base64url in webhook payloads.
+ */
+const BASE64URL_RE = /^[A-Za-z0-9_-]+$/;
+
+/**
+ * Decode tags from the gateway's native format.
+ * The gateway sends tag names and values as base64url-encoded strings.
+ * We detect this by checking if any tag name matches a known plain-text
+ * name — if not, we assume they're base64url-encoded and decode them.
+ */
+function decodeTags(tags: WebhookTag[]): WebhookTag[] {
+  if (tags.length === 0) return tags;
+
+  // Check if tags are already plain UTF-8 by looking for a known tag name
+  const knownNames = ['Content-Type', 'Protocol', TAG_PROTOCOL, TAG_STORAGE_MODE, TAG_MANIFEST_ID];
+  const alreadyPlain = tags.some((t) => knownNames.includes(t.name));
+  if (alreadyPlain) return tags;
+
+  // Check if the first tag name looks like base64url
+  if (!BASE64URL_RE.test(tags[0].name)) return tags;
+
+  // Decode base64url → UTF-8
+  try {
+    return tags.map((t) => ({
+      name: Buffer.from(t.name, 'base64url').toString('utf-8'),
+      value: Buffer.from(t.value, 'base64url').toString('utf-8'),
+    }));
+  } catch {
+    // If decoding fails, return original tags
+    return tags;
+  }
+}
+
+/**
  * Webhook payload from gateway
  */
 export interface WebhookPayload {
@@ -85,7 +120,7 @@ function getTagValue(tags: WebhookTag[], name: string): string | undefined {
  */
 export async function processWebhook(payload: WebhookPayload): Promise<WebhookResult> {
   const txId = payload.tx_id || payload.id;
-  const tags = payload.tags || [];
+  const tags = decodeTags(payload.tags || []);
   const owner = payload.owner || payload.owner_address;
   const blockHeight = payload.block_height ?? payload.height;
   const blockTimestamp = payload.block_timestamp ?? payload.timestamp;
