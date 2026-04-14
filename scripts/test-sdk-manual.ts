@@ -282,18 +282,25 @@ async function main() {
         // Phase 1: Wait for Turbo CDN to have the data (diagnostic)
         const turboCdnUrl = `https://turbo-gateway.com/${provenanceTxId}`;
         let turboAvailable = false;
+        let turboAvailableAt: string | undefined;
         const turboMaxPolls = 30;
         const turboPollMs = 2000;
+        const turboProbeTimeoutMs = 5000;
 
         console.log(`\n         Phase 1: polling Turbo CDN for data availability...`);
         for (let i = 1; i <= turboMaxPolls; i++) {
           await new Promise((r) => setTimeout(r, turboPollMs));
           try {
-            const res = await fetch(turboCdnUrl, { method: 'HEAD', redirect: 'manual' });
+            const res = await fetch(turboCdnUrl, {
+              method: 'HEAD',
+              redirect: 'manual',
+              signal: AbortSignal.timeout(turboProbeTimeoutMs),
+            });
             const status = res.status;
             if (status === 200 || status === 302) {
               turboAvailable = true;
-              console.log(`         Turbo CDN: ${status} at ${elapsed()}s ✓`);
+              turboAvailableAt = elapsed();
+              console.log(`         Turbo CDN: ${status} at ${turboAvailableAt}s ✓`);
               break;
             }
             if (i % 5 === 0) console.log(`         Turbo CDN: ${status} at ${elapsed()}s`);
@@ -340,7 +347,7 @@ async function main() {
             );
             if (attempt === maxAttempts) {
               console.log(
-                `         DIAGNOSIS: Turbo CDN has data (available at ${elapsed()}s) but gateway P2P fetch failed — likely rate-limited`
+                `         DIAGNOSIS: Turbo CDN has data (available at ${turboAvailableAt}s) but gateway P2P fetch failed — likely rate-limited`
               );
               throw new Error(lastError);
             }
@@ -794,7 +801,10 @@ async function main() {
           headers: { 'Content-Type': 'image/jpeg' },
           body: imageBuffer,
         });
-        assert(res.ok, `HTTP ${res.status}`);
+        if (!res.ok) {
+          if (attempt > 1) console.log(`HTTP ${res.status}`);
+          continue;
+        }
         const body = (await res.json()) as {
           matches: Array<{ manifestId: string; similarityScore?: number }>;
         };
