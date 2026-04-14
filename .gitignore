@@ -57,3 +57,9 @@ Thumbs.db
 **/data/*
 !**/data/.gitkeep
 **/data-test/*
+
+# Sidecar runtime databases
+**/sidecar-data/
+
+# Compiled scripts (TS -> JS in-place)
+packages/turbo-c2pa/scripts/*.js
