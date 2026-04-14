@@ -3,4 +3,5 @@ dist
 .next
 .turbo
 pnpm-lock.yaml
+ar-io-verify
 

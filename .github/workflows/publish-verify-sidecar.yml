@@ -1,8 +1,8 @@
 # =============================================================================
 # Deploy Verify Sidecar to Hetzner
 # =============================================================================
-# Builds the sidecar image from source on the server and deploys it
-# alongside the gateway. No GHCR publish — builds directly from git.
+# Builds the official ar-io/ar-io-verify image from the git submodule and
+# deploys it alongside the gateway. No GHCR publish — builds from source.
 #
 # Required Secrets:
 #   - HETZNER_HOST: Server IP or hostname
@@ -18,6 +18,7 @@ on:
       - main
     paths:
       - 'packages/verify-sidecar/**'
+      - 'ar-io-verify'
       - '.github/workflows/publish-verify-sidecar.yml'
   workflow_dispatch:
 
@@ -38,6 +39,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          submodules: true
 
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.9.1
@@ -66,6 +69,7 @@ jobs:
             git reset --hard
             git clean -fd
             git checkout ${{ github.sha }}
+            git submodule update --init --recursive
             echo "Repo at \$(git rev-parse --short HEAD)"
           EOF
 
@@ -96,9 +100,11 @@ jobs:
 
             docker network create ar-io-network >/dev/null 2>&1 || true
 
-            # Build sidecar image from repo root
+            # Build sidecar image from official ar-io-verify submodule
             REPO_DIR="${HOME}/ar-io-node-project"
-            docker build -t verify-sidecar:latest -f "${REPO_DIR}/packages/verify-sidecar/Dockerfile" "${REPO_DIR}"
+            docker build -t verify-sidecar:latest \
+              -f "${REPO_DIR}/ar-io-verify/Dockerfile" \
+              "${REPO_DIR}/ar-io-verify"
 
             # Compose with all overlays so other sidecars are not disrupted
             COMPOSE_FILES="-f docker-compose.yaml"
@@ -129,6 +135,6 @@ jobs:
             echo "## Verify Sidecar Deployment Complete"
             echo ""
             echo "**Commit:** ${{ github.sha }}"
-            echo "**Build:** from source (no GHCR)"
+            echo "**Build:** from ar-io/ar-io-verify submodule"
             echo "**Time (UTC):** $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
           } >> "$GITHUB_STEP_SUMMARY"

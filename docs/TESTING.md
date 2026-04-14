@@ -103,6 +103,34 @@ cd ../../
 docker compose -f docker-compose.local.yaml down
 ```
 
+### Verify Sidecar
+
+Source code: [ar-io/ar-io-verify](https://github.com/ar-io/ar-io-verify) (submodule at `ar-io-verify/`)
+
+```bash
+# Start the full local stack (gateway + trusthash + verify)
+docker compose -f docker-compose.local.yaml up -d
+
+# Run integration tests against live local services (36 tests)
+./scripts/test-verify-sidecar.sh
+
+# Run unit tests inside the submodule
+cd ar-io-verify
+pnpm test
+```
+
+The integration test script (`scripts/test-verify-sidecar.sh`) tests against the running local gateway and verify sidecar:
+
+- Pre-flight health checks (gateway + sidecar connectivity)
+- API metadata and Swagger UI availability
+- Input validation (invalid txId, empty body, too-short txId)
+- L1 transaction verification (existence, hash match, level, owner, metadata)
+- Cached result retrieval by verification ID
+- Verification history by transaction ID
+- PDF certificate generation (status + content-type)
+- Raw data proxy endpoint
+- Attestation endpoint (404 when no wallet, 200 when configured)
+
 ### Turbo C2PA SDK
 
 ```bash

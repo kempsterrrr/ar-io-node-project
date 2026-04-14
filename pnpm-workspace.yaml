@@ -1,4 +1,5 @@
 packages:
   - 'apps/*'
   - 'packages/*'
-  - 'packages/verify-sidecar/web'
+  - '!ar-io-verify'
+  - '!ar-io-verify/**'

@@ -119,20 +119,22 @@ services:
     image: ${VERIFY_SIDECAR_IMAGE_LOCAL:-verify-sidecar-local}
     pull_policy: never
     build:
-      context: .
-      dockerfile: packages/verify-sidecar/Dockerfile
+      context: ./ar-io-verify
+      dockerfile: Dockerfile
     restart: 'no'
     expose:
       - '4001'
-    env_file:
-      - ./packages/verify-sidecar/.env.docker
     environment:
+      - GATEWAY_URL=http://envoy:3000
+      - GATEWAY_HOST=${GATEWAY_HOST:-}
       - NODE_ENV=development
       - PORT=4001
       - LOG_LEVEL=debug
       - SQLITE_PATH=/app/data/verify.db
+      - SIGNING_KEY_PATH=${WALLET_FILE:+/app/wallet.json}
     volumes:
       - ./packages/verify-sidecar/data:/app/data
+      - ${WALLET_FILE:-/dev/null}:/app/wallet.json:ro
     networks:
       - ar-io-network
     healthcheck:

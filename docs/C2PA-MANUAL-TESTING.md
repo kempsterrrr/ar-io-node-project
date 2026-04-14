@@ -360,6 +360,8 @@ Expected: Status 200, `X-Manifest-Resolution: proof-remote-fetch` (or `proof-rem
 
 ## 8. Verify Sidecar
 
+> **Note:** The verify sidecar source code lives in the official [ar-io/ar-io-verify](https://github.com/ar-io/ar-io-verify) repository, available as a git submodule at `ar-io-verify/` (repo root). Deploy config remains in `packages/verify-sidecar/`.
+
 ### 6.1 Verify a Transaction
 
 ```bash
