@@ -11,12 +11,15 @@ services:
         required: false
     environment:
       - GATEWAY_URL=http://envoy:3000
+      - GATEWAY_HOST=${GATEWAY_HOST:-}
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=4001
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - SQLITE_PATH=/app/data/verify.db
+      - SIGNING_KEY_PATH=${WALLET_FILE:+/app/wallet.json}
     volumes:
       - ${VERIFY_SIDECAR_DATA_DIR:-./verify-data}:/app/data
+      - ${WALLET_FILE:-/dev/null}:/app/wallet.json:ro
     networks:
       - ar-io-network
     depends_on:

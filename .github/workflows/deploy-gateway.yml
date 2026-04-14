@@ -54,6 +54,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          submodules: true
 
       - name: Setup SSH
         uses: webfactory/ssh-agent@v0.9.1
@@ -222,10 +224,11 @@ jobs:
             git reset --hard
             git clean -fd
             git checkout ${{ github.sha }}
+            git submodule update --init --recursive
             echo "Building trusthash sidecar..."
             docker build -t trusthash-sidecar:latest -f packages/trusthash-sidecar/Dockerfile .
             echo "Building verify sidecar..."
-            docker build -t verify-sidecar:latest -f packages/verify-sidecar/Dockerfile .
+            docker build -t verify-sidecar:latest -f ar-io-verify/Dockerfile ar-io-verify
           EOF
 
       - name: Write signing secrets to server

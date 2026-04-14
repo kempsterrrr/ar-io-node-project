@@ -9,10 +9,12 @@ A monorepo for running an AR.IO Arweave gateway and building custom sidecar serv
 ```
 ar-io-node-project/
 ├── apps/gateway/                  # AR.IO gateway (Docker-based, port 3000)
+├── ar-io-verify/                  # Verify sidecar (git submodule → ar-io/ar-io-verify)
 ├── packages/
 │   ├── c2pa-protocol/             # Shared C2PA tag schema constants
 │   ├── trusthash-sidecar/         # C2PA manifest repository + signing oracle
 │   ├── turbo-c2pa/                # C2PA client SDK (sign + store modes)
+│   ├── verify-sidecar/            # Verify sidecar deploy config (compose, nginx, env)
 │   └── x402-bundler-sidecar/      # x402 payment bundler
 ├── docs/                          # Detailed documentation
 └── .github/workflows/             # CI/CD pipelines
