@@ -14,6 +14,7 @@ set -euo pipefail
 
 VERIFY_URL="${VERIFY_URL:-http://localhost:4001}"
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:3000}"
+# shellcheck disable=SC2086 — CURL_OPTS intentionally word-split
 CURL_OPTS="--connect-timeout 5 --max-time 30"
 
 # Known test transaction IDs
@@ -50,9 +51,15 @@ assert_status() {
   local label="$1" url="$2" method="${3:-GET}" expected="${4:-200}" body="${5:-}"
   local actual
   if [[ "$method" == "POST" ]]; then
-    actual=$(curl -s $CURL_OPTS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d "$body" "$url")
+    if ! actual=$(curl -s $CURL_OPTS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d "$body" "$url" 2>/dev/null); then
+      fail "$label" "request failed (curl error)"
+      return
+    fi
   else
-    actual=$(curl -s $CURL_OPTS -o /dev/null -w '%{http_code}' "$url")
+    if ! actual=$(curl -s $CURL_OPTS -o /dev/null -w '%{http_code}' "$url" 2>/dev/null); then
+      fail "$label" "request failed (curl error)"
+      return
+    fi
   fi
   if [[ "$actual" == "$expected" ]]; then
     pass "$label (HTTP $actual)"
@@ -140,7 +147,7 @@ echo ""
 echo "--- Verify L1 transaction (${TX_SMALL}) ---"
 result=$(curl -s $CURL_OPTS -X POST -H 'Content-Type: application/json' \
   -d "{\"txId\":\"${TX_SMALL}\"}" \
-  "${VERIFY_URL}/api/v1/verify" 2>/dev/null)
+  "${VERIFY_URL}/api/v1/verify" 2>/dev/null || echo "")
 
 if [[ -z "$result" || "$result" == *"error"* ]]; then
   fail "POST /verify returns verification result" "got: $result"
@@ -190,14 +197,14 @@ else
   echo "--- Cached result retrieval (${vid}) ---"
   assert_status "GET /verify/:id returns 200" "${VERIFY_URL}/api/v1/verify/${vid}"
 
-  cached=$(curl -s $CURL_OPTS "${VERIFY_URL}/api/v1/verify/${vid}" 2>/dev/null)
+  cached=$(curl -s $CURL_OPTS "${VERIFY_URL}/api/v1/verify/${vid}" 2>/dev/null || echo "")
   assert_json_field "Cached txId matches" "$cached" "['txId']" "$TX_SMALL"
   assert_json_field "Cached level matches" "$cached" "['level']" "$level"
 
   # --- Verification history ---
   echo ""
   echo "--- Verification history ---"
-  history=$(curl -s $CURL_OPTS "${VERIFY_URL}/api/v1/verify/tx/${TX_SMALL}" 2>/dev/null)
+  history=$(curl -s $CURL_OPTS "${VERIFY_URL}/api/v1/verify/tx/${TX_SMALL}" 2>/dev/null || echo "")
   assert_json_field "History txId matches" "$history" "['txId']" "$TX_SMALL"
   if ! hist_count=$(json_get "$history" "['count']"); then
     fail "History count is present" "missing or invalid count"
@@ -212,8 +219,8 @@ else
   # --- PDF certificate ---
   echo ""
   echo "--- PDF certificate ---"
-  pdf_status=$(curl -s $CURL_OPTS -o /dev/null -w '%{http_code}' "${VERIFY_URL}/api/v1/verify/${vid}/pdf")
-  pdf_type=$(curl -s $CURL_OPTS -o /dev/null -w '%{content_type}' "${VERIFY_URL}/api/v1/verify/${vid}/pdf")
+  pdf_status=$(curl -s $CURL_OPTS -o /dev/null -w '%{http_code}' "${VERIFY_URL}/api/v1/verify/${vid}/pdf" 2>/dev/null || echo "000")
+  pdf_type=$(curl -s $CURL_OPTS -o /dev/null -w '%{content_type}' "${VERIFY_URL}/api/v1/verify/${vid}/pdf" 2>/dev/null || echo "")
   if [[ "$pdf_status" == "200" ]]; then
     pass "GET /verify/:id/pdf returns 200"
   else
@@ -232,7 +239,7 @@ echo ""
 echo "--- Verify second transaction (${TX_BOOK}) ---"
 result2=$(curl -s $CURL_OPTS -X POST -H 'Content-Type: application/json' \
   -d "{\"txId\":\"${TX_BOOK}\"}" \
-  "${VERIFY_URL}/api/v1/verify" 2>/dev/null)
+  "${VERIFY_URL}/api/v1/verify" 2>/dev/null || echo "")
 
 if [[ -z "$result2" || "$result2" == *"error"* ]]; then
   fail "POST /verify second tx returns result" "got: $result2"
@@ -246,7 +253,7 @@ echo ""
 
 # --- Raw data proxy ---
 echo "--- Raw data proxy ---"
-raw_status=$(curl -s $CURL_OPTS -o /dev/null -w '%{http_code}' "${VERIFY_URL}/raw/${TX_SMALL}")
+raw_status=$(curl -s $CURL_OPTS -o /dev/null -w '%{http_code}' "${VERIFY_URL}/raw/${TX_SMALL}" 2>/dev/null || echo "000")
 if [[ "$raw_status" == "200" ]]; then
   pass "GET /raw/:txId returns 200"
 else
@@ -258,7 +265,7 @@ echo ""
 # --- Attestation (no wallet configured) ---
 echo "--- Attestation ---"
 if [[ -n "${vid:-}" ]]; then
-  attest_status=$(curl -s $CURL_OPTS -o /dev/null -w '%{http_code}' "${VERIFY_URL}/api/v1/verify/${vid}/attestation")
+  attest_status=$(curl -s $CURL_OPTS -o /dev/null -w '%{http_code}' "${VERIFY_URL}/api/v1/verify/${vid}/attestation" 2>/dev/null || echo "000")
   if [[ "$attest_status" == "404" ]]; then
     pass "GET /verify/:id/attestation returns 404 (no wallet configured)"
   elif [[ "$attest_status" == "200" ]]; then
