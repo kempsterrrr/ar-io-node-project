@@ -16,10 +16,10 @@ The full source is available as a git submodule at `ar-io-verify/` (repo root).
 
 ## Local Development
 
-The verify sidecar builds from the `packages/ar-io-verify` submodule:
+The verify sidecar builds from the `ar-io-verify/` submodule (repo root):
 
 ```bash
-docker compose -f docker-compose.local.yaml up verify-sidecar -d
+docker compose -f docker-compose.local.yaml up -d
 ```
 
 ## Contributing
@@ -28,7 +28,9 @@ To develop verify features locally and contribute upstream:
 
 ```bash
 cd ar-io-verify
-git remote -v                    # origin = ar-io/ar-io-verify, fork = your fork
+git remote -v                    # origin = ar-io/ar-io-verify
+# Add your fork as a remote (first time only)
+git remote add fork https://github.com/<your-user>/ar-io-verify.git
 git checkout -b feat/my-feature
 # make changes, test locally
 git push fork feat/my-feature    # push to your fork

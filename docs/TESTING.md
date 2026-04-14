@@ -108,10 +108,11 @@ docker compose -f docker-compose.local.yaml down
 Source code: [ar-io/ar-io-verify](https://github.com/ar-io/ar-io-verify) (submodule at `ar-io-verify/`)
 
 ```bash
+# Prerequisite: the gateway must be running (creates ar-io-network)
 # Start the full local stack (gateway + trusthash + verify)
 docker compose -f docker-compose.local.yaml up -d
 
-# Run integration tests against live local services (36 tests)
+# Run integration tests against live local services
 ./scripts/test-verify-sidecar.sh
 
 # Run unit tests inside the submodule

@@ -362,7 +362,7 @@ Expected: Status 200, `X-Manifest-Resolution: proof-remote-fetch` (or `proof-rem
 
 > **Note:** The verify sidecar source code lives in the official [ar-io/ar-io-verify](https://github.com/ar-io/ar-io-verify) repository, available as a git submodule at `ar-io-verify/` (repo root). Deploy config remains in `packages/verify-sidecar/`.
 
-### 6.1 Verify a Transaction
+### 8.1 Verify a Transaction
 
 ```bash
 curl -s -X POST https://ario.agenticway.io/verify/api/v1/verify \
@@ -370,9 +370,9 @@ curl -s -X POST https://ario.agenticway.io/verify/api/v1/verify \
   -d '{"txId": "<ARWEAVE_TX_ID>"}' | jq .
 ```
 
-Expected: JSON with `verificationId`, `tier`, `existence`, `integrity`, and `metadata` fields.
+Expected: JSON with `verificationId`, `level` (1-3), `existence`, `authenticity`, `owner`, `metadata`, `bundle`, `gatewayAssessment`, `attestation`, and `links` fields.
 
-### 6.2 Download PDF Attestation
+### 8.2 Download PDF Attestation
 
 ```bash
 # Use the verificationId from step 6.1
