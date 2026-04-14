@@ -151,6 +151,7 @@ jobs:
           ANS104_INDEX_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
           ANS104_UNBUNDLE_FILTER={"tags":[{"name":"Protocol","value":"C2PA-Manifest-Proof"}]}
           ANS104_UNBUNDLE_WORKERS=1
+          ANS104_DOWNLOAD_WORKERS=${{ vars.ANS104_DOWNLOAD_WORKERS || '10' }}
 
           # Envoy Peer EDS
           ENABLE_ARWEAVE_PEER_EDS=${{ vars.ENABLE_ARWEAVE_PEER_EDS || 'true' }}

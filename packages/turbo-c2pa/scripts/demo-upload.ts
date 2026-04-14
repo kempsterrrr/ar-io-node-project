@@ -408,8 +408,8 @@ async function main() {
       gatewayUrl,
       uploadServiceUrl,
     });
-    txId = txId;
-    viewUrl = viewUrl;
+    txId = uploadResult.txId;
+    viewUrl = uploadResult.viewUrl;
     owner = uploadResult.owner;
   }
 
