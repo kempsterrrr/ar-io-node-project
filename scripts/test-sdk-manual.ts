@@ -276,16 +276,47 @@ async function main() {
 
     if (provenanceTxId) {
       await test('retrieve() provenance-stored image — manifest embedded', async () => {
-        const maxAttempts = 6;
-        const delayMs = 10000;
+        const t0 = Date.now();
+        const elapsed = () => ((Date.now() - t0) / 1000).toFixed(1);
+
+        // Phase 1: Wait for Turbo CDN to have the data (diagnostic)
+        const turboCdnUrl = `https://turbo-gateway.com/${provenanceTxId}`;
+        let turboAvailable = false;
+        const turboMaxPolls = 30;
+        const turboPollMs = 2000;
+
+        console.log(`\n         Phase 1: polling Turbo CDN for data availability...`);
+        for (let i = 1; i <= turboMaxPolls; i++) {
+          await new Promise((r) => setTimeout(r, turboPollMs));
+          try {
+            const res = await fetch(turboCdnUrl, { method: 'HEAD', redirect: 'manual' });
+            const status = res.status;
+            if (status === 200 || status === 302) {
+              turboAvailable = true;
+              console.log(`         Turbo CDN: ${status} at ${elapsed()}s ✓`);
+              break;
+            }
+            if (i % 5 === 0) console.log(`         Turbo CDN: ${status} at ${elapsed()}s`);
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (i % 5 === 0)
+              console.log(`         Turbo CDN: error at ${elapsed()}s — ${msg.slice(0, 60)}`);
+          }
+        }
+
+        if (!turboAvailable) {
+          throw new Error(
+            `Turbo CDN never returned 200/302 within ${(turboMaxPolls * turboPollMs) / 1000}s — upload propagation issue`
+          );
+        }
+
+        // Phase 2: Retrieve via gateway (tests P2P fetch from Turbo)
+        const maxAttempts = 10;
+        const delayMs = 5000;
         let lastError: string | undefined;
 
+        console.log(`         Phase 2: retrieving via gateway (P2P fetch from Turbo)...`);
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-          if (attempt === 1) {
-            console.log(`\n         waiting ${delayMs / 1000}s for data propagation...`);
-          } else {
-            console.log(`         retry ${attempt}/${maxAttempts}...`);
-          }
           await new Promise((r) => setTimeout(r, delayMs));
 
           try {
@@ -299,12 +330,20 @@ async function main() {
               `expected image/jpeg, got ${result.contentType}`
             );
             console.log(
-              `original=${originalImageSize}b signed=${result.data.length}b (+${result.data.length - originalImageSize!}b manifest) attempt=${attempt}`
+              `         Gateway: 200 at ${elapsed()}s — original=${originalImageSize}b signed=${result.data.length}b (+${result.data.length - originalImageSize!}b manifest)`
             );
             return;
           } catch (e: unknown) {
             lastError = e instanceof Error ? e.message : String(e);
-            if (attempt === maxAttempts) throw new Error(lastError);
+            console.log(
+              `         Gateway: ${lastError.slice(0, 40)} at ${elapsed()}s (attempt ${attempt}/${maxAttempts})`
+            );
+            if (attempt === maxAttempts) {
+              console.log(
+                `         DIAGNOSIS: Turbo CDN has data (available at ${elapsed()}s) but gateway P2P fetch failed — likely rate-limited`
+              );
+              throw new Error(lastError);
+            }
           }
         }
       });
