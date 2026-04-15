@@ -28,11 +28,8 @@ To develop verify features locally and contribute upstream:
 
 ```bash
 cd ar-io-verify
-git remote -v                    # origin = ar-io/ar-io-verify
-# Add your fork as a remote (first time only)
-git remote add fork https://github.com/<your-user>/ar-io-verify.git
 git checkout -b feat/my-feature
 # make changes, test locally
-git push fork feat/my-feature    # push to your fork
-gh pr create -R ar-io/ar-io-verify  # open PR upstream
+git push origin feat/my-feature
+gh pr create -R ar-io/ar-io-verify
 ```

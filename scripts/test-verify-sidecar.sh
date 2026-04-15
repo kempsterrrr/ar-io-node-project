@@ -250,13 +250,14 @@ fi
 
 echo ""
 
-# --- Raw data proxy ---
-echo "--- Raw data proxy ---"
-raw_status=$(curl -s "${CURL_OPTS[@]}" -o /dev/null -w '%{http_code}' "${VERIFY_URL}/raw/${TX_SMALL}" 2>/dev/null || echo "000")
-if [[ "$raw_status" == "200" ]]; then
-  pass "GET /raw/:txId returns 200"
+# --- Runtime config ---
+echo "--- Runtime config ---"
+config_result=$(curl -s "${CURL_OPTS[@]}" "${VERIFY_URL}/api/config" 2>/dev/null || echo "")
+if [[ -n "$config_result" ]]; then
+  pass "GET /api/config returns response"
+  assert_json_field_not_empty "publicGatewayUrl is set" "$config_result" "['publicGatewayUrl']"
 else
-  fail "GET /raw/:txId returns 200" "got HTTP $raw_status"
+  fail "GET /api/config returns response" "empty or no response"
 fi
 
 echo ""
