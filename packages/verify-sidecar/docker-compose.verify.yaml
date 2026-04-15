@@ -16,6 +16,7 @@ services:
       - PORT=4001
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - SQLITE_PATH=/app/data/verify.db
+      - PUBLIC_GATEWAY_URL=${PUBLIC_GATEWAY_URL:-}
       - SIGNING_KEY_PATH=${WALLET_FILE:+/app/wallet.json}
     volumes:
       - ${VERIFY_SIDECAR_DATA_DIR:-./verify-data}:/app/data

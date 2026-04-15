@@ -131,6 +131,7 @@ services:
       - PORT=4001
       - LOG_LEVEL=debug
       - SQLITE_PATH=/app/data/verify.db
+      - PUBLIC_GATEWAY_URL=${PUBLIC_GATEWAY_URL:-http://localhost:3000}
       - SIGNING_KEY_PATH=${WALLET_FILE:+/app/wallet.json}
     volumes:
       - ./packages/verify-sidecar/data:/app/data
