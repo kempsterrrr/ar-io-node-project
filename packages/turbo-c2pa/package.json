@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "typescript": "^5.3.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.4"
   },
   "keywords": [
     "c2pa",
