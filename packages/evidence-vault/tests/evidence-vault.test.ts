@@ -1,38 +1,42 @@
 import { describe, it, expect, vi } from 'vitest';
 import { EvidenceVault } from '../src/evidence-vault.js';
 
-// Mock the AgenticWay SDK
+// Mock the AgenticWay SDK. Vitest 4 enforces that mockImplementation receive a
+// regular function — arrow functions can't be invoked with `new`, which is how
+// EvidenceVault constructs the SDK.
 vi.mock('@agenticway/sdk', () => ({
-  AgenticWay: vi.fn().mockImplementation(() => ({
-    anchor: vi.fn().mockResolvedValue({
-      txId: 'vault-tx-001',
-      hash: 'abcdef1234567890',
-      timestamp: '2026-04-02T00:00:00.000Z',
-    }),
-    batchAnchor: vi.fn().mockResolvedValue({
-      txId: 'vault-batch-001',
-      merkleRoot: 'root-hash',
-      proofs: [{ index: 0, hash: 'leaf-hash', proof: [] }],
-      timestamp: '2026-04-02T00:00:00.000Z',
-    }),
-    verifyAnchor: vi.fn().mockResolvedValue({
-      valid: true,
-      hash: 'abc',
-      anchoredHash: 'abc',
-      blockHeight: 1500000,
-      timestamp: '2026-04-02T00:00:00.000Z',
-    }),
-    query: vi.fn().mockResolvedValue({
-      edges: [],
-      pageInfo: { hasNextPage: false, endCursor: null },
-    }),
-    gateway: {
-      fetchTransactionInfo: vi.fn().mockResolvedValue({
-        tags: [],
-        block: null,
+  AgenticWay: vi.fn().mockImplementation(function () {
+    return {
+      anchor: vi.fn().mockResolvedValue({
+        txId: 'vault-tx-001',
+        hash: 'abcdef1234567890',
+        timestamp: '2026-04-02T00:00:00.000Z',
       }),
-    },
-  })),
+      batchAnchor: vi.fn().mockResolvedValue({
+        txId: 'vault-batch-001',
+        merkleRoot: 'root-hash',
+        proofs: [{ index: 0, hash: 'leaf-hash', proof: [] }],
+        timestamp: '2026-04-02T00:00:00.000Z',
+      }),
+      verifyAnchor: vi.fn().mockResolvedValue({
+        valid: true,
+        hash: 'abc',
+        anchoredHash: 'abc',
+        blockHeight: 1500000,
+        timestamp: '2026-04-02T00:00:00.000Z',
+      }),
+      query: vi.fn().mockResolvedValue({
+        edges: [],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      }),
+      gateway: {
+        fetchTransactionInfo: vi.fn().mockResolvedValue({
+          tags: [],
+          block: null,
+        }),
+      },
+    };
+  }),
   sha256Hex: vi.fn().mockReturnValue('mocked-hash'),
 }));
 

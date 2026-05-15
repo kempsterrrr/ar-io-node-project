@@ -7,9 +7,12 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Mock the database module before importing webhook service
-const mockGetManifestByTxId = vi.fn(() => Promise.resolve(null));
-const mockUpsertManifestArtifactWithBindings = vi.fn(() => Promise.resolve());
+// vi.mock() is hoisted to the top of the file, so any referenced variables
+// must be hoisted alongside it via vi.hoisted() to avoid a TDZ error.
+const { mockGetManifestByTxId, mockUpsertManifestArtifactWithBindings } = vi.hoisted(() => ({
+  mockGetManifestByTxId: vi.fn(() => Promise.resolve(null)),
+  mockUpsertManifestArtifactWithBindings: vi.fn(() => Promise.resolve()),
+}));
 
 vi.mock('../src/db/index.js', () => ({
   getManifestByTxId: mockGetManifestByTxId,
