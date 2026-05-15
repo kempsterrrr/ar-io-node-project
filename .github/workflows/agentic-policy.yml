@@ -111,7 +111,7 @@ jobs:
 
       - name: Create learning PR
         if: steps.proposal.outputs.proposal_exists == 'false'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "chore(agentic): weekly learning proposal"
           title: "chore(agentic): weekly learning proposal (${{ steps.proposal.outputs.week }})"
