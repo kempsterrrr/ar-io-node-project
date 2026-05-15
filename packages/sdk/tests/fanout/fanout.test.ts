@@ -48,7 +48,19 @@ describe('fanOutDataItem', () => {
       Authorization: 'Bearer key1',
     });
     const body = JSON.parse((init as RequestInit).body as string);
-    expect(body).toEqual([header]);
+    // fanOutDataItem base64url-encodes tag names/values for the gateway admin
+    // API (see fanout.ts). Other header fields are passed through unchanged.
+    expect(body).toEqual([
+      {
+        ...header,
+        tags: [
+          {
+            name: Buffer.from('Content-Type', 'utf-8').toString('base64url'),
+            value: Buffer.from('text/plain', 'utf-8').toString('base64url'),
+          },
+        ],
+      },
+    ]);
   });
 
   it('returns error for failed gateways without blocking others', async () => {
