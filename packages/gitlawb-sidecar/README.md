@@ -227,7 +227,7 @@ adjustments noted there is enough.
 
 ## Architecture
 
-```
+```text
                      ┌────────────────────────┐
    git push ──────►  │  gateway Envoy         │
    git clone ─────►  │  TLS + ArNS routing    │

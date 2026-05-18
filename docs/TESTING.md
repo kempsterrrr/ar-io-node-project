@@ -190,7 +190,7 @@ make up
 # Smoke checks
 make ps                            # both services Up + healthy
 docker compose logs -f gitlawb-node
-curl -sf http://localhost:7546 || true  # libp2p port reachable (expected: TCP only)
+nc -zv localhost 7546                    # libp2p TCP port reachable
 
 # After wiring the Envoy snippet from scripts/envoy-route-snippet.yaml:
 curl -sf https://git.<your-arns>/health   # → 200 OK

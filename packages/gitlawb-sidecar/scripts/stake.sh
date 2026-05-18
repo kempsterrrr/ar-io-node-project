@@ -17,6 +17,10 @@ if [[ -z "${GITLAWB_PUBLIC_URL:-}" ]]; then
 fi
 
 STAKE_AMOUNT="${STAKE_AMOUNT:-10000}"
+if ! [[ "${STAKE_AMOUNT}" =~ ^[0-9]+$ ]] || (( STAKE_AMOUNT <= 0 )); then
+  echo "STAKE_AMOUNT must be a positive integer (got: '${STAKE_AMOUNT}')." >&2
+  exit 1
+fi
 
 echo "Registering node:"
 echo "  Stake:       ${STAKE_AMOUNT} \$GITLAWB"

@@ -86,8 +86,10 @@ fi
 # ---------------------------------------------------------------------------
 echo
 echo "4) NodeStaking contract address on Base."
+echo "   Required if you plan to stake (which is how you earn rewards)."
+echo "   Skip if you just want to run a node without registering on-chain."
 echo "   See https://github.com/Gitlawb/node/blob/main/docs/RUN-A-NODE.md for the canonical deployment."
-read -rp "   GITLAWB_CONTRACT_NODE_STAKING (0x...): " STAKING_ADDR
+read -rp "   GITLAWB_CONTRACT_NODE_STAKING (0x..., leave blank to skip): " STAKING_ADDR
 
 # ---------------------------------------------------------------------------
 # Pinata JWT (optional)
@@ -130,6 +132,19 @@ update_env GITLAWB_CHAIN_RPC_URL "${BASE_RPC}"
 [[ -n "${OPERATOR_KEY}" ]]  && update_env GITLAWB_OPERATOR_PRIVATE_KEY "${OPERATOR_KEY}"
 [[ -n "${STAKING_ADDR}" ]]  && update_env GITLAWB_CONTRACT_NODE_STAKING "${STAKING_ADDR}"
 [[ -n "${PINATA_JWT}" ]]    && update_env GITLAWB_PINATA_JWT "${PINATA_JWT}"
+
+# Auto-generate a strong POSTGRES_PASSWORD if the operator hasn't set one.
+# This avoids shipping a default password and keeps the secret out of the
+# prompts (the operator never needs to see or type it).
+CURRENT_PWD="$(grep '^POSTGRES_PASSWORD=' "${ENV_FILE}" | cut -d= -f2-)"
+if [[ -z "${CURRENT_PWD}" ]]; then
+  if command -v openssl >/dev/null 2>&1; then
+    PG_PWD="$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 32)"
+  else
+    PG_PWD="$(head -c 32 /dev/urandom | base64 | tr -d '/+=\n' | head -c 32)"
+  fi
+  update_env POSTGRES_PASSWORD "${PG_PWD}"
+fi
 
 green "Wrote ${ENV_FILE} (chmod 600)."
 

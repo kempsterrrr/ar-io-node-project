@@ -17,15 +17,15 @@ services:
     image: ${GITLAWB_POSTGRES_IMAGE:-postgres:16-alpine}
     restart: unless-stopped
     environment:
-      POSTGRES_USER: gitlawb
-      POSTGRES_PASSWORD: gitlawb
-      POSTGRES_DB: gitlawb
+      POSTGRES_USER: ${POSTGRES_USER:-gitlawb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env (make init generates one for you)}
+      POSTGRES_DB: ${POSTGRES_DB:-gitlawb}
     volumes:
       - gitlawb-postgres-data:/var/lib/postgresql/data
     networks:
       - ar-io-network
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U gitlawb -d gitlawb']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-gitlawb} -d ${POSTGRES_DB:-gitlawb}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -39,6 +39,10 @@ services:
     env_file:
       - path: .env
         required: true
+    environment:
+      # DATABASE_URL composed from the same vars as the postgres service so
+      # there's a single source of truth for the password.
+      DATABASE_URL: postgres://${POSTGRES_USER:-gitlawb}:${POSTGRES_PASSWORD}@gitlawb-postgres:5432/${POSTGRES_DB:-gitlawb}
     expose:
       - '7545'
     ports:

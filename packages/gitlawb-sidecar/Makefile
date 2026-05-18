@@ -18,6 +18,11 @@ init: ## First-run bootstrap: generate DID, write .env
 	@./scripts/init.sh
 
 up: ## Start the gitlawb-node + postgres stack
+	@docker network inspect ar-io-network >/dev/null 2>&1 || { \
+		echo "Error: docker network 'ar-io-network' not found."; \
+		echo "       Bring up your AR.IO gateway first (it creates the network)."; \
+		exit 1; \
+	}
 	@docker compose up -d gitlawb-postgres gitlawb-node
 	@echo
 	@echo "Stack starting. Watch logs with: make logs"
