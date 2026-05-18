@@ -67,8 +67,15 @@ RUN mkdir -p \
 FROM deps AS builder
 WORKDIR /build
 
-# Replace stub sources with real ones from upstream.
-COPY --from=source /src/crates crates/
+# Copy everything from upstream. This overlays the deps stage with real
+# sources AND root-level files that crates pull in at compile time via
+# `include_str!` / `include_bytes!` (notably `bootstrap-peers.json`, which
+# gitlawb-node/src/bootstrap.rs embeds with `include_str!("../../../bootstrap-peers.json")`).
+# The Cargo.{toml,lock} content is identical to what deps already copied —
+# this is a no-op for those files. The `target/` directory from the deps
+# stage is preserved (it doesn't exist in /src), so cargo reuses the
+# pre-compiled dependency artifacts and only recompiles the workspace crates.
+COPY --from=source /src/ ./
 
 # Touch every .rs so cargo notices the source change after the stub build above.
 RUN find crates -name '*.rs' -exec touch {} + \
