@@ -8,7 +8,7 @@ Monorepo: Arweave gateway + sidecar services (C2PA provenance, payments, APIs).
 
 **Stack**: pnpm + Turborepo, Docker Compose, GitHub Actions, Hetzner
 
-**Packages**: `apps/gateway/`, `packages/trusthash-sidecar/`, `packages/turbo-c2pa/`, `packages/c2pa-protocol/`, `packages/x402-bundler-sidecar/`
+**Packages**: `apps/gateway/`, `packages/trusthash-sidecar/`, `packages/turbo-c2pa/`, `packages/c2pa-protocol/`, `packages/x402-bundler-sidecar/`, `packages/gitlawb-sidecar/`
 
 **Key commands**:
 

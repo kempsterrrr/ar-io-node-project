@@ -114,6 +114,17 @@ To run an observer (required for earning rewards):
 └─────────────────────────────────────────────────────────┘
 ```
 
+## Sidecars
+
+Optional services that extend the gateway. Each runs alongside the gateway on `ar-io-network`.
+
+| Sidecar                                                                           | What it does                                                                                                    |
+| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| [`packages/trusthash-sidecar/`](../../packages/trusthash-sidecar/README.md)       | C2PA manifest repository, COSE signing oracle, pHash similarity search                                          |
+| [`packages/verify-sidecar/`](../../packages/verify-sidecar/README.md)             | Cryptographic verification of L1 transactions and bundles                                                       |
+| [`packages/x402-bundler-sidecar/`](../../packages/x402-bundler-sidecar/README.md) | x402-protocol payment bundler                                                                                   |
+| [`packages/gitlawb-sidecar/`](../../packages/gitlawb-sidecar/README.md)           | Run a [Gitlawb](https://github.com/Gitlawb/node) decentralized git node (with on-chain staking) on your gateway |
+
 ## Deployment
 
 This gateway automatically deploys to Hetzner when changes are pushed to the `main` branch. See the [root README](../../README.md) for deployment documentation.
