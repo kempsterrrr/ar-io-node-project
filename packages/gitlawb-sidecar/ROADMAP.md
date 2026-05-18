@@ -15,9 +15,15 @@ The bare-minimum runbook. A gateway operator can:
 
 Out of scope: monitoring beyond `make status`, AR.IO-native anchoring, indexing.
 
-## v0.2 — Observability
+## v0.2 — Observability and arm64 images
 
-Make it possible to leave a node running without checking on it daily.
+Make it possible to leave a node running without checking on it daily,
+and ship native arm64 images for Apple Silicon dev and Graviton servers.
+
+**arm64 image build** — matrix-build amd64 on `ubuntu-latest` and arm64 on
+`ubuntu-24.04-arm` (native, free for public repos), then merge manifests
+with `docker buildx imagetools create`. Avoids the QEMU emulation that
+made the v0.1 attempt unusable (~60 min cold-cache Rust build).
 
 - Prometheus exporter for: last heartbeat timestamp, stake amount, registration
   status, recent push count, pinning success rate
