@@ -86,15 +86,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl libssl3 git bash \
     && rm -rf /var/lib/apt/lists/*
 
+# Non-root user for the long-running gitlawb-node service.
+# uid 10001 = stable system uid; gid 0 (root group) makes named volumes and
+# group-readable files work without per-host UID mapping.
+RUN useradd --system --uid 10001 --gid 0 --home-dir /data --shell /usr/sbin/nologin gitlawb
+
 COPY --from=builder /build/target/release/gitlawb-node /usr/local/bin/gitlawb-node
 COPY --from=builder /build/target/release/gl /usr/local/bin/gl
 COPY --from=builder /build/target/release/git-remote-gitlawb /usr/local/bin/git-remote-gitlawb
 
 # Persist node state (DID, db cache, anything written under /data or $HOME).
-# v0.2 will introduce a dedicated non-root user once the bind-mount UID mapping
-# for ./backups is worked out (see ROADMAP).
+# Group-rwx so files written by root in the gl ops service stay readable by
+# gitlawb (uid 10001) when both services share this volume.
+RUN mkdir -p /data && chown -R 10001:0 /data && chmod -R ug+rwX /data
+
 ENV HOME=/data
 WORKDIR /data
+USER 10001
 
 EXPOSE 7545 7546
 

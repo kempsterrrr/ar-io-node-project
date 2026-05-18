@@ -22,13 +22,16 @@ HOST_PATH="backups/identity-${TS}.pem.bak"
 
 docker compose run --rm gl identity backup --out "${CONTAINER_PATH}"
 
+# gl ran as root, so the file is currently owned by root on the host. Chown it
+# back to the host user so they can move/delete it without sudo.
+docker compose run --rm --entrypoint sh gl -c \
+  "chown $(id -u):$(id -g) /backups/identity-${TS}.pem.bak && chmod 600 /backups/identity-${TS}.pem.bak"
+
 if [[ ! -f "${HOST_PATH}" ]]; then
   echo "Backup file not visible at ${PKG_DIR}/${HOST_PATH}" >&2
   echo "Check container output above for errors." >&2
   exit 1
 fi
-
-chmod 600 "${HOST_PATH}" 2>/dev/null || true
 
 cat <<EOF
 

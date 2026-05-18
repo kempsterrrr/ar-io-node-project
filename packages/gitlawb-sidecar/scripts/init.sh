@@ -143,6 +143,11 @@ if [[ -z "${CURRENT_PWD}" ]]; then
   else
     PG_PWD="$(head -c 32 /dev/urandom | base64 | tr -d '/+=\n' | head -c 32)"
   fi
+  if [[ -z "${PG_PWD}" || ${#PG_PWD} -lt 16 ]]; then
+    red "Failed to generate POSTGRES_PASSWORD (openssl/urandom returned empty or too-short value)."
+    red "Set POSTGRES_PASSWORD manually in ${ENV_FILE} and re-run."
+    exit 1
+  fi
   update_env POSTGRES_PASSWORD "${PG_PWD}"
 fi
 
@@ -156,6 +161,11 @@ bold "6) Generating node DID..."
 cd "${PKG_DIR}"
 DID_GENERATED=false
 if docker compose run --rm gl identity new; then
+  # gl ran as root in the ops container; ensure /data is owned by uid 10001
+  # (the gitlawb user) so the long-running gitlawb-node service can read the
+  # DID it just wrote.
+  docker compose run --rm --entrypoint sh gl -c \
+    'chown -R 10001:0 /data && chmod -R ug+rwX /data' >/dev/null 2>&1 || true
   echo
   bold "   Current node identity:"
   docker compose run --rm gl identity show || true

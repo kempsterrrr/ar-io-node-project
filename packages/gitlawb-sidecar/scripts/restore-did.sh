@@ -40,4 +40,8 @@ read -rp "Proceed? [y/N] " confirm
 
 docker compose run --rm gl identity restore "/backups/$(basename "${STAGE}")" --force
 
+# gl ran as root and wrote to /data; chown to uid 10001 so gitlawb-node can read.
+docker compose run --rm --entrypoint sh gl -c \
+  'chown -R 10001:0 /data && chmod -R ug+rwX /data' >/dev/null 2>&1 || true
+
 echo "✓ Identity restored. Run 'make status' to confirm on-chain registration."

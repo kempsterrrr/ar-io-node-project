@@ -65,9 +65,16 @@ services:
   # Disabled by default; activated via `--profile tools` or `docker compose run`.
   # Bind-mounts ./backups so `make backup-did` / `make restore-did` can read/write
   # PEM files on the host.
+  #
+  # Runs as root (overrides the Dockerfile's non-root USER) so the ./backups
+  # bind mount works cross-platform without per-host UID mapping. Scripts that
+  # use this service chown files back to the host user after writes so they
+  # remain manageable from the host. The long-running gitlawb-node service
+  # keeps its non-root USER from the Dockerfile.
   gl:
     image: ${GITLAWB_SIDECAR_IMAGE:-ghcr.io/kempsterrrr/gitlawb-sidecar:latest}
     profiles: ['tools']
+    user: '0:0'
     entrypoint: ['gl']
     env_file:
       - path: .env
