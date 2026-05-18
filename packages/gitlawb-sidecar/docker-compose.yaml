@@ -1,0 +1,83 @@
+# =============================================================================
+# Gitlawb Sidecar — docker compose
+# =============================================================================
+# Brings up a Gitlawb node + dedicated Postgres on the gateway's ar-io-network.
+# The gateway must be running first so the network exists.
+#
+# Usage:
+#   cd packages/gitlawb-sidecar
+#   make init       # bootstrap DID + .env (one-time)
+#   make up         # start the stack
+#   make stake      # register on-chain (one-time)
+#   make status     # check heartbeat / registration
+# =============================================================================
+
+services:
+  gitlawb-postgres:
+    image: ${GITLAWB_POSTGRES_IMAGE:-postgres:16-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gitlawb
+      POSTGRES_PASSWORD: gitlawb
+      POSTGRES_DB: gitlawb
+    volumes:
+      - gitlawb-postgres-data:/var/lib/postgresql/data
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U gitlawb -d gitlawb']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  gitlawb-node:
+    image: ${GITLAWB_SIDECAR_IMAGE:-ghcr.io/kempsterrrr/gitlawb-sidecar:latest}
+    restart: unless-stopped
+    depends_on:
+      gitlawb-postgres:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: true
+    expose:
+      - '7545'
+    ports:
+      # libp2p gossip — must be reachable from the public internet.
+      # Open TCP/7546 in your firewall and (if behind NAT) forward it.
+      - '7546:7546'
+    volumes:
+      - gitlawb-data:/data
+    networks:
+      - ar-io-network
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:7545/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Ops service — shares the node's image, volume, and env. Entrypoint is `gl`,
+  # so `docker compose run --rm gl <args>` reads like a direct CLI invocation.
+  # Disabled by default; activated via `--profile tools` or `docker compose run`.
+  # Bind-mounts ./backups so `make backup-did` / `make restore-did` can read/write
+  # PEM files on the host.
+  gl:
+    image: ${GITLAWB_SIDECAR_IMAGE:-ghcr.io/kempsterrrr/gitlawb-sidecar:latest}
+    profiles: ['tools']
+    entrypoint: ['gl']
+    env_file:
+      - path: .env
+        required: true
+    volumes:
+      - gitlawb-data:/data
+      - ./backups:/backups
+    networks:
+      - ar-io-network
+
+volumes:
+  gitlawb-data:
+  gitlawb-postgres-data:
+
+networks:
+  ar-io-network:
+    external: true

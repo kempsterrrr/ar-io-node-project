@@ -1,0 +1,12 @@
+{
+  "name": "@ar-io/gitlawb-sidecar",
+  "version": "0.1.0",
+  "description": "Run a Gitlawb decentralized git node alongside an AR.IO gateway",
+  "private": true,
+  "scripts": {
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f gitlawb-node"
+  }
+}
