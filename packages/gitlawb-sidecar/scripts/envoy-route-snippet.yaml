@@ -1,0 +1,58 @@
+# =============================================================================
+# Envoy route snippet for the Gitlawb sidecar
+# =============================================================================
+# Paste these snippets into your gateway's Envoy config (typically
+# apps/gateway/envoy/envoy.template.yaml or similar) so requests to
+# git.<your-gateway-arns> reach gitlawb-node:7545.
+#
+# What this does:
+#   - Adds a virtual host matched by the public Gitlawb subdomain
+#   - Routes all paths to the upstream `gitlawb_cluster`
+#   - Defines that cluster as gitlawb-node:7545 on ar-io-network
+#
+# Replace `git.yourgateway.example` with your actual public hostname.
+# Reload Envoy after editing: `docker compose restart envoy` (or signal the
+# admin port if you have hot reload configured).
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# 1. Virtual host — add to your listener's filter_chains[].route_config.virtual_hosts
+# ---------------------------------------------------------------------------
+virtual_hosts:
+  - name: gitlawb
+    domains:
+      - 'git.yourgateway.example'
+    routes:
+      - match: { prefix: '/' }
+        route:
+          cluster: gitlawb_cluster
+          timeout: 0s  # git operations can be long (clone large repos)
+          upgrade_configs:
+            - upgrade_type: websocket  # libp2p may use websockets for some transports
+
+# ---------------------------------------------------------------------------
+# 2. Cluster — add to top-level clusters[]
+# ---------------------------------------------------------------------------
+clusters:
+  - name: gitlawb_cluster
+    type: STRICT_DNS
+    connect_timeout: 5s
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: gitlawb_cluster
+      endpoints:
+        - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: gitlawb-node
+                    port_value: 7545
+
+# ---------------------------------------------------------------------------
+# Notes
+# ---------------------------------------------------------------------------
+# - libp2p (:7546) does NOT go through Envoy. It binds to the host directly
+#   from docker-compose.yaml. Open TCP/7546 in your firewall.
+# - If you use ArNS, point your ArNS record at the gateway's public address
+#   and the gateway's wildcard virtual host pattern should already match
+#   git.<your-arns> — confirm by curling https://git.<your-arns>/health.
