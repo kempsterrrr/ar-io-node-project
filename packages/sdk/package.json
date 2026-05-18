@@ -27,11 +27,11 @@
   },
   "dependencies": {
     "@ar-io/c2pa-protocol": "workspace:*",
-    "@ardrive/turbo-sdk": "^1.41.1",
+    "@ardrive/turbo-sdk": "^1.41.2",
     "@dha-team/arbundles": "^1.0.4"
   },
   "optionalDependencies": {
-    "@contentauth/c2pa-node": "^0.5.4",
+    "@contentauth/c2pa-node": "^0.5.5",
     "blockhash-core": "^0.1.0",
     "ethers": "^6.13.0",
     "sharp": "^0.34.5"
