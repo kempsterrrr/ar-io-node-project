@@ -1,0 +1,8 @@
+.env
+.env.local
+*.env
+!.env.example
+data/
+node-data/
+postgres-data/
+backups/

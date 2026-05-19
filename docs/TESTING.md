@@ -170,6 +170,47 @@ If you prefer a helper script from the repo root:
 ./scripts/up-gateway-sidecar.sh --prod -d
 ```
 
+### Gitlawb Sidecar
+
+Source: [`packages/gitlawb-sidecar/`](../packages/gitlawb-sidecar/README.md). Image: `ghcr.io/kempsterrrr/gitlawb-sidecar`.
+
+```bash
+# Prerequisite: gateway running so ar-io-network exists
+cd packages/gitlawb-sidecar
+
+# First-run only — generates DID, writes .env (chmod 600)
+make init
+
+# Validate compose syntax without starting anything
+docker compose config --quiet
+
+# Start the stack (gitlawb-node + dedicated postgres)
+make up
+
+# Smoke checks
+make ps                            # both services Up + healthy
+docker compose logs -f gitlawb-node
+nc -zv localhost 7546                    # libp2p TCP port reachable
+
+# After wiring the Envoy snippet from scripts/envoy-route-snippet.yaml:
+curl -sf https://<your-gateway>/gitlawb/health   # → 200 OK (path-mounted, not a subdomain)
+
+# On-chain operations (require operator key + funded wallet in .env)
+make stake
+make status
+make claim
+```
+
+To rebuild the image locally against a different upstream commit:
+
+```bash
+docker build \
+  --build-arg GITLAWB_SHA=<sha> \
+  -t my-gitlawb-sidecar:dev \
+  packages/gitlawb-sidecar/
+# then set GITLAWB_SIDECAR_IMAGE=my-gitlawb-sidecar:dev in .env
+```
+
 ## CI Testing
 
 The CI pipeline (`.github/workflows/ci.yml`) runs:

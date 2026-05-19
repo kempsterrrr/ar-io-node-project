@@ -12,6 +12,7 @@ ar-io-node-project/
 ├── ar-io-verify/                  # Verify sidecar (git submodule → ar-io/ar-io-verify)
 ├── packages/
 │   ├── c2pa-protocol/             # Shared C2PA tag schema constants
+│   ├── gitlawb-sidecar/           # Run a Gitlawb decentralized git node on the gateway
 │   ├── trusthash-sidecar/         # C2PA manifest repository + signing oracle
 │   ├── turbo-c2pa/                # C2PA client SDK (sign + store modes)
 │   ├── verify-sidecar/            # Verify sidecar deploy config (compose, nginx, env)

@@ -1,0 +1,132 @@
+# =============================================================================
+# Publish Gitlawb Sidecar to GHCR
+# =============================================================================
+# Triggers:
+#   - Tag push matching `gitlawb-sidecar-v*` (e.g. gitlawb-sidecar-v0.1.0)
+#     -> builds and pushes :<version>, :<major.minor>, :latest
+#   - Manual workflow_dispatch (publishes with a user-supplied tag)
+#   - PR / push touching the package -> builds only (no push), as a smoke test
+#
+# Image: ghcr.io/<owner>/gitlawb-sidecar
+# =============================================================================
+
+name: Publish Gitlawb Sidecar
+
+on:
+  push:
+    tags:
+      - 'gitlawb-sidecar-v*'
+    branches:
+      - main
+    paths:
+      - 'packages/gitlawb-sidecar/**'
+      - '.github/workflows/publish-gitlawb-sidecar.yml'
+  pull_request:
+    paths:
+      - 'packages/gitlawb-sidecar/**'
+      - '.github/workflows/publish-gitlawb-sidecar.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to publish (e.g. v0.1.0-rc1)'
+        required: true
+        type: string
+
+env:
+  IMAGE_NAME: ${{ github.repository_owner }}/gitlawb-sidecar
+  REGISTRY: ghcr.io
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-gitlawb-sidecar-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build${{ (startsWith(github.ref, 'refs/tags/gitlawb-sidecar-v') || github.event_name == 'workflow_dispatch') && ' + Push' || '' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Publish gate: tag pushes (refs/tags/gitlawb-sidecar-v*) OR manual
+       # dispatch from main with a validated tag input. Anything else builds
+       # but does not push, preventing unreviewed branch code from being
+       # published under release-like tags.
+      - name: Validate manual dispatch input
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [[ "${{ github.ref }}" != "refs/heads/main" ]]; then
+            echo "workflow_dispatch is only allowed from main (got: ${{ github.ref }})" >&2
+            exit 1
+          fi
+          TAG="${{ github.event.inputs.tag }}"
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9._-]+)?$ ]]; then
+            echo "Invalid tag '$TAG' — must match vMAJOR.MINOR.PATCH[-suffix]" >&2
+            exit 1
+          fi
+
+      - name: Log in to GHCR
+        if: |
+          startsWith(github.ref, 'refs/tags/gitlawb-sidecar-v')
+          || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=match,pattern=gitlawb-sidecar-v(.*),group=1,enable=${{ startsWith(github.ref, 'refs/tags/gitlawb-sidecar-v') }}
+            type=match,pattern=gitlawb-sidecar-v(\d+\.\d+),group=1,enable=${{ startsWith(github.ref, 'refs/tags/gitlawb-sidecar-v') }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/gitlawb-sidecar-v') }}
+            type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+            type=sha,enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+      # v0.1: amd64 only. Multi-arch (arm64) builds the Gitlawb Rust workspace
+      # under QEMU emulation and runs 45-90 min vs ~10 min native. We'll add
+      # arm64 in v0.2 by matrix-building on a native ubuntu-24.04-arm runner
+      # and merging manifests with docker buildx imagetools create.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: packages/gitlawb-sidecar
+          file: packages/gitlawb-sidecar/Dockerfile
+          platforms: linux/amd64
+          push: |
+            ${{ startsWith(github.ref, 'refs/tags/gitlawb-sidecar-v')
+                || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          {
+            echo "## Gitlawb Sidecar Image Build"
+            echo ""
+            echo "**Trigger:** ${{ github.event_name }}"
+            echo "**Ref:** ${{ github.ref }}"
+            echo "**Pushed:** ${{ startsWith(github.ref, 'refs/tags/gitlawb-sidecar-v') || github.event_name == 'workflow_dispatch' }}"
+            echo ""
+            echo "### Tags"
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
