@@ -66,8 +66,9 @@ the anchor payload also includes an IPFS CID for the pushed objects.
 - New service: `gitlawb-index-sidecar`
 - Watches the gateway's Arweave index for `App-Name=gitlawb` transactions
 - Materializes `repo DID → refs → commits` in SQLite/Postgres
-- For anchors with CIDs: serves `git clone https://git.<gateway>/<repo>.git`
-  by resolving objects via IPFS (embedded Helia + public-gateway fallback)
+- For anchors with CIDs: serves `git clone https://<gateway>/gitlawb/<repo>.git`
+  by resolving objects via IPFS (embedded Helia + public-gateway fallback).
+  Path-mounted on the gateway's base hostname like v0.1 — never a subdomain.
 - Verifies `Node-DID` signatures against the `gitlawb/ref-update/v1` schema so
   mirrored repos can be labeled "cryptographically verified"
 - Anchors without CIDs surface as a history-only view (no clone, just commit
@@ -76,11 +77,26 @@ the anchor payload also includes an IPFS CID for the pushed objects.
 This is the layer that makes AR.IO gateways meaningful infrastructure for
 Gitlawb, not just adjacent.
 
-## v0.5 — ArNS auto-registration
+## v0.5 — ArNS-based node discovery (design needed)
 
-On first `make stake`, optionally claim a `git_<node-did>.<gateway-arns>`
-ArNS name so the node's public URL is reachable and self-describing without
-manual DNS / ArNS work.
+ArNS resolves names to Arweave transaction IDs, not to live HTTP endpoints,
+so we can't just "register the node's public URL as an ArNS name." But there
+is a sensible pattern: register an ArNS under-name (or primary name) that
+points to an Arweave TX containing a small **node manifest** — DID, current
+public URL, supported features, signed by the node. Discoverers resolve the
+ArNS name, fetch the manifest TX, read the URL field.
 
-Depends on the gateway operator having ArNS allowance and being willing to
-let the sidecar spend it.
+This gives operators a stable, transferable identifier (the ArNS name) that
+outlives any particular gateway hostname or IP. Aligns with how the rest of
+the AR.IO ecosystem uses ArNS for identity.
+
+Open design questions before this lands:
+
+- Should the manifest live on a primary ArNS name (`<node-name>`) or an
+  under-name of the operator's existing gateway name (`<node>_<gateway>`)?
+- Manifest schema: what fields beyond `did` + `public_url` are useful?
+- Update cadence: ArNS records are mutable, but TTL'd at the gateway — how
+  often should the node refresh its manifest?
+
+Depends on the gateway operator having ArIO/Turbo credits and being willing
+to let the sidecar spend a small amount on the registration.

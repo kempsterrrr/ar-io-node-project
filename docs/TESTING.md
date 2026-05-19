@@ -193,7 +193,7 @@ docker compose logs -f gitlawb-node
 nc -zv localhost 7546                    # libp2p TCP port reachable
 
 # After wiring the Envoy snippet from scripts/envoy-route-snippet.yaml:
-curl -sf https://git.<your-arns>/health   # → 200 OK
+curl -sf https://<your-gateway>/gitlawb/health   # → 200 OK (path-mounted, not a subdomain)
 
 # On-chain operations (require operator key + funded wallet in .env)
 make stake

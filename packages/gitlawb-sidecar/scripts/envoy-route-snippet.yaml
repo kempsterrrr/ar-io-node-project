@@ -1,37 +1,54 @@
 # =============================================================================
 # Envoy route snippet for the Gitlawb sidecar
 # =============================================================================
-# Paste these snippets into your gateway's Envoy config (typically
-# apps/gateway/envoy/envoy.template.yaml or similar) so requests to
-# git.<your-gateway-arns> reach gitlawb-node:7545.
+# Paste these snippets into your gateway's Envoy template (typically
+# `envoy/envoy.template.yaml` in the ar-io-node repo) and reload Envoy.
 #
-# What this does:
-#   - Adds a virtual host matched by the public Gitlawb subdomain
-#   - Routes all paths to the upstream `gitlawb_cluster`
-#   - Defines that cluster as gitlawb-node:7545 on ar-io-network
+# Why path-based, not subdomain-based:
+#   AR.IO gateways reserve the entire `*.<ARNS_ROOT_HOST>` subdomain namespace
+#   for ArNS resolution. Any subdomain we squat (e.g. `git.<gateway>`) would
+#   shadow a real or future ArNS name and break the cross-gateway consistency
+#   that ArNS depends on. Path-based routing on the gateway's base hostname is
+#   the established AR.IO pattern (see existing `/bundler/` and `/ao/cu/` routes
+#   in the upstream Envoy template — we follow them exactly).
 #
-# Replace `git.yourgateway.example` with your actual public hostname.
-# Reload Envoy after editing: `docker compose restart envoy` (or signal the
-# admin port if you have hot reload configured).
+# Expected URL shape after applying:
+#   https://<your-gateway>/gitlawb           → gitlawb-node:7545/
+#   https://<your-gateway>/gitlawb/health    → gitlawb-node:7545/health
+#   https://<your-gateway>/gitlawb/<o>/<r>.git → gitlawb-node:7545/<o>/<r>.git
+#
+# After applying, set GITLAWB_PUBLIC_URL=https://<your-gateway>/gitlawb in .env.
 # =============================================================================
 
 # ---------------------------------------------------------------------------
-# 1. Virtual host — add to your listener's filter_chains[].route_config.virtual_hosts
+# 1. Routes — add these to the `root_service` virtual_host's `routes:` list
+#    in the upstream envoy.template.yaml. Place them BEFORE the catch-all
+#    `- match: { prefix: '/' }` route so they're matched first.
 # ---------------------------------------------------------------------------
-virtual_hosts:
-  - name: gitlawb
-    domains:
-      - 'git.yourgateway.example'
-    routes:
-      - match: { prefix: '/' }
-        route:
-          cluster: gitlawb_cluster
-          timeout: 0s  # git operations can be long (clone large repos)
-          upgrade_configs:
-            - upgrade_type: websocket  # libp2p may use websockets for some transports
+routes:
+  - match:
+      prefix: '/gitlawb/'
+    route:
+      cluster: gitlawb_cluster
+      timeout: 0s # git clones of large repos can be long-running
+      prefix_rewrite: '/'
+      retry_policy:
+        retry_on: '5xx,reset'
+        num_retries: 3
+  - match:
+      prefix: '/gitlawb'
+    route:
+      cluster: gitlawb_cluster
+      timeout: 0s
+      prefix_rewrite: '/'
+      retry_policy:
+        retry_on: '5xx,reset'
+        num_retries: 3
 
 # ---------------------------------------------------------------------------
-# 2. Cluster — add to top-level clusters[]
+# 2. Cluster — add to the top-level `clusters:` list in envoy.template.yaml.
+#    The address `gitlawb-node` resolves on ar-io-network when both the
+#    gateway's envoy container and the sidecar are attached to it.
 # ---------------------------------------------------------------------------
 clusters:
   - name: gitlawb_cluster
@@ -52,7 +69,12 @@ clusters:
 # Notes
 # ---------------------------------------------------------------------------
 # - libp2p (:7546) does NOT go through Envoy. It binds to the host directly
-#   from docker-compose.yaml. Open TCP/7546 in your firewall.
-# - If you use ArNS, point your ArNS record at the gateway's public address
-#   and the gateway's wildcard virtual host pattern should already match
-#   git.<your-arns> — confirm by curling https://git.<your-arns>/health.
+#   via docker-compose.yaml. Open TCP/7546 in your firewall and (if behind
+#   NAT) forward it.
+# - If your gateway compose already has additional routes added by other
+#   sidecars (`/bundler`, `/ao/cu`, etc.), insert these alongside them. Order
+#   within `root_service.routes` matters: more-specific prefixes must come
+#   before less-specific ones.
+# - After editing the template, the envoy container needs to re-render it
+#   (the upstream Dockerfile uses `ytt` at container start). The simplest
+#   path is `docker compose restart envoy`.

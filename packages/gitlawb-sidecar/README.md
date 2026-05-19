@@ -29,9 +29,10 @@ in under 20 minutes.
      at ~$0.03/month per the upstream docs)
    - **Use a dedicated wallet** — do not reuse a personal wallet that holds
      other assets. `make init` will warn you about this.
-3. **A public hostname** routed to your gateway. Typically an ArNS subdomain
-   like `git.yourgateway.example`. The Gitlawb network pings this URL to
-   verify your node is alive.
+3. **Your gateway's existing public hostname.** The sidecar is exposed as a
+   path on your gateway's base URL (e.g. `https://your-gateway.example/gitlawb`)
+   via an Envoy route — no new DNS, no separate TLS certificate, no subdomain.
+   See [Why not a subdomain?](#why-not-a-subdomain) below.
 4. **TCP/7546 reachable from the public internet.** Gitlawb uses libp2p for
    peer gossip on this port. Open it in your firewall and (if behind NAT)
    forward it to your gateway host. This port does **not** go through Envoy.
@@ -93,9 +94,20 @@ make restore-did FILE=path/to/identity-<timestamp>.pem.bak
 
 ### 4. Wire up Envoy on the gateway
 
-Paste the two snippets from [`scripts/envoy-route-snippet.yaml`](./scripts/envoy-route-snippet.yaml)
-into your gateway's Envoy config. Replace `git.yourgateway.example` with
-your real hostname. Reload Envoy.
+Path-based routing: requests to `https://<your-gateway>/gitlawb/...` get
+proxied to the sidecar's port 7545. Open
+[`scripts/envoy-route-snippet.yaml`](./scripts/envoy-route-snippet.yaml)
+and paste the route entries into your gateway's `envoy.template.yaml`
+(under `root_service.routes`, before the catch-all `/` route) and the
+cluster entry into the top-level `clusters:` list. Then:
+
+```bash
+# From your gateway compose dir, after editing envoy.template.yaml:
+docker compose restart envoy
+```
+
+This follows the same pattern the upstream Envoy template already uses for
+`/bundler/` and `/ao/cu/` routes — we just add `/gitlawb/`.
 
 ### 5. Open TCP/7546
 
@@ -116,7 +128,7 @@ make logs   # confirm clean startup
 Sanity check the public URL:
 
 ```bash
-curl -s https://git.yourgateway.example/health
+curl -s https://your-gateway.example/gitlawb/health
 # → 200 OK
 ```
 
@@ -200,13 +212,17 @@ You're approaching the 24h cutoff that excludes the node from rewards.
 Check `make logs` for errors. The most common cause is an expired RPC
 endpoint or insufficient ETH on the operator wallet.
 
-**`curl https://git.<your-arns>/health` returns nothing**
+**`curl https://<your-gateway>/gitlawb/health` returns nothing**
 The Envoy route isn't reaching the sidecar. Confirm:
 
-- The virtual host's `domains:` matches your hostname exactly
+- The `/gitlawb/` route was added to the `root_service` virtual_host (NOT to
+  the `arns_resolution_service` one) and is listed **before** the catch-all
+  `- match: { prefix: '/' }` route
 - `docker network inspect ar-io-network` shows both `envoy` and `gitlawb-node`
 - `docker compose exec envoy curl -f http://gitlawb-node:7545/health` works
   from inside the network
+- `prefix_rewrite: '/'` is present on both `/gitlawb/` and `/gitlawb` routes
+  so the node sees its own root paths
 
 **Peers can't reach me / no inbound libp2p traffic**
 TCP/7546 isn't open. Check firewall and NAT forwarding. `curl ifconfig.me`
@@ -225,13 +241,42 @@ Major Gitlawb upstream upgrades (binary-incompatible config changes) will be
 called out in this repo's release notes; `make upgrade` plus any `.env`
 adjustments noted there is enough.
 
+## Why not a subdomain?
+
+An earlier draft of this sidecar exposed the node at `git.<your-gateway>`.
+That was wrong. AR.IO gateways reserve the entire `*.<ARNS_ROOT_HOST>`
+subdomain namespace for ArNS (Arweave Name System) resolution:
+
+> "Ar.io gateways will also resolve that name as one of their own subdomains,
+> e.g., `https://ardrive.arweave.net` and proxy all requests to the associated
+> Arweave transaction ID. This means that ANTs work across all ar.io gateways
+> that support them."
+>
+> — [ar.io docs / learn / arns](https://docs.ar.io/learn/arns)
+
+Squatting any subdomain (`git`, `gitlawb`, anything) would:
+
+- **Shadow real or future ArNS names.** If anyone ever registers `git` in
+  the ArNS registry, users hitting `git.<my-gateway>` would see this Gitlawb
+  node instead of the registered content — but only on my gateway. Behavior
+  diverges from every other gateway in the network.
+- **Break the cross-gateway consistency property** that ArNS is built on.
+
+So we use path-based routing on the gateway's base hostname instead:
+`https://<gateway>/gitlawb/...`. This is the same pattern the gateway already
+uses for built-in non-ArNS endpoints (`/ar-io/*`, `/raw/*`, `/graphql`,
+`/bundler/`, `/ao/cu/`). Envoy strips the `/gitlawb` prefix and forwards to
+`gitlawb-node:7545` on `ar-io-network`.
+
 ## Architecture
 
 ```text
-                     ┌────────────────────────┐
-   git push ──────►  │  gateway Envoy         │
-   git clone ─────►  │  TLS + ArNS routing    │
-                     └──────────┬─────────────┘
+https://<gateway>/gitlawb/...
+                     ┌──────────────────────────────┐
+   git push ──────►  │  gateway Envoy               │
+   git clone ─────►  │  TLS + ArNS at *.<gateway>   │
+                     │  /gitlawb/* → strip → node   │
+                     └──────────┬───────────────────┘
                                 │ http://gitlawb-node:7545
                                 ▼
                      ┌────────────────────────┐         ┌──────────────────┐

@@ -46,8 +46,10 @@ echo
 # Public URL
 # ---------------------------------------------------------------------------
 echo "1) Public URL (HTTPS) that peers will use to reach your node."
-echo "   Typically an ArNS subdomain routed by your gateway's Envoy to gitlawb-node:7545."
-echo "   Example: https://git.yourgateway.example"
+echo "   Path-mounted on your AR.IO gateway via Envoy (see scripts/envoy-route-snippet.yaml)."
+echo "   We do NOT use a subdomain — the gateway's *.<ARNS_ROOT_HOST> namespace"
+echo "   is reserved for ArNS resolution."
+echo "   Example: https://your-gateway.example/gitlawb"
 read -rp "   Public URL: " PUBLIC_URL
 if [[ -z "${PUBLIC_URL}" ]]; then
   red "Public URL is required."
