@@ -15,8 +15,8 @@
   },
   "dependencies": {
     "@ar-io/c2pa-protocol": "workspace:*",
-    "@ardrive/turbo-sdk": "^1.41.1",
-    "@contentauth/c2pa-node": "^0.5.4",
+    "@ardrive/turbo-sdk": "^1.41.3",
+    "@contentauth/c2pa-node": "^0.5.5",
     "blockhash-core": "^0.1.0",
     "cbor2": "^1.0.0",
     "ethers": "^6.13.0",
@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "typescript": "^5.3.0",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.7"
   },
   "keywords": [
     "c2pa",
